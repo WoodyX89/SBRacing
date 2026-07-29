@@ -8,6 +8,22 @@ function toggleMobileMenu() {
 function initNavbar() {
     const navbar = document.getElementById('navbar');
     if (!navbar) return;
+
+    // Push header below status bar on mobile (all pages)
+    function applySafeArea() {
+        const isMobile = window.matchMedia('(max-width: 767px)').matches;
+        if (isMobile) {
+            const safe = parseInt(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-top)'), 10);
+            // env() can't be read via getPropertyValue in all browsers — use max of CSS env and fallback
+            navbar.style.paddingTop = 'max(env(safe-area-inset-top, 0px), 2.75rem)';
+        } else {
+            navbar.style.paddingTop = 'env(safe-area-inset-top, 0px)';
+        }
+    }
+    applySafeArea();
+    window.addEventListener('resize', applySafeArea);
+    window.addEventListener('orientationchange', applySafeArea);
+
     window.addEventListener('scroll', () => {
         if (window.scrollY > 30) {
             navbar.classList.add('nav-scrolled');
@@ -169,88 +185,94 @@ document.addEventListener('keydown', function (e) {
 });
 
 // ---------- Auth status in nav ----------
-async function updateNavAuth() {
-    // Ensure a slot exists next to the cart / CTA
+async function updateNavAuth(forcedUser) {
+    // Find actions row: parent of the cart button (most reliable)
+    const cartBtn = document.querySelector('#navbar button[onclick*="showCart"], #navbar #cart-count');
+    const actions = cartBtn
+        ? (cartBtn.closest('button') || cartBtn).parentElement
+        : document.querySelector('#navbar .flex.items-center.gap-x-4');
+    if (!actions) {
+        console.warn('[nav-auth] actions row not found');
+        return;
+    }
+
     let slot = document.getElementById('nav-auth');
     if (!slot) {
-        const actions = document.querySelector('#navbar .flex.items-center.gap-x-4');
-        if (!actions) return;
         slot = document.createElement('div');
         slot.id = 'nav-auth';
-        slot.className = 'hidden md:flex items-center';
-        // Insert before the JOIN THE CREW link if present, else at end
-        const joinCta = actions.querySelector('a[href="join.html"]');
-        if (joinCta) {
-            actions.insertBefore(slot, joinCta);
+        slot.className = 'flex items-center';
+        // Place right after cart button
+        const cartEl = actions.querySelector('button[onclick*="showCart"]') || actions.firstElementChild;
+        if (cartEl && cartEl.nextSibling) {
+            actions.insertBefore(slot, cartEl.nextSibling);
         } else {
             actions.appendChild(slot);
         }
     }
 
-    // Mobile slot
+    // Mobile menu slot
     let mobileSlot = document.getElementById('nav-auth-mobile');
     if (!mobileSlot) {
-        const mobileMenu = document.querySelector('#mobile-menu .px-6');
+        const mobileMenu = document.querySelector('#mobile-menu .flex.flex-col, #mobile-menu > div');
         if (mobileMenu) {
             mobileSlot = document.createElement('div');
             mobileSlot.id = 'nav-auth-mobile';
             mobileSlot.className = 'pt-3 border-t border-zinc-800 mt-2';
-            const joinBlock = mobileMenu.querySelector('.pt-3.border-t');
-            if (joinBlock) {
-                mobileMenu.insertBefore(mobileSlot, joinBlock);
-            } else {
-                mobileMenu.appendChild(mobileSlot);
-            }
+            mobileMenu.appendChild(mobileSlot);
         }
     }
 
-    let user = null;
+    let user = forcedUser || null;
     let profile = null;
     try {
-        if (typeof sb !== 'undefined' && typeof getCurrentUser === 'function') {
-            user = await getCurrentUser();
-            if (user && typeof getProfile === 'function') {
+        if (!user && window.sb) {
+            const { data: { session } } = await window.sb.auth.getSession();
+            user = session?.user || null;
+        }
+        if (user && typeof getProfile === 'function') {
+            try {
                 profile = await getProfile(user.id);
-            }
+            } catch (_) { /* ignore profile errors for nav */ }
         }
     } catch (e) {
-        console.warn('Nav auth check failed', e);
+        console.warn('[nav-auth] session check failed', e);
     }
 
-    // Desktop JOIN CTA (white button in the actions row)
+    console.log('[nav-auth] user:', user ? (user.email || user.id) : null);
+
+    // Desktop JOIN CTA
     const desktopJoin = Array.from(document.querySelectorAll('#navbar a[href="join.html"]'))
-        .find(a => a.className.includes('bg-white') || a.textContent.includes('JOIN THE CREW'));
+        .find(a => (a.className || '').includes('bg-white') || (a.textContent || '').includes('JOIN THE CREW'));
 
     if (user) {
-        const name = (profile?.full_name || user.email || 'Member').split(' ')[0];
+        const rawName = profile?.full_name || (user.email ? user.email.split('@')[0] : 'Member');
+        const name = String(rawName).split(' ')[0];
         const email = user.email || '';
         const display = name.length > 14 ? name.slice(0, 12) + '…' : name;
+        const initial = (display.charAt(0) || 'M').toUpperCase();
 
+        slot.style.display = 'flex';
         slot.innerHTML = `
-            <div class="flex items-center gap-x-2">
-                <a href="members.html" class="flex items-center gap-x-2 px-3 py-1.5 rounded-2xl bg-zinc-900 border border-zinc-700 hover:border-orange-600/50 transition-all" title="${escapeAttrNav(email)}">
-                    <span class="w-7 h-7 rounded-full bg-orange-600/20 text-orange-500 flex items-center justify-center text-xs font-bold">${display.charAt(0).toUpperCase()}</span>
-                    <span class="text-sm font-medium max-w-[100px] truncate">${escapeHtmlNav(display)}</span>
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="Logged in"></span>
+            <div class="flex items-center gap-x-1.5">
+                <a href="members.html" class="relative flex items-center gap-x-2 px-1.5 py-1 rounded-2xl hover:bg-zinc-800/80 transition-all" title="${escapeAttrNav(email)}">
+                    <span class="w-8 h-8 rounded-full bg-orange-600 text-white flex items-center justify-center text-xs font-bold">${initial}</span>
+                    <span class="absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-zinc-900" title="Logged in"></span>
+                    <span class="text-sm font-medium max-w-[100px] truncate hidden md:inline pl-1">${escapeHtmlNav(display)}</span>
                 </a>
-                <button type="button" onclick="navLogout()" class="text-xs text-zinc-500 hover:text-white px-2 py-1" title="Log out">
+                <button type="button" onclick="navLogout()" class="hidden md:inline-flex text-xs text-zinc-500 hover:text-white px-1.5 py-1" title="Log out">
                     <i class="fa-solid fa-right-from-bracket"></i>
                 </button>
             </div>`;
-        slot.classList.remove('hidden');
-        slot.classList.add('md:flex');
 
-        if (desktopJoin) {
-            desktopJoin.style.display = 'none';
-        }
+        if (desktopJoin) desktopJoin.style.display = 'none';
 
         if (mobileSlot) {
             mobileSlot.innerHTML = `
                 <a href="members.html" class="flex items-center gap-x-3 px-4 py-3 rounded-2xl bg-zinc-800/80">
-                    <span class="w-9 h-9 rounded-full bg-orange-600/20 text-orange-500 flex items-center justify-center font-bold">${display.charAt(0).toUpperCase()}</span>
+                    <span class="w-9 h-9 rounded-full bg-orange-600 text-white flex items-center justify-center font-bold">${initial}</span>
                     <div class="min-w-0">
                         <div class="font-medium truncate">${escapeHtmlNav(profile?.full_name || display)}</div>
-                        <div class="text-xs text-emerald-400 flex items-center gap-x-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Logged in</div>
+                        <div class="text-xs text-emerald-400">Logged in</div>
                     </div>
                 </a>
                 <button type="button" onclick="navLogout()" class="mt-2 w-full text-left px-4 py-3 rounded-2xl hover:bg-zinc-800 text-zinc-400 text-sm">
@@ -258,17 +280,14 @@ async function updateNavAuth() {
                 </button>`;
         }
     } else {
+        slot.style.display = 'flex';
         slot.innerHTML = `
             <a href="members.html" class="flex items-center gap-x-2 px-3 py-1.5 rounded-2xl border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-400 hover:text-white transition-all">
                 <i class="fa-solid fa-user text-xs"></i>
-                <span>Log in</span>
+                <span class="hidden sm:inline">Log in</span>
             </a>`;
-        slot.classList.remove('hidden');
-        slot.classList.add('md:flex');
 
-        if (desktopJoin) {
-            desktopJoin.style.display = '';
-        }
+        if (desktopJoin) desktopJoin.style.display = '';
 
         if (mobileSlot) {
             mobileSlot.innerHTML = `
@@ -283,9 +302,10 @@ async function updateNavAuth() {
 
 async function navLogout() {
     try {
-        if (typeof sb !== 'undefined') {
-            await sb.auth.signOut();
+        if (window.sb) {
+            await window.sb.auth.signOut();
         }
+
     } catch (e) {
         console.warn(e);
     }
@@ -311,18 +331,22 @@ document.addEventListener('DOMContentLoaded', () => {
     setActiveNav();
     updateCartCount();
 
-    // Auth badge in nav (waits briefly for supabase-config to load)
     const bootAuth = () => {
+        const client = window.sb;
+        if (!client) return false;
         updateNavAuth();
-        if (typeof sb !== 'undefined') {
-            sb.auth.onAuthStateChange(() => updateNavAuth());
-        }
+        client.auth.onAuthStateChange((event, session) => {
+            console.log('[nav-auth] event:', event);
+            updateNavAuth(session?.user || null);
+        });
+        return true;
     };
-    if (typeof sb !== 'undefined') {
-        bootAuth();
-    } else {
-        setTimeout(bootAuth, 150);
-        setTimeout(bootAuth, 600);
+    if (!bootAuth()) {
+        setTimeout(bootAuth, 50);
+        setTimeout(bootAuth, 200);
+        setTimeout(bootAuth, 500);
+        setTimeout(bootAuth, 1200);
     }
 });
+
 

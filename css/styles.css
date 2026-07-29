@@ -276,3 +276,21 @@ body {
         padding-top: max(var(--safe-top), 1rem);
     }
 }
+
+
+/* Force status-bar clearance on ALL pages */
+#navbar {
+  padding-top: max(env(safe-area-inset-top, 0px), 0px);
+}
+@media (max-width: 767px) {
+  #navbar {
+    padding-top: max(env(safe-area-inset-top, 0px), 2.75rem) !important;
+  }
+}
+@supports (padding-top: env(safe-area-inset-top)) {
+  @media (max-width: 767px) {
+    #navbar {
+      padding-top: max(env(safe-area-inset-top), 2.75rem) !important;
+    }
+  }
+}
