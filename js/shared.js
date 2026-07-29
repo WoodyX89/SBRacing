@@ -9,20 +9,10 @@ function initNavbar() {
     const navbar = document.getElementById('navbar');
     if (!navbar) return;
 
-    // Push header below status bar on mobile (all pages)
-    function applySafeArea() {
-        const isMobile = window.matchMedia('(max-width: 767px)').matches;
-        if (isMobile) {
-            const safe = parseInt(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-top)'), 10);
-            // env() can't be read via getPropertyValue in all browsers — use max of CSS env and fallback
-            navbar.style.paddingTop = 'max(env(safe-area-inset-top, 0px), 2.75rem)';
-        } else {
-            navbar.style.paddingTop = 'env(safe-area-inset-top, 0px)';
-        }
-    }
-    applySafeArea();
-    window.addEventListener('resize', applySafeArea);
-    window.addEventListener('orientationchange', applySafeArea);
+    // Clear any old inline padding from previous builds so CSS safe-area rules win equally on every page
+    navbar.style.paddingTop = '';
+    navbar.style.paddingLeft = '';
+    navbar.style.paddingRight = '';
 
     window.addEventListener('scroll', () => {
         if (window.scrollY > 30) {

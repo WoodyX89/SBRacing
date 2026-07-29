@@ -217,80 +217,34 @@ input, select, textarea {
 }
 
 
-
-/* iOS / Android status bar + notch safe areas */
-:root {
-    --safe-top: env(safe-area-inset-top, 0px);
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
-    --safe-left: env(safe-area-inset-left, 0px);
-    --safe-right: env(safe-area-inset-right, 0px);
-}
-
-body {
-    padding-left: var(--safe-left);
-    padding-right: var(--safe-right);
-}
-
+/* ========== Safe area (status bar / notch / PWA) ========== */
+/* One rule for every page — do not stack extra rem on top of the inset */
 #navbar {
-    padding-top: var(--safe-top);
-    /* Extra breathing room under status icons on devices that report 0 */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
 }
 
+/* Browser (not installed PWA): tiny fallback if inset is 0 on some Androids */
 @media (max-width: 767px) {
-    #navbar {
-        /* Clear time / camera / battery status bar */
-        padding-top: max(var(--safe-top), 2.75rem);
-    }
-
-    /* Nav row itself a bit tighter so total height stays reasonable */
-    #navbar .py-4 {
-        padding-top: 0.5rem !important;
-        padding-bottom: 0.5rem !important;
-    }
-
-    /* Keep page content below fixed nav + status bar */
-    body {
-        /* nav content ~56px + safe top */
-    }
-
-    .hero-bg,
-    main,
-    section.pt-28,
-    .pt-28 {
-        /* handled via padding classes where possible */
-    }
-
-    /* Push first content under fixed header */
-    body > header.hero-bg,
-    body > section:first-of-type,
-    #login-wall,
-    #member-dashboard,
-    main {
-        /* extra top space is on pages with pt-24/pt-28 */
+    @media not all and (display-mode: standalone) {
+        #navbar {
+            padding-top: max(env(safe-area-inset-top, 0px), 0.5rem);
+        }
     }
 }
 
-/* When installed as PWA with black-translucent status bar */
+/* Installed PWA: trust the system inset only (same on index + all other pages) */
 @media (display-mode: standalone) {
     #navbar {
-        padding-top: max(var(--safe-top), 1rem);
+        padding-top: env(safe-area-inset-top, 0px) !important;
     }
 }
 
-
-/* Force status-bar clearance on ALL pages */
-#navbar {
-  padding-top: max(env(safe-area-inset-top, 0px), 0px);
-}
 @media (max-width: 767px) {
-  #navbar {
-    padding-top: max(env(safe-area-inset-top, 0px), 2.75rem) !important;
-  }
-}
-@supports (padding-top: env(safe-area-inset-top)) {
-  @media (max-width: 767px) {
-    #navbar {
-      padding-top: max(env(safe-area-inset-top), 2.75rem) !important;
+    #navbar .py-4 {
+        padding-top: 0.55rem !important;
+        padding-bottom: 0.55rem !important;
     }
-  }
 }
+
