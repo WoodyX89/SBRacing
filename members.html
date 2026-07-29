@@ -5,12 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Members • SB Racing</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/supabase-config.js"></script>
-<script src="js/shared.js"></script>
-<script src="js/members.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#c2410f">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SB Racing">
+    <link rel="apple-touch-icon" href="assets/logo.JPG">
+    <link rel="icon" type="image/jpeg" href="assets/logo.JPG">
 </head>
 <body class="bg-zinc-950 text-zinc-200">
 <nav id="navbar" class="fixed top-0 left-0 right-0 z-50 bg-zinc-900/80 backdrop-blur-lg border-b border-zinc-800 transition-all">
@@ -81,11 +85,11 @@
                 <form id="login-form" onsubmit="loginMember(event)" class="max-w-xs mx-auto mt-8 space-y-4 text-left">
                     <div>
                         <label class="text-xs font-medium tracking-widest text-zinc-400">EMAIL OR USERNAME</label>
-                        <input type="text" id="login-email" value="trevor@sb-racing.ca" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+                        <input type="text" id="login-email" value="" placeholder="you@email.com" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
                     </div>
                     <div>
                         <label class="text-xs font-medium tracking-widest text-zinc-400">PASSWORD</label>
-                        <input type="password" id="login-password" value="soggybottom" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+                        <input type="password" id="login-password" value="" placeholder="Your password" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
                     </div>
                     
                     <button type="submit" 
@@ -94,7 +98,7 @@
                     </button>
                 </form>
                 
-                <p class="text-xs text-zinc-500 mt-5">Demo credentials pre-filled • Any password works for this template</p>
+                <p class="text-xs text-zinc-500 mt-5">Use the email & password you created on the Join page</p>
             </div>
 
             <!-- Member Dashboard (hidden until login) -->
@@ -228,128 +232,7 @@
         </div>
     </section>
 
-<script>
-// Members Area logic
-function loginMember(e) {
-    e.preventDefault();
-    const email = document.getElementById('login-email').value;
-    const pass = document.getElementById('login-password').value;
-    if (email && pass) {
-        const wall = document.getElementById('login-wall');
-        const dashboard = document.getElementById('member-dashboard');
-        wall.style.transition = 'all 0.2s ease';
-        wall.style.opacity = '0';
-        setTimeout(() => {
-            wall.classList.add('hidden');
-            dashboard.classList.remove('hidden');
-            dashboard.style.opacity = '0';
-            setTimeout(() => {
-                dashboard.style.transition = 'all 0.3s ease';
-                dashboard.style.opacity = '1';
-            }, 50);
-        }, 180);
-        const nameEl = document.getElementById('member-name');
-        if (nameEl.textContent === 'Trevor Wood' && email.includes('@')) {
-            const guessedName = email.split('@')[0].replace('.', ' ').replace(/\b\w/g, l => l.toUpperCase());
-            nameEl.textContent = guessedName;
-        }
-        if (!window.memberRides) {
-            window.memberRides = [
-                { date: '2026-01-02', trail: 'Echo Dale Coulee', distance: '14.2 km', time: '1h 48m', rating: 5 },
-                { date: '2025-12-28', trail: 'Cypress Hills Flow', distance: '22.7 km', time: '2h 35m', rating: 4 }
-            ];
-        }
-        renderRideLog();
-    }
-}
 
-function logoutMember() {
-    const dashboard = document.getElementById('member-dashboard');
-    const wall = document.getElementById('login-wall');
-    dashboard.style.transition = 'all 0.2s ease';
-    dashboard.style.opacity = '0';
-    setTimeout(() => {
-        dashboard.classList.add('hidden');
-        dashboard.style.opacity = '1';
-        wall.classList.remove('hidden');
-        wall.style.opacity = '1';
-    }, 200);
-}
-
-function switchMemberTab(tabIndex) {
-    document.querySelectorAll('.member-tab-content').forEach(el => el.classList.add('hidden'));
-    document.getElementById(`tab-${tabIndex}`).classList.remove('hidden');
-    document.querySelectorAll('.member-tab').forEach((btn, idx) => {
-        if (idx == tabIndex) {
-            btn.classList.add('border-b-2', 'border-orange-600', 'text-orange-500', 'font-semibold');
-            btn.classList.remove('text-zinc-400');
-        } else {
-            btn.classList.remove('border-b-2', 'border-orange-600', 'text-orange-500', 'font-semibold');
-            btn.classList.add('text-zinc-400');
-        }
-    });
-}
-
-function renderRideLog() {
-    const container = document.getElementById('ride-log-list');
-    if (!container || !window.memberRides) return;
-    container.innerHTML = '';
-    if (window.memberRides.length === 0) {
-        container.innerHTML = `<p class="text-xs text-zinc-500 italic px-1">No rides logged yet. Tap the button above to add your first one.</p>`;
-        return;
-    }
-    window.memberRides.forEach((ride) => {
-        container.innerHTML += `
-            <div class="bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-4 flex items-center justify-between text-sm">
-                <div>
-                    <div class="font-medium">${ride.trail}</div>
-                    <div class="text-xs text-zinc-400 font-mono">${ride.date} • ${ride.distance} • ${ride.time}</div>
-                </div>
-                <div class="flex items-center gap-x-px text-amber-400">
-                    ${'★'.repeat(ride.rating)}${'☆'.repeat(5 - ride.rating)}
-                </div>
-            </div>`;
-    });
-}
-
-function logNewRide() {
-    const trail = prompt('Trail name?', 'Cypress Hills - New Flow Line');
-    if (!trail) return;
-    const distance = prompt('Distance (e.g. 18.4 km)', '18.4 km') || '12 km';
-    const time = prompt('Ride time (e.g. 2h 10m)', '2h 10m') || '1h 45m';
-    const rating = parseInt(prompt('Rating (1-5 stars)', '5')) || 5;
-    if (!window.memberRides) window.memberRides = [];
-    const today = new Date().toISOString().split('T')[0];
-    window.memberRides.unshift({
-        date: today, trail, distance, time,
-        rating: Math.max(1, Math.min(5, rating))
-    });
-    renderRideLog();
-    showToast('Ride logged! Thanks for riding with SB Racing.');
-}
-
-function likePost(element) {
-    const countEl = element.querySelector('.like-count');
-    let count = parseInt(countEl.textContent);
-    count++;
-    countEl.textContent = count;
-    element.style.color = '#f59e0b';
-}
-
-// RSVP helpers (also used on members private events)
-let currentEvent = null;
-function rsvpEvent(eventIndex, title, dateStr) {
-    currentEvent = { index: eventIndex, title, dateStr };
-    // Simple toast for members page private events
-    showToast(`RSVP recorded for ${title}!`);
-}
-
-// Seed rides
-window.memberRides = [
-    { date: '2026-01-02', trail: 'Echo Dale Coulee', distance: '14.2 km', time: '1h 48m', rating: 5 },
-    { date: '2025-12-28', trail: 'Cypress Hills Flow', distance: '22.7 km', time: '2h 35m', rating: 4 }
-];
-</script>
 <footer class="bg-black border-t border-zinc-800 py-12">
     <div class="max-w-screen-2xl mx-auto px-8 md:px-12 text-xs text-zinc-400">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-y-4">
@@ -384,10 +267,20 @@ window.memberRides = [
 <div id="success-toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-8 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm font-medium z-[100]">
     <i class="fa-solid fa-check-circle"></i><span id="toast-message"></span>
 </div>
-<script src="js/shared.js"></script>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 <script src="js/supabase-config.js"></script>
+<script src="js/shared.js"></script>
 <script src="js/members.js"></script>
-</body>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function (e) {
+      console.warn('SW register failed', e);
+    });
+  });
+}
+</script>
 </body>
 </html>

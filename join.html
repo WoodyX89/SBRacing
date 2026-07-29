@@ -7,6 +7,14 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#c2410f">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SB Racing">
+    <link rel="apple-touch-icon" href="assets/logo.JPG">
+    <link rel="icon" type="image/jpeg" href="assets/logo.JPG">
 </head>
 <body class="bg-zinc-950 text-zinc-200">
 <nav id="navbar" class="fixed top-0 left-0 right-0 z-50 bg-zinc-900/80 backdrop-blur-lg border-b border-zinc-800 transition-all">
@@ -301,90 +309,7 @@
         <span id="toast-message"></span>
     </div>
 
-<script>
-// Membership Tier Selection
-let selectedTierPrice = 0;
-let selectedTierName = '';
 
-function selectTier(tierIndex, element) {
-    document.querySelectorAll('.tier-card').forEach(card => {
-        card.classList.remove('border-orange-600', 'scale-[1.015]');
-        card.classList.add('border-zinc-700');
-    });
-    element.classList.remove('border-zinc-700');
-    element.classList.add('border-orange-600', 'scale-[1.015]');
-    
-    const tierNames = ['Trail Rider', 'Coulee Crusher', 'Youth / Student'];
-    const tierPrices = [45, 85, 25];
-    selectedTierName = tierNames[tierIndex];
-    selectedTierPrice = tierPrices[tierIndex];
-    
-    document.getElementById('tier-name').innerHTML = selectedTierName;
-    document.getElementById('tier-price').innerHTML = '$' + selectedTierPrice;
-    document.getElementById('selected-tier').value = tierIndex;
-}
-
-function submitMembership(e) {
-    e.preventDefault();
-    const tier = document.getElementById('selected-tier').value;
-    if (!tier) {
-        alert('Please select a membership tier first by clicking one of the cards above.');
-        return;
-    }
-    const name = document.getElementById('full-name').value;
-    const email = document.getElementById('email').value;
-    window.pendingMember = { name, email, tier: selectedTierName, price: selectedTierPrice };
-    showPaymentModal();
-}
-
-function showPaymentModal() {
-    const modal = document.getElementById('payment-modal');
-    const pending = window.pendingMember;
-    if (!pending) return;
-    document.getElementById('payment-tier-name').textContent = pending.tier;
-    document.getElementById('payment-amount').textContent = '$' + pending.price;
-    document.getElementById('payment-total').textContent = '$' + pending.price;
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-function hidePaymentModal() {
-    const modal = document.getElementById('payment-modal');
-    modal.classList.remove('flex');
-    modal.classList.add('hidden');
-}
-
-function processPayment(e) {
-    e.preventDefault();
-    const pending = window.pendingMember;
-    if (!pending) return;
-    const btn = e.target.querySelector('button');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = `<span class="flex items-center justify-center gap-x-2"><i class="fa-solid fa-spinner fa-spin"></i> PROCESSING...</span>`;
-    btn.disabled = true;
-    setTimeout(() => {
-        hidePaymentModal();
-        showToast(`Welcome to SB Racing, ${pending.name.split(' ')[0]}! Your ${pending.tier} membership is now active.`);
-        document.getElementById('membership-form').reset();
-        document.getElementById('tier-name').innerHTML = 'Please select a tier above';
-        document.getElementById('tier-price').innerHTML = '';
-        document.querySelectorAll('.tier-card').forEach(c => c.classList.remove('border-orange-600', 'scale-[1.015]'));
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-        window.pendingMember = null;
-        // Redirect to members after a moment
-        setTimeout(() => { window.location.href = 'members.html'; }, 1800);
-    }, 1650);
-}
-
-// Pre-select popular tier
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-        const tiers = document.querySelectorAll('.tier-card');
-        if (tiers.length > 1) tiers[1].click();
-    }, 300);
-});
-</script>
 <footer class="bg-black border-t border-zinc-800 py-12">
     <div class="max-w-screen-2xl mx-auto px-8 md:px-12 text-xs text-zinc-400">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-y-4">
@@ -419,9 +344,20 @@ document.addEventListener('DOMContentLoaded', () => {
 <div id="success-toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-8 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm font-medium z-[100]">
     <i class="fa-solid fa-check-circle"></i><span id="toast-message"></span>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/shared.js"></script>
-<script src="js/merch.js"></script>
+<script src="js/join.js"></script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function (e) {
+      console.warn('SW register failed', e);
+    });
+  });
+}
+</script>
 </body>
 </html>
