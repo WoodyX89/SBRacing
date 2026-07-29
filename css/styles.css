@@ -215,3 +215,64 @@ input, select, textarea {
         padding-bottom: 2rem;
     }
 }
+
+
+
+/* iOS / Android status bar + notch safe areas */
+:root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+}
+
+body {
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
+}
+
+#navbar {
+    padding-top: var(--safe-top);
+    /* Extra breathing room under status icons on devices that report 0 */
+}
+
+@media (max-width: 767px) {
+    #navbar {
+        /* Clear time / camera / battery status bar */
+        padding-top: max(var(--safe-top), 2.75rem);
+    }
+
+    /* Nav row itself a bit tighter so total height stays reasonable */
+    #navbar .py-4 {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+
+    /* Keep page content below fixed nav + status bar */
+    body {
+        /* nav content ~56px + safe top */
+    }
+
+    .hero-bg,
+    main,
+    section.pt-28,
+    .pt-28 {
+        /* handled via padding classes where possible */
+    }
+
+    /* Push first content under fixed header */
+    body > header.hero-bg,
+    body > section:first-of-type,
+    #login-wall,
+    #member-dashboard,
+    main {
+        /* extra top space is on pages with pt-24/pt-28 */
+    }
+}
+
+/* When installed as PWA with black-translucent status bar */
+@media (display-mode: standalone) {
+    #navbar {
+        padding-top: max(var(--safe-top), 1rem);
+    }
+}
