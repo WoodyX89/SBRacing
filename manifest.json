@@ -1,0 +1,31 @@
+{
+  "name": "SB Racing",
+  "short_name": "SB Racing",
+  "description": "Medicine Hat mountain bike club. Ride the Badlands.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#09090b",
+  "theme_color": "#c2410f",
+  "icons": [
+    {
+      "src": "assets/logo.JPG",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/logo.JPG",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/logo.JPG",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    }
+  ]
+}
