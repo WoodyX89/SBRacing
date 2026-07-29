@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soggy Bottom Racing • Enter the Trails</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', system_ui, sans-serif;
+        }
+        .title-font {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        #hero-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -2;
+        }
+
+        .overlay {
+            background: linear-gradient(
+                to bottom,
+                rgba(0,0,0,0.4) 0%,
+                rgba(63,42,30,0.7) 50%,
+                rgba(0,0,0,0.85) 100%
+            );
+        }
+
+        .mud-text {
+            text-shadow: 0 4px 20px rgba(0,0,0,0.9);
+        }
+
+        .trail-particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #fcd34d;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: trail 1.5s linear forwards;
+        }
+
+        @keyframes trail {
+            to {
+                transform: translateY(300px) scale(0);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body class="bg-black text-white overflow-hidden">
+    <!-- Background Video -->
+    <video id="hero-video" autoplay loop muted playsinline>
+        <!-- Replace with your own video URL (recommended: short vertical or horizontal MTB clip) -->
+        <source src="https://assets.mixkit.co/videos/preview/754/754-small.mp4" type="video/mp4">
+        <!-- Fallback image -->
+        Your browser does not support the video tag.
+    </video>
+
+    <!-- Dark Overlay -->
+    <div class="overlay fixed inset-0 z-10"></div>
+
+    <!-- Content -->
+    <div class="relative z-20 min-h-screen flex flex-col">
+        <!-- Top Bar -->
+        <div class="flex justify-between items-center px-6 py-6">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 bg-amber-600 rounded-2xl flex items-center justify-center text-2xl font-bold title-font shadow-inner">SBR</div>
+                <div class="title-font text-3xl font-semibold tracking-tighter">SOGGY BOTTOM</div>
+            </div>
+            <a href="index.html" 
+               class="hidden md:flex items-center gap-2 px-6 py-3 border border-white/30 hover:border-amber-400 rounded-full text-sm font-medium transition-all hover:scale-105">
+                <span>ENTER SITE</span>
+                <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+
+        <!-- Main Hero -->
+        <div class="flex-1 flex items-center justify-center px-6 text-center">
+            <div class="max-w-3xl">
+                <div class="inline-flex items-center gap-3 bg-black/60 backdrop-blur-md px-8 py-3 rounded-3xl mb-8 border border-amber-400/30">
+                    <div class="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
+                    <span class="uppercase tracking-[3px] text-sm font-medium text-amber-300">Medicine Hat, Alberta</span>
+                </div>
+
+                <h1 class="title-font text-7xl md:text-8xl font-bold tracking-[-3px] leading-none mud-text mb-6">
+                    GET<br>SOGGY
+                </h1>
+                
+                <p class="text-2xl md:text-3xl text-amber-200 mb-12 max-w-lg mx-auto">
+                    Mountain bike crew chasing mud, singletrack, and good times in the badlands.
+                </p>
+
+                <!-- Interactive CTA -->
+                <div class="flex flex-col sm:flex-row gap-6 justify-center items-center">
+                    <button onclick="enterTheTrails()" 
+                            id="enter-btn"
+                            class="group relative px-16 py-8 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-600 text-2xl font-semibold rounded-3xl overflow-hidden hover:scale-105 active:scale-95 transition-all duration-300 shadow-2xl shadow-amber-900/50">
+                        <span class="relative z-10 flex items-center gap-4">
+                            ENTER THE TRAILS
+                            <i class="fas fa-mountain group-active:rotate-12 transition-transform"></i>
+                        </span>
+                        <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform"></div>
+                    </button>
+
+                    <button onclick="toggleVideo()" 
+                            class="flex items-center gap-3 px-8 py-6 border-2 border-white/40 hover:border-white rounded-3xl text-lg font-medium transition-all hover:bg-white/10">
+                        <i id="play-icon" class="fas fa-pause text-2xl"></i>
+                        <span>VIDEO</span>
+                    </button>
+                </div>
+
+                <div class="mt-16 flex justify-center gap-12 text-sm">
+                    <div onclick="createTrailParticles()" class="cursor-pointer group">
+                        <div class="text-4xl font-bold text-amber-400 group-hover:scale-110 transition">40+</div>
+                        <div class="text-zinc-400">Riders</div>
+                    </div>
+                    <div onclick="createTrailParticles()" class="cursor-pointer group">
+                        <div class="text-4xl font-bold text-amber-400 group-hover:scale-110 transition">25</div>
+                        <div class="text-zinc-400">Rides this year</div>
+                    </div>
+                    <div onclick="createTrailParticles()" class="cursor-pointer group">
+                        <div class="text-4xl font-bold text-amber-400 group-hover:scale-110 transition">∞</div>
+                        <div class="text-zinc-400">Stoke level</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Bar -->
+        <div class="py-8 px-6 text-center text-xs text-amber-300/60 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>© 2026 Soggy Bottom Racing • Prairie Mud Enthusiasts</div>
+            <div class="flex items-center gap-6">
+                <a href="index.html" class="hover:text-amber-400 transition flex items-center gap-2">
+                    <span class="uppercase tracking-widest text-[10px]">Main Site</span>
+                    <i class="fas fa-arrow-right text-xs"></i>
+                </a>
+                <button onclick="createTrailParticles()" class="hover:text-amber-400 transition">
+                    <i class="fas fa-bicycle"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clickable Mud Splatter Hint -->
+    <div id="mud-hint" 
+         onclick="createTrailParticles()"
+         class="fixed bottom-8 right-8 w-16 h-16 bg-amber-900/70 hover:bg-amber-800 rounded-2xl flex items-center justify-center text-3xl cursor-pointer transition-all active:scale-90 z-30 shadow-xl">
+        💦
+    </div>
+
+    <script>
+        // Video control
+        const video = document.getElementById('hero-video');
+        let isPlaying = true;
+
+        function toggleVideo() {
+            if (isPlaying) {
+                video.pause();
+                document.getElementById('play-icon').classList.replace('fa-pause', 'fa-play');
+            } else {
+                video.play();
+                document.getElementById('play-icon').classList.replace('fa-play', 'fa-pause');
+            }
+            isPlaying = !isPlaying;
+        }
+
+        // Enter the site with cool transition
+        function enterTheTrails() {
+            const btn = document.getElementById('enter-btn');
+            btn.style.transition = 'all 0.6s cubic-bezier(0.4, 0, 1, 1)';
+            btn.style.transform = 'scale(0.95) translateY(20px)';
+            btn.style.opacity = '0.6';
+
+            // Create final burst of particles
+            for (let i = 0; i < 40; i++) {
+                createSingleParticle();
+            }
+
+            // Redirect after short delay
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 650);
+        }
+
+        // Interactive mud/trail particles
+        function createSingleParticle() {
+            const particle = document.createElement('div');
+            particle.className = 'trail-particle';
+            
+            // Random starting position near bottom
+            const startX = Math.random() * window.innerWidth;
+            particle.style.left = `${startX}px`;
+            particle.style.bottom = `${Math.random() * 120 + 80}px`;
+            
+            // Random size and color variation
+            const size = Math.random() * 7 + 3;
+            particle.style.width = `${size}px`;
+            particle.style.height = `${size}px`;
+            particle.style.background = Math.random() > 0.5 ? '#fcd34d' : '#b45309';
+            
+            document.body.appendChild(particle);
+
+            // Remove after animation
+            setTimeout(() => {
+                particle.remove();
+            }, 1800);
+        }
+
+        function createTrailParticles(count = 25) {
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => {
+                    createSingleParticle();
+                }, i * 18);
+            }
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ' || e.key === 'k') {
+                e.preventDefault();
+                toggleVideo();
+            }
+            if (e.key === 'Enter') {
+                enterTheTrails();
+            }
+        });
+
+        // Click anywhere on background spawns particles
+        document.addEventListener('click', (e) => {
+            if (e.target.tagName === 'VIDEO' || e.target.id === 'hero-video') {
+                for (let i = 0; i < 8; i++) {
+                    createSingleParticle();
+                }
+            }
+        });
+
+        // Auto particles on load
+        function initLanding() {
+            // Initial particle burst
+            setTimeout(() => createTrailParticles(30), 800);
+            setTimeout(() => createTrailParticles(15), 1600);
+            
+            // Occasional random particles
+            setInterval(() => {
+                if (Math.random() > 0.6) createTrailParticles(3);
+            }, 2800);
+
+            console.log('%cSoggy Bottom Racing Landing Page Ready 🚲💦', 'color:#fbbf24; font-size:13px; font-weight:600');
+        }
+
+        window.onload = initLanding;
+    </script>
+</body>
+</html>
