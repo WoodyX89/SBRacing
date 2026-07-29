@@ -117,9 +117,8 @@ img, video {
 }
 
 .nav-scrolled {
-    background-color: rgba(17, 24, 39, 0.95) !important;
-    backdrop-filter: blur(12px);
-    box-shadow: 0 4px 20px rgb(0 0 0 / 0.3);
+    background-color: #09090b !important; /* zinc-950 solid */
+    box-shadow: 0 4px 20px rgb(0 0 0 / 0.35);
 }
 
 .soggy-bg {
@@ -248,3 +247,12 @@ input, select, textarea {
     }
 }
 
+
+
+/* navbar solid force — identical on index hero and all other pages */
+#navbar {
+    background-color: #09090b !important;
+    background-image: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
