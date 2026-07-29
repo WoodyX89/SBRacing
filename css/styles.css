@@ -37,9 +37,9 @@
         }
 
         .hero-bg {
-            background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.55)), url('/assets/logo.JPG');
+            background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.55)), url('/assets/backdrop.jpeg');
             background-size: cover;
-            background-position: center 30%;
+            background-position: center center;
             background-attachment: fixed;
         }
 

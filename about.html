@@ -13,8 +13,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="SB Racing">
-    <link rel="apple-touch-icon" href="assets/logo.JPG">
-    <link rel="icon" type="image/jpeg" href="assets/logo.JPG">
+    <link rel="apple-touch-icon" href="/assets/logo.JPG">
+    <link rel="icon" type="image/jpeg" href="/assets/logo.JPG">
 </head>
 <body class="bg-zinc-950 text-zinc-200">
 <nav id="navbar" class="fixed top-0 left-0 right-0 z-50 bg-zinc-900/80 backdrop-blur-lg border-b border-zinc-800 transition-all">
@@ -22,7 +22,7 @@
         <div class="px-8 py-4 flex items-center justify-between">
             <a href="index.html" class="flex items-center gap-x-3">
                 <div class="flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-700 to-amber-800 shadow-inner overflow-hidden ring-2 ring-offset-2 ring-offset-zinc-900 ring-orange-900/50">
-                    <img src="assets/logo.JPG" alt="SB Racing Logo" class="w-full h-full object-cover scale-125" onerror="this.style.display='none'">
+                    <img src="/assets/logo.JPG" alt="SB Racing Logo" class="w-full h-full object-cover scale-125" onerror="this.src='/assets/logo.jpg'">
                 </div>
                 <div>
                     <span class="sb-logo text-3xl font-black tracking-tighter">SB</span>
@@ -168,8 +168,19 @@
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('/sw.js').catch(function (e) {
-      console.warn('SW register failed', e);
+    // Prefer same-folder sw.js; ignore failures (login/merch do not depend on it)
+    var swUrl = 'sw.js';
+    navigator.serviceWorker.getRegistrations().then(function (regs) {
+      // If sw is missing, clear any old broken registrations so they don't cache stale pages
+      fetch(swUrl, { method: 'HEAD' }).then(function (res) {
+        if (res.ok) {
+          navigator.serviceWorker.register(swUrl).catch(function () {});
+        } else {
+          regs.forEach(function (r) { r.unregister(); });
+        }
+      }).catch(function () {
+        regs.forEach(function (r) { r.unregister(); });
+      });
     });
   });
 }

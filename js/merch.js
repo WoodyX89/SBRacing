@@ -5,9 +5,18 @@ let isAdmin = false;
 let editingProductId = null;
 
 async function initMerch() {
-  await checkAdmin();
+  try {
+    await Promise.race([
+      checkAdmin(),
+      new Promise(function (r) { setTimeout(r, 3000); })
+    ]);
+  } catch (e) {
+    console.warn('[merch] checkAdmin', e);
+    isAdmin = false;
+  }
   await loadProducts();
   if (isAdmin) showAdminUI();
+  console.log('[merch] loaded', allProducts.length, 'products, admin=', isAdmin);
 }
 
 async function checkAdmin() {
@@ -34,13 +43,36 @@ async function loadProducts() {
     </div>`;
 
   try {
-    // Admins see all (including inactive); public sees active only (RLS)
-    let query = sb.from('products').select('*').order('sort_order', { ascending: true });
-    if (!isAdmin) {
-      query = query.eq('is_active', true);
+    let data = null;
+    const clientQuery = (async () => {
+      let query = window.sb.from('products').select('*').order('sort_order', { ascending: true });
+      if (!isAdmin) query = query.eq('is_active', true);
+      const res = await query;
+      if (res.error) throw res.error;
+      return res.data || [];
+    })();
+
+    data = await Promise.race([
+      clientQuery,
+      new Promise((resolve) => setTimeout(() => resolve(null), 2500))
+    ]);
+
+    if (!data) {
+      console.warn('[merch] client query slow — using fetch');
+      const session = typeof getSessionFromStorage === 'function' ? getSessionFromStorage() : null;
+      const token = (session && session.access_token) || window.SB_ANON_KEY;
+      let url = window.SB_URL + '/rest/v1/products?select=*&order=sort_order.asc';
+      if (!isAdmin) url += '&is_active=eq.true';
+      const res = await fetch(url, {
+        headers: {
+          apikey: window.SB_ANON_KEY,
+          Authorization: 'Bearer ' + token,
+          Accept: 'application/json'
+        }
+      });
+      if (!res.ok) throw new Error('products fetch ' + res.status);
+      data = await res.json();
     }
-    const { data, error } = await query;
-    if (error) throw error;
 
     allProducts = data || [];
     renderProducts();
@@ -165,7 +197,7 @@ function editProduct(id) {
 
 async function deleteProduct(id) {
   if (!confirm('Delete this product permanently?')) return;
-  const { error } = await sb.from('products').delete().eq('id', id);
+  const { error } = await window.sb.from('products').delete().eq('id', id);
   if (error) {
     showToast(error.message, true);
     return;
@@ -204,9 +236,9 @@ async function saveProduct(e) {
   try {
     let error;
     if (editingProductId) {
-      ({ error } = await sb.from('products').update(payload).eq('id', editingProductId));
+      ({ error } = await window.sb.from('products').update(payload).eq('id', editingProductId));
     } else {
-      ({ error } = await sb.from('products').insert(payload));
+      ({ error } = await window.sb.from('products').insert(payload));
     }
     if (error) throw error;
 
@@ -238,26 +270,36 @@ async function uploadProductImage(input) {
   const file = input.files?.[0];
   if (!file) return;
   if (!isAdmin) {
-    showToast('Admin only', true);
+    showToast('Admin only — log in as admin first', true);
+    return;
+  }
+  if (!window.sb) {
+    showToast('Supabase not loaded', true);
     return;
   }
 
-  const ext = file.name.split('.').pop() || 'jpg';
-  const path = `products/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  if (file.size > 5 * 1024 * 1024) {
+    showToast('Image must be under 5 MB', true);
+    return;
+  }
+
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `products/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
   showToast('Uploading image...');
-  const { data, error } = await sb.storage.from('merch').upload(path, file, {
+  const { data, error } = await window.sb.storage.from('merch').upload(path, file, {
     cacheControl: '3600',
-    upsert: false
+    upsert: false,
+    contentType: file.type || 'image/jpeg'
   });
 
   if (error) {
-    // Fallback message if bucket doesn't exist
-    showToast('Upload failed: ' + error.message + ' (You can paste an image URL instead)', true);
+    console.error('upload error', error);
+    showToast('Upload failed: ' + error.message, true);
     return;
   }
 
-  const { data: pub } = sb.storage.from('merch').getPublicUrl(path);
+  const { data: pub } = window.sb.storage.from('merch').getPublicUrl(path);
   if (pub?.publicUrl) {
     document.getElementById('prod-image').value = pub.publicUrl;
     previewImageUrl();
@@ -278,6 +320,19 @@ function escapeAttr(str) {
   return escapeHtml(str).replace(/'/g, '&#39;');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (typeof sb !== 'undefined') initMerch();
-});
+function bootMerch() {
+  if (!window.sb) {
+    console.warn('[merch] sb not ready, retrying...');
+    setTimeout(bootMerch, 150);
+    return;
+  }
+  initMerch().catch(function (e) {
+    console.error('[merch] init failed', e);
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootMerch);
+} else {
+  bootMerch();
+}

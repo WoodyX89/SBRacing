@@ -1,21 +1,43 @@
 // Members area — real Supabase Auth + ride logs + profile
 
 async function initMembersPage() {
-    const session = await getSession();
-    if (session?.user) {
-        await showDashboard(session.user);
+    console.log('[members] init start');
+    // Always show login wall first so UI is never stuck blank
+    showLoginWall();
+
+    let session = null;
+    try {
+        session = await Promise.race([
+            getSession(),
+            new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 3000); })
+        ]);
+    } catch (e) {
+        console.warn('[members] getSession error', e);
+    }
+
+    console.log('[members] session', session && session.user && session.user.email);
+
+    if (session && session.user) {
+        try {
+            await showDashboard(session.user);
+        } catch (e) {
+            console.error('[members] dashboard error', e);
+            showLoginWall();
+        }
     } else {
         showLoginWall();
     }
 
-    // Listen for auth changes
-    sb.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-            await showDashboard(session.user);
-        } else if (event === 'SIGNED_OUT') {
-            showLoginWall();
-        }
-    });
+    if (window.sb) {
+        window.sb.auth.onAuthStateChange(async function (event, session) {
+            console.log('[members] auth event', event);
+            if (event === 'SIGNED_IN' && session && session.user) {
+                await showDashboard(session.user);
+            } else if (event === 'SIGNED_OUT') {
+                showLoginWall();
+            }
+        });
+    }
 }
 
 function showLoginWall() {
@@ -74,10 +96,29 @@ async function loginMember(e) {
     }
 
     try {
-        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+        const { data, error } = await window.sb.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        showToast('Welcome back!');
-        // Dashboard shown via onAuthStateChange
+
+        // Session is written to localStorage by the client — use it immediately
+        if (data.session?.user) {
+            showToast('Welcome back!');
+            await showDashboard(data.session.user);
+            if (typeof updateNavAuth === 'function') {
+                await updateNavAuth(data.session.user);
+            }
+        } else if (data.user && !data.session) {
+            showToast('Check your email to confirm your account before logging in.', true);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = original;
+            }
+        } else {
+            showToast('Login returned no session. Disable "Confirm email" in Supabase Auth settings.', true);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = original;
+            }
+        }
     } catch (err) {
         console.error(err);
         showToast(err.message || 'Login failed', true);
@@ -88,8 +129,9 @@ async function loginMember(e) {
     }
 }
 
+
 async function logoutMember() {
-    await sb.auth.signOut();
+    await window.sb.auth.signOut();
     showToast('Logged out');
     showLoginWall();
 }
@@ -165,7 +207,7 @@ async function logNewRide() {
     const duration = prompt('Ride time (e.g. 2h 10m)', '2h 10m') || null;
     const rating = parseInt(prompt('Rating (1-5 stars)', '5')) || 5;
 
-    const { data, error } = await sb.from('rides').insert({
+    const { data, error } = await window.sb.from('rides').insert({
         user_id: user.id,
         trail_name: trail,
         ride_date: new Date().toISOString().split('T')[0],
@@ -236,7 +278,7 @@ async function likePost(postId, element) {
     element.style.color = '#f59e0b';
 
     // Fire and forget update
-    await sb.from('posts').update({ likes: count }).eq('id', postId);
+    await window.sb.from('posts').update({ likes: count }).eq('id', postId);
 }
 
 async function rsvpEvent(eventIndex, title, dateStr) {
@@ -270,11 +312,20 @@ function formatTimeAgo(iso) {
     return d.toLocaleDateString();
 }
 
-// Boot
-document.addEventListener('DOMContentLoaded', () => {
-    if (typeof sb !== 'undefined') {
-        initMembersPage();
-    } else {
-        console.error('Supabase client not loaded');
-    }
-});
+
+function bootMembers() {
+  if (!window.sb) {
+    console.warn('[members] sb not ready, retrying...');
+    setTimeout(bootMembers, 150);
+    return;
+  }
+  initMembersPage().catch(function (e) {
+    console.error('[members] init failed', e);
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootMembers);
+} else {
+  bootMembers();
+}
+
