@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Members • SB Racing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/shared.js"></script>
+<script src="js/members.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+<nav id="navbar" class="fixed top-0 left-0 right-0 z-50 bg-zinc-900/80 backdrop-blur-lg border-b border-zinc-800 transition-all">
+    <div class="max-w-screen-2xl mx-auto">
+        <div class="px-8 py-4 flex items-center justify-between">
+            <a href="index.html" class="flex items-center gap-x-3">
+                <div class="flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-700 to-amber-800 shadow-inner overflow-hidden ring-2 ring-offset-2 ring-offset-zinc-900 ring-orange-900/50">
+                    <img src="assets/logo.JPG" alt="SB Racing Logo" class="w-full h-full object-cover scale-125" onerror="this.style.display='none'">
+                </div>
+                <div>
+                    <span class="sb-logo text-3xl font-black tracking-tighter">SB</span>
+                    <span class="text-2xl font-semibold tracking-[-2px] text-zinc-400">RACING</span>
+                </div>
+            </a>
+            <div class="hidden md:flex items-center gap-x-8 text-sm font-medium">
+                <a href="about.html" class="nav-link px-3 py-2 hover:text-white transition-colors">About</a>
+                <a href="merch.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Merch</a>
+                <a href="events.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Events</a>
+                <a href="join.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Join</a>
+                <a href="members.html" class="nav-link px-3 py-2 hover:text-white transition-colors flex items-center gap-x-1.5">
+                    <i class="fa-solid fa-lock text-xs"></i><span>Members</span>
+                </a>
+            </div>
+            <div class="flex items-center gap-x-4">
+                <button onclick="showCart()" class="flex items-center gap-x-2 px-4 py-2 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 transition-all active:scale-[0.985]">
+                    <i class="fa-solid fa-shopping-cart text-lg"></i>
+                    <span id="cart-count" class="min-w-[18px] h-[18px] flex items-center justify-center text-xs font-mono bg-orange-600 text-white rounded-full px-1.5">0</span>
+                </button>
+                <button class="md:hidden flex items-center justify-center w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 active:scale-95 transition-all" onclick="toggleMobileMenu()">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+                <a href="join.html" class="hidden md:block px-6 py-2.5 rounded-2xl bg-white text-zinc-900 font-semibold text-sm tracking-wide hover:bg-amber-100 active:scale-[0.985] transition-all">JOIN THE CREW</a>
+            </div>
+        </div>
+    </div>
+    <div id="mobile-menu" class="hidden md:hidden border-t border-zinc-800 bg-zinc-900">
+        <div class="px-6 py-4 flex flex-col gap-y-1 text-base font-medium">
+            <a href="about.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">About Us</a>
+            <a href="merch.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Merchandise</a>
+            <a href="events.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Events &amp; Rides</a>
+            <a href="join.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Become a Member</a>
+            <a href="members.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800 flex items-center gap-x-2"><i class="fa-solid fa-lock"></i><span>Members Only Area</span></a>
+            <div class="pt-3 border-t border-zinc-800 mt-2">
+                <a href="join.html" class="block w-full text-center px-6 py-3 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-white active:scale-[0.985]">JOIN THE CREW</a>
+            </div>
+        </div>
+    </div>
+</nav>
+<div class="h-20"></div>
+    <!-- MEMBERS ONLY AREA -->
+    <section id="members" class="max-w-screen-2xl mx-auto px-8 md:px-12 py-20">
+        <div class="max-w-4xl mx-auto">
+            <div class="flex items-center gap-x-3 mb-6">
+                <i class="fa-solid fa-lock text-orange-600 text-2xl"></i>
+                <div>
+                    <div class="uppercase tracking-[2.5px] text-xs font-semibold text-orange-600">EXCLUSIVE</div>
+                    <h2 class="section-header tracking-tighter -mt-1">Members Only Area</h2>
+                </div>
+            </div>
+            
+            <div id="login-wall" class="bg-zinc-900 border border-zinc-700 rounded-3xl p-10 text-center">
+                <div class="mx-auto w-16 h-16 flex items-center justify-center bg-zinc-800 rounded-2xl mb-6">
+                    <i class="fa-solid fa-user-lock text-3xl text-orange-600"></i>
+                </div>
+                <h3 class="text-2xl font-semibold tracking-tight">Access the Inner Circle</h3>
+                <p class="mt-3 max-w-xs mx-auto text-sm text-zinc-400">Login to view private ride logs, exclusive events, member directory, GPX downloads, and the real-time trail conditions chat.</p>
+                
+                <form id="login-form" onsubmit="loginMember(event)" class="max-w-xs mx-auto mt-8 space-y-4 text-left">
+                    <div>
+                        <label class="text-xs font-medium tracking-widest text-zinc-400">EMAIL OR USERNAME</label>
+                        <input type="text" id="login-email" value="trevor@sb-racing.ca" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+                    </div>
+                    <div>
+                        <label class="text-xs font-medium tracking-widest text-zinc-400">PASSWORD</label>
+                        <input type="password" id="login-password" value="soggybottom" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+                    </div>
+                    
+                    <button type="submit" 
+                            class="w-full py-3.5 mt-2 rounded-2xl bg-orange-600 hover:bg-orange-700 active:bg-orange-800 font-semibold text-sm tracking-wider transition-all">
+                        LOG IN TO MEMBERS AREA
+                    </button>
+                </form>
+                
+                <p class="text-xs text-zinc-500 mt-5">Demo credentials pre-filled • Any password works for this template</p>
+            </div>
+
+            <!-- Member Dashboard (hidden until login) -->
+            <div id="member-dashboard" class="hidden bg-zinc-900 border border-zinc-700 rounded-3xl overflow-hidden">
+                <div class="px-8 py-6 bg-zinc-950 flex items-center justify-between border-b border-zinc-700">
+                    <div class="flex items-center gap-x-4">
+                        <div class="w-11 h-11 rounded-2xl overflow-hidden border border-zinc-700">
+                            <img src="https://picsum.photos/id/1005/44/44" class="object-cover">
+                        </div>
+                        <div>
+                            <div class="font-semibold" id="member-name">Trevor Wood</div>
+                            <div class="text-xs text-emerald-400 flex items-center gap-x-1">
+                                <i class="fa-solid fa-check-circle"></i> 
+                                <span>Premium Member • Coulee Crusher</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="logoutMember()" 
+                            class="text-xs font-medium px-4 py-2 rounded-2xl border border-zinc-700 hover:bg-zinc-800 flex items-center gap-x-2">
+                        <i class="fa-solid fa-sign-out-alt"></i>
+                        <span>LOGOUT</span>
+                    </button>
+                </div>
+
+                <!-- Dashboard Tabs -->
+                <div class="px-8 pt-6">
+                    <div class="flex border-b border-zinc-700 text-sm font-medium">
+                        <button onclick="switchMemberTab(0)" class="member-tab px-5 py-3 border-b-2 border-orange-600 text-orange-500 font-semibold" data-tab="0">My Rides</button>
+                        <button onclick="switchMemberTab(1)" class="member-tab px-5 py-3 text-zinc-400 hover:text-white" data-tab="1">Private Events</button>
+                        <button onclick="switchMemberTab(2)" class="member-tab px-5 py-3 text-zinc-400 hover:text-white" data-tab="2">Perks &amp; Resources</button>
+                        <button onclick="switchMemberTab(3)" class="member-tab px-5 py-3 text-zinc-400 hover:text-white" data-tab="3">Community Feed</button>
+                    </div>
+                </div>
+
+                <!-- Tab Content -->
+                <div class="p-8">
+                    <!-- My Rides Tab -->
+                    <div id="tab-0" class="member-tab-content">
+                        <div class="flex justify-between items-center mb-5">
+                            <div class="font-semibold">Ride Log • 2026 Season</div>
+                            <button onclick="logNewRide()" class="text-xs flex items-center gap-x-2 px-4 py-2 rounded-2xl bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white text-xs font-semibold">
+                                <i class="fa-solid fa-plus"></i> 
+                                <span>LOG NEW RIDE</span>
+                            </button>
+                        </div>
+                        
+                        <div id="ride-log-list" class="space-y-3 text-sm"></div>
+                    </div>
+
+                    <!-- Private Events Tab -->
+                    <div id="tab-1" class="member-tab-content hidden">
+                        <div class="font-semibold mb-4">Members-Only Events</div>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between bg-zinc-950 border border-zinc-700 rounded-2xl p-4">
+                                <div>
+                                    <div class="font-medium">Full Moon Night Ride — Jan 29</div>
+                                    <div class="text-xs text-zinc-400">Cypress Hills • 25km • Advanced</div>
+                                </div>
+                                <button onclick="rsvpEvent(99, 'Full Moon Night Ride', 'Jan 29')" class="px-4 py-1.5 text-xs font-semibold rounded-2xl border border-orange-600 text-orange-500">RSVP</button>
+                            </div>
+                            <div class="flex items-center justify-between bg-zinc-950 border border-zinc-700 rounded-2xl p-4">
+                                <div>
+                                    <div class="font-medium">SB Racing Wind-Up BBQ &amp; Awards</div>
+                                    <div class="text-xs text-zinc-400">Aug 15 • Elkwater • All welcome</div>
+                                </div>
+                                <button onclick="rsvpEvent(100, 'SB Racing Wind-Up', 'Aug 15')" class="px-4 py-1.5 text-xs font-semibold rounded-2xl border border-orange-600 text-orange-500">RSVP</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Perks Tab -->
+                    <div id="tab-2" class="member-tab-content hidden">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-zinc-950 border border-zinc-700 p-5 rounded-3xl">
+                                <div class="font-semibold mb-1 flex items-center gap-x-2"><i class="fa-solid fa-tags text-orange-500"></i> <span>Merch Discount Code</span></div>
+                                <div class="font-mono text-2xl tracking-widest text-orange-500">SOGGY20</div>
+                                <div class="text-xs text-emerald-400 mt-1">20% off — expires Feb 28</div>
+                            </div>
+                            <div class="bg-zinc-950 border border-zinc-700 p-5 rounded-3xl">
+                                <div class="font-semibold mb-3">Trail Resources</div>
+                                <div class="space-y-2 text-sm">
+                                    <a href="#" class="block hover:text-orange-400 transition-colors">↓ Download Cypress Hills GPX Pack</a>
+                                    <a href="#" class="block hover:text-orange-400 transition-colors">↓ Echo Dale &amp; Coulees Map (2026)</a>
+                                    <a href="#" class="block hover:text-orange-400 transition-colors">↓ Winter Tire Pressure Guide (PDF)</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Community Feed Tab -->
+                    <div id="tab-3" class="member-tab-content hidden">
+                        <div class="font-semibold mb-4">Member Feed • Recent Activity</div>
+                        
+                        <div class="space-y-4">
+                            <div class="bg-zinc-950 border border-zinc-700 rounded-2xl p-4">
+                                <div class="flex gap-x-3">
+                                    <div class="w-9 h-9 rounded-full overflow-hidden flex-shrink-0"><img src="https://picsum.photos/id/1005/36/36"></div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-baseline justify-between">
+                                            <span class="font-semibold">Mike R.</span>
+                                            <span class="text-xs text-zinc-500">2h ago</span>
+                                        </div>
+                                        <div class="text-sm mt-0.5">"Just did the new flow line at Cypress. Conditions are perfect right now. Highly recommend."</div>
+                                        <div class="flex gap-x-5 mt-3 text-xs">
+                                            <button onclick="likePost(this)" class="flex items-center gap-x-1 text-zinc-400 hover:text-orange-400"><i class="fa-solid fa-heart"></i> <span class="like-count">47</span></button>
+                                            <span class="text-zinc-500">12 comments</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-zinc-950 border border-zinc-700 rounded-2xl p-4">
+                                <div class="flex gap-x-3">
+                                    <div class="w-9 h-9 rounded-full overflow-hidden flex-shrink-0"><img src="https://picsum.photos/id/201/36/36"></div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-baseline justify-between">
+                                            <span class="font-semibold">Sarah K.</span>
+                                            <span class="text-xs text-zinc-500">Yesterday</span>
+                                        </div>
+                                        <div class="text-sm mt-0.5">"Huge thanks to everyone who came out to the skills clinic. My kid crushed the beginner loop for the first time!"</div>
+                                        <div class="flex gap-x-5 mt-3 text-xs">
+                                            <button onclick="likePost(this)" class="flex items-center gap-x-1 text-zinc-400 hover:text-orange-400"><i class="fa-solid fa-heart"></i> <span class="like-count">31</span></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+<script>
+// Members Area logic
+function loginMember(e) {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const pass = document.getElementById('login-password').value;
+    if (email && pass) {
+        const wall = document.getElementById('login-wall');
+        const dashboard = document.getElementById('member-dashboard');
+        wall.style.transition = 'all 0.2s ease';
+        wall.style.opacity = '0';
+        setTimeout(() => {
+            wall.classList.add('hidden');
+            dashboard.classList.remove('hidden');
+            dashboard.style.opacity = '0';
+            setTimeout(() => {
+                dashboard.style.transition = 'all 0.3s ease';
+                dashboard.style.opacity = '1';
+            }, 50);
+        }, 180);
+        const nameEl = document.getElementById('member-name');
+        if (nameEl.textContent === 'Trevor Wood' && email.includes('@')) {
+            const guessedName = email.split('@')[0].replace('.', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            nameEl.textContent = guessedName;
+        }
+        if (!window.memberRides) {
+            window.memberRides = [
+                { date: '2026-01-02', trail: 'Echo Dale Coulee', distance: '14.2 km', time: '1h 48m', rating: 5 },
+                { date: '2025-12-28', trail: 'Cypress Hills Flow', distance: '22.7 km', time: '2h 35m', rating: 4 }
+            ];
+        }
+        renderRideLog();
+    }
+}
+
+function logoutMember() {
+    const dashboard = document.getElementById('member-dashboard');
+    const wall = document.getElementById('login-wall');
+    dashboard.style.transition = 'all 0.2s ease';
+    dashboard.style.opacity = '0';
+    setTimeout(() => {
+        dashboard.classList.add('hidden');
+        dashboard.style.opacity = '1';
+        wall.classList.remove('hidden');
+        wall.style.opacity = '1';
+    }, 200);
+}
+
+function switchMemberTab(tabIndex) {
+    document.querySelectorAll('.member-tab-content').forEach(el => el.classList.add('hidden'));
+    document.getElementById(`tab-${tabIndex}`).classList.remove('hidden');
+    document.querySelectorAll('.member-tab').forEach((btn, idx) => {
+        if (idx == tabIndex) {
+            btn.classList.add('border-b-2', 'border-orange-600', 'text-orange-500', 'font-semibold');
+            btn.classList.remove('text-zinc-400');
+        } else {
+            btn.classList.remove('border-b-2', 'border-orange-600', 'text-orange-500', 'font-semibold');
+            btn.classList.add('text-zinc-400');
+        }
+    });
+}
+
+function renderRideLog() {
+    const container = document.getElementById('ride-log-list');
+    if (!container || !window.memberRides) return;
+    container.innerHTML = '';
+    if (window.memberRides.length === 0) {
+        container.innerHTML = `<p class="text-xs text-zinc-500 italic px-1">No rides logged yet. Tap the button above to add your first one.</p>`;
+        return;
+    }
+    window.memberRides.forEach((ride) => {
+        container.innerHTML += `
+            <div class="bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-4 flex items-center justify-between text-sm">
+                <div>
+                    <div class="font-medium">${ride.trail}</div>
+                    <div class="text-xs text-zinc-400 font-mono">${ride.date} • ${ride.distance} • ${ride.time}</div>
+                </div>
+                <div class="flex items-center gap-x-px text-amber-400">
+                    ${'★'.repeat(ride.rating)}${'☆'.repeat(5 - ride.rating)}
+                </div>
+            </div>`;
+    });
+}
+
+function logNewRide() {
+    const trail = prompt('Trail name?', 'Cypress Hills - New Flow Line');
+    if (!trail) return;
+    const distance = prompt('Distance (e.g. 18.4 km)', '18.4 km') || '12 km';
+    const time = prompt('Ride time (e.g. 2h 10m)', '2h 10m') || '1h 45m';
+    const rating = parseInt(prompt('Rating (1-5 stars)', '5')) || 5;
+    if (!window.memberRides) window.memberRides = [];
+    const today = new Date().toISOString().split('T')[0];
+    window.memberRides.unshift({
+        date: today, trail, distance, time,
+        rating: Math.max(1, Math.min(5, rating))
+    });
+    renderRideLog();
+    showToast('Ride logged! Thanks for riding with SB Racing.');
+}
+
+function likePost(element) {
+    const countEl = element.querySelector('.like-count');
+    let count = parseInt(countEl.textContent);
+    count++;
+    countEl.textContent = count;
+    element.style.color = '#f59e0b';
+}
+
+// RSVP helpers (also used on members private events)
+let currentEvent = null;
+function rsvpEvent(eventIndex, title, dateStr) {
+    currentEvent = { index: eventIndex, title, dateStr };
+    // Simple toast for members page private events
+    showToast(`RSVP recorded for ${title}!`);
+}
+
+// Seed rides
+window.memberRides = [
+    { date: '2026-01-02', trail: 'Echo Dale Coulee', distance: '14.2 km', time: '1h 48m', rating: 5 },
+    { date: '2025-12-28', trail: 'Cypress Hills Flow', distance: '22.7 km', time: '2h 35m', rating: 4 }
+];
+</script>
+<footer class="bg-black border-t border-zinc-800 py-12">
+    <div class="max-w-screen-2xl mx-auto px-8 md:px-12 text-xs text-zinc-400">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-y-4">
+            <div>
+                © 2026 SB Racing • Medicine Hat, Alberta<br>
+                <span class="text-zinc-600">Proudly riding the traditional lands of the Blackfoot Confederacy.</span>
+            </div>
+            <div class="flex gap-x-6">
+                <a href="#" class="hover:text-white">Instagram</a>
+                <a href="#" class="hover:text-white">Discord</a>
+                <a href="#" class="hover:text-white">Trail Reports</a>
+                <a href="#" class="hover:text-white">Contact</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<div id="cart-drawer" onclick="if (event.target.id === 'cart-drawer') hideCart()" class="hidden fixed inset-0 bg-black/60 z-[90] flex justify-end">
+    <div onclick="event.stopImmediatePropagation()" class="w-full max-w-md bg-zinc-900 border-l border-zinc-700 h-full flex flex-col">
+        <div class="p-6 flex justify-between items-center border-b border-zinc-700">
+            <div class="font-bold text-xl">Your Cart</div>
+            <button onclick="hideCart()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
+        </div>
+        <div id="cart-items" class="flex-1 overflow-auto p-6 space-y-4 text-sm"></div>
+        <div class="p-6 border-t border-zinc-700 bg-zinc-950">
+            <div class="flex justify-between font-bold text-lg mb-5"><span>Total</span><span id="cart-total" class="font-mono">$0</span></div>
+            <button onclick="checkout()" class="w-full py-4 rounded-2xl bg-white text-zinc-900 font-bold tracking-wider active:scale-[0.985]">CHECKOUT</button>
+        </div>
+    </div>
+</div>
+
+<div id="success-toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-8 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm font-medium z-[100]">
+    <i class="fa-solid fa-check-circle"></i><span id="toast-message"></span>
+</div>
+<script src="js/shared.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/members.js"></script>
+</body>
+</body>
+</html>

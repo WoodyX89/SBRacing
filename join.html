@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Join • SB Racing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+<nav id="navbar" class="fixed top-0 left-0 right-0 z-50 bg-zinc-900/80 backdrop-blur-lg border-b border-zinc-800 transition-all">
+    <div class="max-w-screen-2xl mx-auto">
+        <div class="px-8 py-4 flex items-center justify-between">
+            <a href="index.html" class="flex items-center gap-x-3">
+                <div class="flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-700 to-amber-800 shadow-inner overflow-hidden ring-2 ring-offset-2 ring-offset-zinc-900 ring-orange-900/50">
+                    <img src="assets/logo.JPG" alt="SB Racing Logo" class="w-full h-full object-cover scale-125" onerror="this.style.display='none'">
+                </div>
+                <div>
+                    <span class="sb-logo text-3xl font-black tracking-tighter">SB</span>
+                    <span class="text-2xl font-semibold tracking-[-2px] text-zinc-400">RACING</span>
+                </div>
+            </a>
+            <div class="hidden md:flex items-center gap-x-8 text-sm font-medium">
+                <a href="about.html" class="nav-link px-3 py-2 hover:text-white transition-colors">About</a>
+                <a href="merch.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Merch</a>
+                <a href="events.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Events</a>
+                <a href="join.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Join</a>
+                <a href="members.html" class="nav-link px-3 py-2 hover:text-white transition-colors flex items-center gap-x-1.5">
+                    <i class="fa-solid fa-lock text-xs"></i><span>Members</span>
+                </a>
+            </div>
+            <div class="flex items-center gap-x-4">
+                <button onclick="showCart()" class="flex items-center gap-x-2 px-4 py-2 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 transition-all active:scale-[0.985]">
+                    <i class="fa-solid fa-shopping-cart text-lg"></i>
+                    <span id="cart-count" class="min-w-[18px] h-[18px] flex items-center justify-center text-xs font-mono bg-orange-600 text-white rounded-full px-1.5">0</span>
+                </button>
+                <button class="md:hidden flex items-center justify-center w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 active:scale-95 transition-all" onclick="toggleMobileMenu()">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+                <a href="join.html" class="hidden md:block px-6 py-2.5 rounded-2xl bg-white text-zinc-900 font-semibold text-sm tracking-wide hover:bg-amber-100 active:scale-[0.985] transition-all">JOIN THE CREW</a>
+            </div>
+        </div>
+    </div>
+    <div id="mobile-menu" class="hidden md:hidden border-t border-zinc-800 bg-zinc-900">
+        <div class="px-6 py-4 flex flex-col gap-y-1 text-base font-medium">
+            <a href="about.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">About Us</a>
+            <a href="merch.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Merchandise</a>
+            <a href="events.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Events &amp; Rides</a>
+            <a href="join.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Become a Member</a>
+            <a href="members.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800 flex items-center gap-x-2"><i class="fa-solid fa-lock"></i><span>Members Only Area</span></a>
+            <div class="pt-3 border-t border-zinc-800 mt-2">
+                <a href="join.html" class="block w-full text-center px-6 py-3 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-white active:scale-[0.985]">JOIN THE CREW</a>
+            </div>
+        </div>
+    </div>
+</nav>
+<div class="h-20"></div>
+    <!-- JOIN / SIGN UP -->
+    <section id="join" class="bg-zinc-900 border-y border-zinc-800 py-20">
+        <div class="max-w-screen-2xl mx-auto px-8 md:px-12">
+            <div class="max-w-2xl mx-auto text-center mb-12">
+                <div class="uppercase tracking-[3px] text-xs font-semibold text-orange-600">YOUR NEXT ADVENTURE STARTS HERE</div>
+                <h2 class="section-header tracking-tighter mt-3">Become a Member</h2>
+                <p class="mt-4 text-lg text-zinc-400">Join a crew of passionate riders who live for the trails around Medicine Hat. Membership keeps the lights on, supports trail maintenance, and unlocks the full SB experience.</p>
+            </div>
+
+            <!-- Membership Tiers -->
+            <div class="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+                <!-- Tier 1 -->
+                <div onclick="selectTier(0, this)" class="tier-card cursor-pointer border border-zinc-700 hover:border-orange-600 transition-all rounded-3xl p-7 bg-zinc-950 group">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-bold text-2xl">Trail Rider</div>
+                            <div class="text-xs uppercase tracking-widest text-zinc-500 mt-0.5">ANNUAL MEMBERSHIP</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-mono text-4xl font-black tracking-tighter">$45</div>
+                            <div class="text-[10px] text-zinc-500 -mt-1">/ year</div>
+                        </div>
+                    </div>
+                    <ul class="mt-8 space-y-3 text-sm text-zinc-300">
+                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Access to all group rides &amp; Discord</span></li>
+                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Monthly newsletter + trail reports</span></li>
+                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Club voting rights</span></li>
+                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>10% merch discount</span></li>
+                    </ul>
+                    <div class="mt-8 text-center text-xs text-orange-600 font-semibold group-hover:underline">SELECT THIS TIER →</div>
+                </div>
+
+                <!-- Tier 2 - Popular -->
+                <div onclick="selectTier(1, this)" class="tier-card cursor-pointer border-2 border-orange-600 relative rounded-3xl p-7 bg-zinc-950 group scale-[1.015]">
+                    <div class="absolute -top-3 right-6 bg-orange-600 text-white text-[10px] font-bold tracking-widest px-4 py-0.5 rounded-full">MOST POPULAR</div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-bold text-2xl">Coulee Crusher</div>
+                            <div class="text-xs uppercase tracking-widest text-orange-500 mt-0.5">PREMIUM ANNUAL</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-mono text-4xl font-black tracking-tighter">$85</div>
+                            <div class="text-[10px] text-zinc-500 -mt-1">/ year</div>
+                        </div>
+                    </div>
+                    <ul class="mt-8 space-y-3 text-sm text-zinc-300">
+                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Everything in Trail Rider</span></li>
+                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span><strong>20% off</strong> all merchandise</span></li>
+                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Priority event registration</span></li>
+                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Exclusive members-only rides</span></li>
+                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Full access to Members Area</span></li>
+                    </ul>
+                    <div class="mt-8 text-center text-xs text-orange-600 font-semibold group-hover:underline">SELECT THIS TIER →</div>
+                </div>
+
+                <!-- Tier 3 -->
+                <div onclick="selectTier(2, this)" class="tier-card cursor-pointer border border-zinc-700 hover:border-orange-600 transition-all rounded-3xl p-7 bg-zinc-950 group">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-bold text-2xl">Youth / Student</div>
+                            <div class="text-xs uppercase tracking-widest text-zinc-500 mt-0.5">ANNUAL MEMBERSHIP</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-mono text-4xl font-black tracking-tighter">$25</div>
+                            <div class="text-[10px] text-zinc-500 -mt-1">/ year</div>
+                        </div>
+                    </div>
+                    <ul class="mt-8 space-y-3 text-sm text-zinc-300">
+                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Full ride access + Discord</span></li>
+                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Youth skills clinics included</span></li>
+                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>5% merch discount</span></li>
+                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Parental waiver required</span></li>
+                    </ul>
+                    <div class="mt-8 text-center text-xs text-orange-600 font-semibold group-hover:underline">SELECT THIS TIER →</div>
+                </div>
+            </div>
+
+            <!-- Signup Form -->
+            <div class="max-w-xl mx-auto mt-14 bg-zinc-950 border border-zinc-800 rounded-3xl p-8 md:p-10">
+                <h3 class="font-semibold text-xl mb-1">Ready to join?</h3>
+                <p class="text-sm text-zinc-400 mb-6">Fill out the form below and complete payment to activate your membership instantly.</p>
+
+                <form id="membership-form" onsubmit="submitMembership(event)">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="text-xs font-medium tracking-wider text-zinc-400">FULL NAME</label>
+                            <input type="text" id="full-name" required class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium tracking-wider text-zinc-400">EMAIL ADDRESS</label>
+                            <input type="email" id="email" required class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
+                        </div>
+                    </div>
+
+                    <div class="mt-5">
+                        <label class="text-xs font-medium tracking-wider text-zinc-400">PHONE NUMBER</label>
+                        <input type="tel" id="phone" placeholder="(403) 555-0192" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
+                    </div>
+
+                    <div class="mt-5">
+                        <label class="text-xs font-medium tracking-wider text-zinc-400">SELECTED MEMBERSHIP TIER</label>
+                        <div id="selected-tier-display" 
+                             class="mt-1.5 flex items-center justify-between bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
+                            <span id="tier-name">Please select a tier above</span>
+                            <span id="tier-price" class="font-mono font-semibold"></span>
+                        </div>
+                        <input type="hidden" id="selected-tier" value="">
+                    </div>
+
+                    <button type="submit" 
+                            class="mt-8 w-full py-4 rounded-3xl bg-white hover:bg-amber-100 active:scale-[0.985] font-bold text-zinc-900 tracking-wider text-sm transition-all flex items-center justify-center gap-x-2">
+                        <span>COMPLETE MEMBERSHIP PAYMENT</span>
+                    </button>
+                    
+                    <p class="text-center text-[10px] text-zinc-500 mt-4">Secure checkout powered by Stripe • Cancel anytime</p>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Modals -->
+    <!-- RSVP Modal -->
+    <div id="rsvp-modal" onclick="if (event.target.id === 'rsvp-modal') hideRSVPModal()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex items-center justify-center p-6">
+        <div onclick="event.stopImmediatePropagation()" class="modal bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-8">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <div id="rsvp-event-title" class="font-bold text-2xl tracking-tight"></div>
+                    <div id="rsvp-event-date" class="text-sm text-zinc-400"></div>
+                </div>
+                <button onclick="hideRSVPModal()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
+            </div>
+
+            <form id="rsvp-form" onsubmit="submitRSVP(event)">
+                <div class="space-y-5">
+                    <div>
+                        <label class="text-xs font-medium text-zinc-400">FULL NAME</label>
+                        <input type="text" id="rsvp-name" value="Trevor Wood" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-xs font-medium text-zinc-400">EMAIL</label>
+                            <input type="email" id="rsvp-email" value="trevor@sb-racing.ca" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-zinc-400">EMERGENCY CONTACT</label>
+                            <input type="tel" id="rsvp-emergency" placeholder="403-555-1234" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-x-3 pt-2">
+                        <input type="checkbox" id="waiver-check" checked class="mt-1 accent-orange-600">
+                        <label for="waiver-check" class="text-xs leading-tight text-zinc-400">I have read and agree to the SB Racing waiver and release of liability. I understand the risks involved in mountain biking.</label>
+                    </div>
+                </div>
+
+                <div class="flex gap-x-3 mt-8">
+                    <button type="button" onclick="hideRSVPModal()" 
+                            class="flex-1 py-3 rounded-2xl border border-zinc-700 font-semibold text-sm">CANCEL</button>
+                    <button type="submit" 
+                            class="flex-1 py-3 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-sm">CONFIRM MY SPOT</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div id="payment-modal" onclick="if (event.target.id === 'payment-modal') hidePaymentModal()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[80] flex items-center justify-center p-6">
+        <div onclick="event.stopImmediatePropagation()" class="modal bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-8">
+            <div class="flex justify-between mb-2">
+                <div class="font-bold text-xl">Complete Payment</div>
+                <button onclick="hidePaymentModal()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
+            </div>
+            <div class="text-sm text-zinc-400 mb-6">Membership: <span id="payment-tier-name" class="font-semibold text-white"></span></div>
+
+            <div class="bg-zinc-950 border border-zinc-700 rounded-2xl p-5 mb-6">
+                <div class="flex justify-between text-sm">
+                    <span>Subtotal</span>
+                    <span id="payment-amount" class="font-mono font-semibold"></span>
+                </div>
+                <div class="h-px bg-zinc-700 my-3"></div>
+                <div class="flex justify-between font-bold text-lg">
+                    <span>Total due today</span>
+                    <span id="payment-total" class="font-mono"></span>
+                </div>
+            </div>
+
+            <form id="payment-form" onsubmit="processPayment(event)">
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-xs font-medium text-zinc-400">CARD NUMBER</label>
+                        <input type="text" id="card-number" value="4242 4242 4242 4242" maxlength="19" 
+                               class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 font-mono text-sm tracking-widest outline-none focus:border-orange-600">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-xs font-medium text-zinc-400">EXPIRY DATE</label>
+                            <input type="text" id="card-expiry" value="04 / 28" maxlength="7" 
+                                   class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 font-mono text-sm outline-none focus:border-orange-600">
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-zinc-400">CVC</label>
+                            <input type="text" id="card-cvc" value="424" maxlength="4" 
+                                   class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 font-mono text-sm outline-none focus:border-orange-600">
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" 
+                        class="mt-8 w-full py-4 rounded-3xl bg-emerald-600 hover:bg-emerald-700 font-bold text-sm tracking-wider flex justify-center items-center gap-x-2 active:scale-[0.985]">
+                    <span>PAY &amp; ACTIVATE MEMBERSHIP</span>
+                </button>
+                <p class="text-center text-[10px] text-zinc-500 mt-4">This is a demo. No real payment will be processed.</p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Cart Drawer -->
+    <div id="cart-drawer" onclick="if (event.target.id === 'cart-drawer') hideCart()" class="hidden fixed inset-0 bg-black/60 z-[90] flex justify-end">
+        <div onclick="event.stopImmediatePropagation()" class="w-full max-w-md bg-zinc-900 border-l border-zinc-700 h-full flex flex-col">
+            <div class="p-6 flex justify-between items-center border-b border-zinc-700">
+                <div class="font-bold text-xl">Your Cart</div>
+                <button onclick="hideCart()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
+            </div>
+            
+            <div id="cart-items" class="flex-1 overflow-auto p-6 space-y-4 text-sm"></div>
+            
+            <div class="p-6 border-t border-zinc-700 bg-zinc-950">
+                <div class="flex justify-between font-bold text-lg mb-5">
+                    <span>Total</span>
+                    <span id="cart-total" class="font-mono">$0</span>
+                </div>
+                <button onclick="checkout()" 
+                        class="w-full py-4 rounded-2xl bg-white text-zinc-900 font-bold tracking-wider active:scale-[0.985]">
+                    CHECKOUT
+                </button>
+                <p class="text-center text-xs text-zinc-500 mt-3">or 4 interest-free payments of $X with Shop Pay</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Toast -->
+    <div id="success-toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-8 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm font-medium z-[100]">
+        <i class="fa-solid fa-check-circle"></i>
+        <span id="toast-message"></span>
+    </div>
+
+<script>
+// Membership Tier Selection
+let selectedTierPrice = 0;
+let selectedTierName = '';
+
+function selectTier(tierIndex, element) {
+    document.querySelectorAll('.tier-card').forEach(card => {
+        card.classList.remove('border-orange-600', 'scale-[1.015]');
+        card.classList.add('border-zinc-700');
+    });
+    element.classList.remove('border-zinc-700');
+    element.classList.add('border-orange-600', 'scale-[1.015]');
+    
+    const tierNames = ['Trail Rider', 'Coulee Crusher', 'Youth / Student'];
+    const tierPrices = [45, 85, 25];
+    selectedTierName = tierNames[tierIndex];
+    selectedTierPrice = tierPrices[tierIndex];
+    
+    document.getElementById('tier-name').innerHTML = selectedTierName;
+    document.getElementById('tier-price').innerHTML = '$' + selectedTierPrice;
+    document.getElementById('selected-tier').value = tierIndex;
+}
+
+function submitMembership(e) {
+    e.preventDefault();
+    const tier = document.getElementById('selected-tier').value;
+    if (!tier) {
+        alert('Please select a membership tier first by clicking one of the cards above.');
+        return;
+    }
+    const name = document.getElementById('full-name').value;
+    const email = document.getElementById('email').value;
+    window.pendingMember = { name, email, tier: selectedTierName, price: selectedTierPrice };
+    showPaymentModal();
+}
+
+function showPaymentModal() {
+    const modal = document.getElementById('payment-modal');
+    const pending = window.pendingMember;
+    if (!pending) return;
+    document.getElementById('payment-tier-name').textContent = pending.tier;
+    document.getElementById('payment-amount').textContent = '$' + pending.price;
+    document.getElementById('payment-total').textContent = '$' + pending.price;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function hidePaymentModal() {
+    const modal = document.getElementById('payment-modal');
+    modal.classList.remove('flex');
+    modal.classList.add('hidden');
+}
+
+function processPayment(e) {
+    e.preventDefault();
+    const pending = window.pendingMember;
+    if (!pending) return;
+    const btn = e.target.querySelector('button');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = `<span class="flex items-center justify-center gap-x-2"><i class="fa-solid fa-spinner fa-spin"></i> PROCESSING...</span>`;
+    btn.disabled = true;
+    setTimeout(() => {
+        hidePaymentModal();
+        showToast(`Welcome to SB Racing, ${pending.name.split(' ')[0]}! Your ${pending.tier} membership is now active.`);
+        document.getElementById('membership-form').reset();
+        document.getElementById('tier-name').innerHTML = 'Please select a tier above';
+        document.getElementById('tier-price').innerHTML = '';
+        document.querySelectorAll('.tier-card').forEach(c => c.classList.remove('border-orange-600', 'scale-[1.015]'));
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        window.pendingMember = null;
+        // Redirect to members after a moment
+        setTimeout(() => { window.location.href = 'members.html'; }, 1800);
+    }, 1650);
+}
+
+// Pre-select popular tier
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        const tiers = document.querySelectorAll('.tier-card');
+        if (tiers.length > 1) tiers[1].click();
+    }, 300);
+});
+</script>
+<footer class="bg-black border-t border-zinc-800 py-12">
+    <div class="max-w-screen-2xl mx-auto px-8 md:px-12 text-xs text-zinc-400">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-y-4">
+            <div>
+                © 2026 SB Racing • Medicine Hat, Alberta<br>
+                <span class="text-zinc-600">Proudly riding the traditional lands of the Blackfoot Confederacy.</span>
+            </div>
+            <div class="flex gap-x-6">
+                <a href="#" class="hover:text-white">Instagram</a>
+                <a href="#" class="hover:text-white">Discord</a>
+                <a href="#" class="hover:text-white">Trail Reports</a>
+                <a href="#" class="hover:text-white">Contact</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<div id="cart-drawer" onclick="if (event.target.id === 'cart-drawer') hideCart()" class="hidden fixed inset-0 bg-black/60 z-[90] flex justify-end">
+    <div onclick="event.stopImmediatePropagation()" class="w-full max-w-md bg-zinc-900 border-l border-zinc-700 h-full flex flex-col">
+        <div class="p-6 flex justify-between items-center border-b border-zinc-700">
+            <div class="font-bold text-xl">Your Cart</div>
+            <button onclick="hideCart()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
+        </div>
+        <div id="cart-items" class="flex-1 overflow-auto p-6 space-y-4 text-sm"></div>
+        <div class="p-6 border-t border-zinc-700 bg-zinc-950">
+            <div class="flex justify-between font-bold text-lg mb-5"><span>Total</span><span id="cart-total" class="font-mono">$0</span></div>
+            <button onclick="checkout()" class="w-full py-4 rounded-2xl bg-white text-zinc-900 font-bold tracking-wider active:scale-[0.985]">CHECKOUT</button>
+        </div>
+    </div>
+</div>
+
+<div id="success-toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-8 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm font-medium z-[100]">
+    <i class="fa-solid fa-check-circle"></i><span id="toast-message"></span>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/shared.js"></script>
+<script src="js/merch.js"></script>
+</body>
+</html>
