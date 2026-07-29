@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
         
         :root {
             --accent: #c2410f;
@@ -37,7 +37,7 @@
         }
 
         .hero-bg {
-            background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.55)), url('../assets/logo.JPG');
+            background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.55)), url('/assets/logo.JPG');
             background-size: cover;
             background-position: center 30%;
             background-attachment: fixed;
@@ -120,7 +120,7 @@
         .soggy-bg {
             background-image: 
                 linear-gradient(rgba(17, 24, 39, 0.92), rgba(17, 24, 39, 0.92)),
-                url('../assets/logo.JPG');
+                url('/assets/logo.JPG');
             background-size: cover;
             background-position: center;
         }
