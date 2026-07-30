@@ -1,3 +1,18 @@
+
+// Load shared navbar from partials/nav.html (one file for every page)
+async function loadSiteNav() {
+    const mount = document.getElementById('site-nav');
+    if (!mount) return;
+    try {
+        const res = await fetch('partials/nav.html', { cache: 'no-cache' });
+        if (!res.ok) throw new Error('nav ' + res.status);
+        mount.innerHTML = await res.text();
+    } catch (e) {
+        console.error('[nav] failed to load partials/nav.html', e);
+        mount.innerHTML = '<nav id="navbar" class="fixed top-0 left-0 right-0 z-[100] bg-black p-4 text-white"><a href="index.html">SB Racing</a> — nav failed to load</nav>';
+    }
+}
+
 // Shared navigation + cart + toast helpers for multi-page SB Racing site
 
 function toggleMobileMenu() {
@@ -9,17 +24,19 @@ function initNavbar() {
     const navbar = document.getElementById('navbar');
     if (!navbar) return;
 
-    // Clear any old inline padding from previous builds so CSS safe-area rules win equally on every page
-    navbar.style.paddingTop = '';
-    navbar.style.paddingLeft = '';
-    navbar.style.paddingRight = '';
+    // Always solid black — never let hero show through at top of page
+    navbar.style.background = '#000';
+    navbar.style.backgroundColor = '#000';
+    navbar.style.backgroundImage = 'none';
+    navbar.style.opacity = '1';
+    navbar.style.zIndex = '100';
 
     window.addEventListener('scroll', () => {
-        if (window.scrollY > 30) {
-            navbar.classList.add('nav-scrolled');
-        } else {
-            navbar.classList.remove('nav-scrolled');
-        }
+        navbar.style.backgroundColor = '#000000';
+        navbar.style.backgroundImage = 'none';
+        // Optional shadow only — never change color
+        if (window.scrollY > 30) navbar.classList.add('nav-scrolled');
+        else navbar.classList.remove('nav-scrolled');
     });
 }
 
@@ -316,7 +333,8 @@ function escapeAttrNav(str) {
     return escapeHtmlNav(str).replace(/'/g, '&#39;');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadSiteNav();
     initNavbar();
     setActiveNav();
     updateCartCount();

@@ -8,66 +8,23 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/styles.css">
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#c2410f">
+    <meta name="theme-color" content="#000000">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="SB Racing">
     <link rel="apple-touch-icon" href="/assets/logo.JPG">
     <link rel="icon" type="image/jpeg" href="/assets/logo.JPG">
 </head>
 <body class="bg-zinc-950 text-zinc-200">
-<nav id="navbar" class="fixed top-0 left-0 right-0 z-50 bg-zinc-950 border-b border-zinc-800 transition-all">
-    <div class="max-w-screen-2xl mx-auto">
-        <div class="px-8 py-4 flex items-center justify-between">
-            <a href="index.html" class="flex items-center gap-x-3">
-                <div class="flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-700 to-amber-800 shadow-inner overflow-hidden ring-2 ring-offset-2 ring-offset-zinc-900 ring-orange-900/50">
-                    <img src="/assets/logo.JPG" alt="SB Racing Logo" class="w-full h-full object-cover scale-125" onerror="this.src='/assets/logo.jpg'">
-                </div>
-                <div>
-                    <span class="sb-logo text-3xl font-black tracking-tighter">SB</span>
-                    <span class="text-2xl font-semibold tracking-[-2px] text-zinc-400">RACING</span>
-                </div>
-            </a>
-            <div class="hidden md:flex items-center gap-x-8 text-sm font-medium">
-                <a href="about.html" class="nav-link px-3 py-2 hover:text-white transition-colors">About</a>
-                <a href="merch.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Merch</a>
-                <a href="events.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Events</a>
-                <a href="join.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Join</a>
-                <a href="members.html" class="nav-link px-3 py-2 hover:text-white transition-colors flex items-center gap-x-1.5">
-                    <i class="fa-solid fa-lock text-xs"></i><span>Members</span>
-                </a>
-            </div>
-            <div class="flex items-center gap-x-4">
-                <button onclick="showCart()" class="flex items-center gap-x-2 px-4 py-2 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 transition-all active:scale-[0.985]">
-                    <i class="fa-solid fa-shopping-cart text-lg"></i>
-                    <span id="cart-count" class="min-w-[18px] h-[18px] flex items-center justify-center text-xs font-mono bg-orange-600 text-white rounded-full px-1.5">0</span>
-                </button>
-                <button class="md:hidden flex items-center justify-center w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 active:scale-95 transition-all" onclick="toggleMobileMenu()">
-                    <i class="fa-solid fa-bars text-xl"></i>
-                </button>
-                <a href="join.html" class="hidden md:block px-6 py-2.5 rounded-2xl bg-white text-zinc-900 font-semibold text-sm tracking-wide hover:bg-amber-100 active:scale-[0.985] transition-all">JOIN THE CREW</a>
-            </div>
-        </div>
-    </div>
-    <div id="mobile-menu" class="hidden md:hidden border-t border-zinc-800 bg-zinc-900">
-        <div class="px-6 py-4 flex flex-col gap-y-1 text-base font-medium">
-            <a href="about.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">About Us</a>
-            <a href="merch.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Merchandise</a>
-            <a href="events.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Events &amp; Rides</a>
-            <a href="join.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Become a Member</a>
-            <a href="members.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800 flex items-center gap-x-2"><i class="fa-solid fa-lock"></i><span>Members Only Area</span></a>
-            <div class="pt-3 border-t border-zinc-800 mt-2">
-                <a href="join.html" class="block w-full text-center px-6 py-3 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-white active:scale-[0.985]">JOIN THE CREW</a>
-            </div>
-        </div>
-    </div>
-</nav>
-<div class="h-20"></div>
+<!-- Shared nav (edit partials/nav.html only) -->
+<div id="site-nav"></div>
+<div class="page-top-spacer" aria-hidden="true"></div>
+<div class="page-body">
     <!-- JOIN / SIGN UP -->
     <section id="join" class="bg-zinc-900 border-y border-zinc-800 py-20">
         <div class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12">
-            <div class="max-w-2xl mx-auto text-center mb-12">
+            <div class="max-w-2xl mx-auto text-center mb-12 mt-10">
                 <div class="uppercase tracking-[3px] text-xs font-semibold text-orange-600">YOUR NEXT ADVENTURE STARTS HERE</div>
                 <h2 class="section-header tracking-tighter mt-3">Become a Member</h2>
                 <p class="mt-4 text-lg text-zinc-400">Join a crew of passionate riders who live for the trails around Medicine Hat. Membership keeps the lights on, supports trail maintenance, and unlocks the full SB experience.</p>
@@ -280,7 +237,8 @@
     </div>
 
     <!-- Cart Drawer -->
-    <div id="cart-drawer" onclick="if (event.target.id === 'cart-drawer') hideCart()" class="hidden fixed inset-0 bg-black/60 z-[90] flex justify-end">
+    </div><!-- /.page-body -->
+<div id="cart-drawer" onclick="if (event.target.id === 'cart-drawer') hideCart()" class="hidden fixed inset-0 bg-black/60 z-[90] flex justify-end">
         <div onclick="event.stopImmediatePropagation()" class="w-full max-w-md bg-zinc-900 border-l border-zinc-700 h-full flex flex-col">
             <div class="p-6 flex justify-between items-center border-b border-zinc-700">
                 <div class="font-bold text-xl">Your Cart</div>

@@ -1,0 +1,46 @@
+<nav id="navbar" class="fixed top-0 left-0 right-0 z-[100] bg-black border-b border-zinc-800" style="background:#000!important;">
+    <div class="max-w-screen-2xl mx-auto">
+        <div class="nav-row px-4 sm:px-8 flex items-center justify-between">
+            <a href="index.html" class="flex items-center gap-x-3">
+                <div class="nav-logo flex items-center justify-center rounded-2xl bg-gradient-to-br from-orange-700 to-amber-800 shadow-inner overflow-hidden ring-2 ring-offset-2 ring-offset-zinc-900 ring-orange-900/50">
+                    <img src="/assets/logo.JPG" alt="SB Racing Logo" class="w-full h-full object-cover scale-125" onerror="this.src='/assets/logo.jpg'">
+                </div>
+                <div>
+                    <span class="sb-logo nav-brand-sb font-black tracking-tighter">SB</span>
+                    <span class="nav-brand-racing font-semibold tracking-[-2px] text-zinc-400">RACING</span>
+                </div>
+            </a>
+            <div class="hidden md:flex items-center gap-x-8 text-sm font-medium">
+                <a href="about.html" class="nav-link px-3 py-2 hover:text-white transition-colors">About</a>
+                <a href="merch.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Merch</a>
+                <a href="events.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Events</a>
+                <a href="join.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Join</a>
+                <a href="members.html" class="nav-link px-3 py-2 hover:text-white transition-colors flex items-center gap-x-1.5">
+                    <i class="fa-solid fa-lock text-xs"></i><span>Members</span>
+                </a>
+            </div>
+            <div class="flex items-center gap-x-4">
+                <button type="button" onclick="showCart()" class="flex items-center gap-x-2 px-4 py-2 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 transition-all active:scale-[0.985]">
+                    <i class="fa-solid fa-shopping-cart text-lg"></i>
+                    <span id="cart-count" class="min-w-[18px] h-[18px] flex items-center justify-center text-xs font-mono bg-orange-600 text-white rounded-full px-1.5">0</span>
+                </button>
+                <button type="button" class="md:hidden flex items-center justify-center w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 active:scale-95 transition-all" onclick="toggleMobileMenu()">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+                <a href="join.html" class="hidden md:block px-6 py-2.5 rounded-2xl bg-white text-zinc-900 font-semibold text-sm tracking-wide hover:bg-amber-100 active:scale-[0.985] transition-all">JOIN THE CREW</a>
+            </div>
+        </div>
+    </div>
+    <div id="mobile-menu" class="hidden md:hidden border-t border-zinc-800 bg-zinc-900">
+        <div class="px-6 py-4 flex flex-col gap-y-1 text-base font-medium">
+            <a href="about.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">About Us</a>
+            <a href="merch.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Merchandise</a>
+            <a href="events.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Events &amp; Rides</a>
+            <a href="join.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Become a Member</a>
+            <a href="members.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800 flex items-center gap-x-2"><i class="fa-solid fa-lock"></i><span>Members Only Area</span></a>
+            <div class="pt-3 border-t border-zinc-800 mt-2">
+                <a href="join.html" class="block w-full text-center px-6 py-3 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-white active:scale-[0.985]">JOIN THE CREW</a>
+            </div>
+        </div>
+    </div>
+</nav>
