@@ -5,7 +5,7 @@
   --safe-top: env(safe-area-inset-top, 0px);
   /* extra gap under the bar (“skip a couple lines”) */
   --content-gap: 1rem; /* try 1rem–2rem */
-  --nav-total: calc(var(--nav-row) + var(--safe-top) + var(--content-gap));
+  --nav-total: calc(var(--nav-row) + var(--safe-top));
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -131,6 +131,7 @@ img, video { max-width: 100%; height: auto; }
     background-repeat: no-repeat;
     background-origin: content-box;
     background-clip: content-box;
+    padding-top: var(--nav-total) !important;
 }
 
 .page-body { background: transparent; }
