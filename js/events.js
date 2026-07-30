@@ -157,7 +157,8 @@ function renderEvents() {
           <button type="button" onclick="openRsvp(${ev.id})" class="w-full py-3 rounded-2xl bg-white text-zinc-900 font-semibold text-sm hover:bg-amber-50 active:scale-[0.98] transition-all">
             RSVP
           </button>
-          ${pokerBtn}${adminBtns}
+          ${pokerBtn ? `<div class="flex flex-wrap gap-2 mt-3">${pokerBtn}</div>` : ''}
+          ${adminBtns}
         </div>
       </div>`;
   }).join('');
