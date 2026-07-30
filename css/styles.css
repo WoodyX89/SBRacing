@@ -168,7 +168,7 @@ img, video { max-width: 100%; height: auto; }
 .soggy-bg {
     background-image:
         linear-gradient(rgba(9,9,11,0.88), rgba(9,9,11,0.92)),
-        url("../assets/logo.JPG");
+        url("../assets/logo.png");
     background-size: cover;
     background-position: center;
 }

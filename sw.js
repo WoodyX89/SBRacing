@@ -5,7 +5,7 @@ const PRECACHE = [
   './css/styles.css',
   './js/shared.js',
   './js/supabase-config.js',
-  './assets/logo.JPG',
+  './assets/logo.png',
   './manifest.json'
 ];
 

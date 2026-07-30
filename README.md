@@ -24,7 +24,7 @@ Multi-page static website for SB Racing (Soggy Bottom Racing).
 ├── join.html
 ├── members.html
 ├── assets/
-│   └── logo.JPG          # put your logo here
+│   └── logo.png          # put your logo here
 ├── css/
 │   └── styles.css
 ├── js/
@@ -46,4 +46,4 @@ Multi-page static website for SB Racing (Soggy Bottom Racing).
 
 - Cart is stored in `localStorage` so it persists across pages
 - All interactive features (cart, RSVP, membership, login) are client-side demos
-- Logo: place `logo.JPG` in the `assets/` folder
+- Logo: place `logo.png` in the `assets/` folder
