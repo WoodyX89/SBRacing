@@ -116,14 +116,6 @@ function renderEvents() {
     const badgeColor = ev.is_featured ? 'text-orange-400' : (ev.category === 'clinic' ? 'text-sky-400' : 'text-emerald-400');
     const badgeText = ev.is_featured ? 'FEATURED' : (ev.category === 'clinic' ? 'CLINIC' : (ev.category === 'social' ? 'SOCIAL' : 'RIDE'));
 
-    const pokerBtn = (isAdmin && ev.category === 'poker_run') ? `
-        <a href="poker.html?e=${ev.id}" class="text-xs px-3 py-1.5 rounded-xl border border-orange-700 text-orange-400 hover:bg-orange-950/40">
-          <i class="fa-solid fa-spade mr-1"></i>Poker run
-        </a>
-        <button type="button" onclick="showPokerAdminFor(${ev.id})" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">
-          Checkpoints
-        </button>` : (ev.category === 'poker_run' ? `
-        <a href="poker.html?e=${ev.id}" class="text-xs px-3 py-1.5 rounded-xl border border-orange-700 text-orange-400">Leaderboard</a>` : '');
     const adminBtns = isAdmin ? `
       <div class="flex gap-2 mt-3">
         <button type="button" onclick="openEventModal(${ev.id})" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">
@@ -157,7 +149,7 @@ function renderEvents() {
           <button type="button" onclick="openRsvp(${ev.id})" class="w-full py-3 rounded-2xl bg-white text-zinc-900 font-semibold text-sm hover:bg-amber-50 active:scale-[0.98] transition-all">
             RSVP
           </button>
-          ${pokerBtn}${adminBtns}
+          ${adminBtns}
         </div>
       </div>`;
   }).join('');
@@ -168,7 +160,7 @@ function openEventModal(id) {
     showToast('Admin only — log in as admin', true);
     return;
   }
-  editingEventId = (id !== undefined && id !== null && id !== '') ? id : null;
+  editingEventId = id || null;
   const modal = document.getElementById('event-modal');
   const title = document.getElementById('event-modal-title');
   if (!modal) return;
@@ -275,43 +267,32 @@ function openRsvp(eventId) {
     showToast('RSVP for: ' + ev.title);
     return;
   }
-  const idEl = document.getElementById('rsvp-event-id');
-  if (idEl) idEl.value = eventId;
-  const titleEl = document.getElementById('rsvp-event-title');
-  if (titleEl) titleEl.textContent = ev.title;
-  const dateEl = document.getElementById('rsvp-event-date');
-  if (dateEl) {
-    const d = new Date(ev.event_date + 'T12:00:00');
-    const dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const timeLabel = ev.event_time ? String(ev.event_time).slice(0, 5) : '';
-    dateEl.textContent = dateLabel + (timeLabel ? ' • ' + timeLabel : '');
-  }
+  document.getElementById('rsvp-event-id').value = eventId;
+  document.getElementById('rsvp-event-name').textContent = ev.title;
   modal.classList.remove('hidden');
   modal.classList.add('flex');
 }
 
-function hideRSVPModal() {
+function closeRsvpModal() {
   const modal = document.getElementById('rsvp-modal');
   if (!modal) return;
   modal.classList.add('hidden');
   modal.classList.remove('flex');
 }
-function closeRsvpModal() { hideRSVPModal(); }
 
-async function submitRSVP(e) {
+async function submitRsvp(e) {
   e.preventDefault();
   const eventId = parseInt(document.getElementById('rsvp-event-id').value, 10);
   const fullName = document.getElementById('rsvp-name').value.trim();
   const email = document.getElementById('rsvp-email').value.trim();
-  const emergency = (document.getElementById('rsvp-emergency') && document.getElementById('rsvp-emergency').value.trim()) || null;
-  const waiverEl = document.getElementById('waiver-check') || document.getElementById('rsvp-waiver');
-  const waiver = waiverEl ? waiverEl.checked : true;
+  const emergency = document.getElementById('rsvp-emergency')?.value?.trim() || null;
+  const waiver = document.getElementById('rsvp-waiver')?.checked;
 
   if (!fullName || !email) {
     showToast('Name and email required', true);
     return;
   }
-  if (waiverEl && !waiver) {
+  if (document.getElementById('rsvp-waiver') && !waiver) {
     showToast('Please accept the waiver', true);
     return;
   }
@@ -320,7 +301,7 @@ async function submitRSVP(e) {
     const session = await getSession();
     const { error } = await window.sb.from('rsvps').insert({
       event_id: eventId,
-      user_id: session && session.user ? session.user.id : null,
+      user_id: session?.user?.id || null,
       full_name: fullName,
       email: email,
       emergency_contact: emergency,
@@ -329,16 +310,13 @@ async function submitRSVP(e) {
     });
     if (error) throw error;
     showToast('RSVP confirmed!');
-    hideRSVPModal();
+    closeRsvpModal();
     await loadEvents();
   } catch (err) {
     console.error(err);
     showToast(err.message || 'RSVP failed', true);
   }
 }
-// alias
-async function submitRsvp(e) { return submitRSVP(e); }
-function rsvpEvent(id) { openRsvp(id); }
 
 function showAllEvents() {
   loadEvents();
@@ -365,19 +343,4 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', bootEvents);
 } else {
   bootEvents();
-}
-
-
-function showPokerAdminFor(eventId) {
-  let panel = document.getElementById('poker-admin-panel');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'poker-admin-panel';
-    panel.className = 'mt-10 border border-zinc-700 rounded-3xl p-6 bg-zinc-950';
-    const section = document.getElementById('events');
-    if (section) section.appendChild(panel);
-  }
-  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  if (typeof loadPokerAdmin === 'function') loadPokerAdmin(eventId);
-  else showToast('Load js/poker.js for checkpoint admin', true);
 }
