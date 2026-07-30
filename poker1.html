@@ -10,24 +10,6 @@
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="/assets/logo.png">
-  <!-- Critical poker card CSS last so Tailwind CDN cannot wipe it -->
-  <style id="poker-card-critical">
-    .poker-card{width:3.25rem!important;height:4.5rem!important;min-width:3.25rem!important;min-height:4.5rem!important;perspective:1000px!important;display:inline-block!important;position:relative!important;transform:none!important;flex-shrink:0!important}
-    .poker-card.lg{width:9rem!important;height:12.5rem!important;min-width:9rem!important;min-height:12.5rem!important;cursor:pointer!important}
-    .poker-card-inner{position:relative!important;width:100%!important;height:100%!important;transition:transform .7s cubic-bezier(.4,.2,.2,1)!important;transform-style:preserve-3d!important;-webkit-transform-style:preserve-3d!important;transform:rotateY(0deg)!important}
-    .poker-card.flipped .poker-card-inner{transform:rotateY(180deg)!important}
-    .poker-card-face{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;backface-visibility:hidden!important;-webkit-backface-visibility:hidden!important;border-radius:.5rem!important;overflow:hidden!important;box-shadow:0 6px 18px rgba(0,0,0,.45)!important}
-    .poker-card-back{background:#111 url("/assets/carddeck.JPG") center/cover no-repeat!important;border:1px solid #3f3f46!important}
-    .poker-card-back.hint::after{content:"Tap to flip";position:absolute;left:0;right:0;bottom:.4rem;text-align:center;font-size:.65rem;font-weight:600;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none}
-    .poker-card-front{background:#fafafa!important;transform:rotateY(180deg)!important;border:1px solid #d4d4d8!important;display:flex!important;flex-direction:column!important;justify-content:space-between!important;padding:.25rem .3rem!important;color:#18181b!important}
-    .poker-card-front.red{color:#dc2626!important}
-    .poker-card-corner{display:flex!important;flex-direction:column!important;align-items:center!important;line-height:1!important;font-weight:800!important;font-size:.65rem!important}
-    .poker-card-corner.bl{transform:rotate(180deg)!important;align-self:flex-end!important}
-    .poker-card-center{flex:1!important;display:flex!important;align-items:center!important;justify-content:center!important;font-size:1.35rem!important}
-    .poker-card.lg .poker-card-center{font-size:2.75rem!important}
-    .poker-card.lg .poker-card-corner{font-size:1.1rem!important}
-    .poker-hand-row{display:flex!important;flex-wrap:wrap!important;gap:.25rem!important}
-  </style>
 </head>
 <body class="bg-zinc-950 text-zinc-200" data-page="poker">
 <div id="site-nav"></div>
@@ -61,10 +43,7 @@
     </form>
 
     <div class="text-center space-y-4">
-      <div class="flex flex-col items-center gap-3">
-        <div id="poker-last-draw" class="hidden min-h-[13rem] flex justify-center items-center"></div>
-        <p id="poker-flip-hint" class="hidden text-xs text-zinc-400">Tap the card to flip it over</p>
-      </div>
+      <div id="poker-last-draw" class="hidden flex justify-center gap-3"></div>
       <button type="button" id="btn-draw-card" onclick="drawCard()" class="w-full py-4 rounded-3xl bg-orange-600 hover:bg-orange-700 font-bold text-lg">
         <i class="fa-solid fa-clone mr-2"></i> Draw card
       </button>
