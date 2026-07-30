@@ -118,7 +118,7 @@ function renderEvents() {
 
     const pokerBtn = (isAdmin && ev.category === 'poker_run') ? `
         <a href="poker.html?e=${ev.id}" class="text-xs px-3 py-1.5 rounded-xl border border-orange-700 text-orange-400 hover:bg-orange-950/40">
-          <i class="fa-solid fa-spade mr-1"></i>Poker run
+          <i class="fa-solid fa-spade mr-1"></i>Leaderboard
         </a>
         <button type="button" onclick="showPokerAdminFor(${ev.id})" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">
           Checkpoints
