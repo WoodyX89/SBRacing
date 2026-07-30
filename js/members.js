@@ -71,12 +71,118 @@ async function showDashboard(user) {
         statusEl.textContent = tierLabel[profile.membership_tier] || 'Member';
     }
 
+    const av = document.getElementById('member-avatar');
+    if (av) {
+        av.src = profile?.avatar_url || '/assets/logo.png';
+    }
+
+    fillProfileForm(profile, user);
+
     // Load rides
     await loadRides(user.id);
 
     // Load community feed
     await loadPosts();
 }
+
+function fillProfileForm(profile, user) {
+    const name = document.getElementById('profile-full-name');
+    const email = document.getElementById('profile-email');
+    const phone = document.getElementById('profile-phone');
+    const emergency = document.getElementById('profile-emergency');
+    const tier = document.getElementById('profile-tier-display');
+    const preview = document.getElementById('profile-avatar-preview');
+    if (name) name.value = profile?.full_name || '';
+    if (email) email.value = profile?.email || user?.email || '';
+    if (phone) phone.value = profile?.phone || '';
+    if (emergency) emergency.value = profile?.emergency_contact || '';
+    if (tier) {
+        const labels = {
+            trail_rider: 'Trail Rider',
+            coulee_crusher: 'Coulee Crusher (Premium)',
+            youth: 'Youth / Student',
+            none: 'No active membership'
+        };
+        const st = profile?.membership_status || '';
+        tier.textContent = (labels[profile?.membership_tier] || 'Member') + (st ? ' · ' + st : '');
+    }
+    if (preview) preview.src = profile?.avatar_url || '/assets/logo.png';
+}
+
+async function saveProfile(e) {
+    e.preventDefault();
+    const user = await getCurrentUser();
+    if (!user) {
+        showToast('Please log in', true);
+        return;
+    }
+
+    const btn = document.getElementById('profile-save-btn');
+    const original = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = 'Saving…';
+    }
+
+    try {
+        let avatar_url = null;
+        const fileInput = document.getElementById('profile-avatar-file');
+        const file = fileInput && fileInput.files && fileInput.files[0];
+
+        if (file) {
+            if (file.size > 3.5 * 1024 * 1024) throw new Error('Image must be under 3.5MB');
+            const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/jpeg/, 'jpg');
+            const path = user.id + '/avatar.' + ext;
+            const { error: upErr } = await window.sb.storage
+                .from('avatars')
+                .upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
+            if (upErr) throw upErr;
+            const { data: pub } = window.sb.storage.from('avatars').getPublicUrl(path);
+            avatar_url = pub.publicUrl + '?t=' + Date.now();
+        }
+
+        const updates = {
+            full_name: document.getElementById('profile-full-name').value.trim() || null,
+            phone: document.getElementById('profile-phone').value.trim() || null,
+            emergency_contact: document.getElementById('profile-emergency').value.trim() || null,
+            updated_at: new Date().toISOString()
+        };
+        if (avatar_url) updates.avatar_url = avatar_url;
+
+        const { error } = await window.sb.from('profiles').update(updates).eq('id', user.id);
+        if (error) throw error;
+
+        // refresh header
+        const nameEl = document.getElementById('member-name');
+        if (nameEl && updates.full_name) nameEl.textContent = updates.full_name;
+        if (avatar_url) {
+            const av = document.getElementById('member-avatar');
+            const prev = document.getElementById('profile-avatar-preview');
+            if (av) av.src = avatar_url;
+            if (prev) prev.src = avatar_url;
+        }
+        if (fileInput) fileInput.value = '';
+        showToast('Profile saved');
+    } catch (err) {
+        console.error(err);
+        showToast(err.message || 'Could not save profile', true);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = original || 'Save profile';
+        }
+    }
+}
+
+// live preview when choosing a file
+document.addEventListener('change', function (ev) {
+    if (ev.target && ev.target.id === 'profile-avatar-file' && ev.target.files && ev.target.files[0]) {
+        const url = URL.createObjectURL(ev.target.files[0]);
+        const prev = document.getElementById('profile-avatar-preview');
+        if (prev) prev.src = url;
+    }
+});
+
 
 async function loginMember(e) {
     e.preventDefault();
