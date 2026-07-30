@@ -1,309 +1,210 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Events • SB Racing</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="css/styles.css">
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#000000">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <meta name="apple-mobile-web-app-title" content="SB Racing">
-    <link rel="apple-touch-icon" href="/assets/logo.png">
-    <link rel="icon" type="image/jpeg" href="/assets/logo.png">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Events • SB Racing</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="SB Racing">
+<link rel="apple-touch-icon" href="/assets/logo.png">
+<link rel="icon" type="image/png" href="/assets/logo.png">
 </head>
 <body class="bg-zinc-950 text-zinc-200">
+
 <!-- Shared nav (edit partials/nav.html only) -->
 <div id="site-nav"></div>
 <div class="page-top-spacer" aria-hidden="true"></div>
+
 <div class="page-body">
-    <!-- EVENTS -->
-    <section id="events" class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 py-20">
-        <div class="flex items-end justify-between mb-9 mt-10">
+  <!-- EVENTS -->
+  <section id="events" class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 py-20">
+    <div class="flex flex-wrap items-end justify-between gap-4 mb-9 mt-10">
+      <div>
+        <div class="uppercase tracking-[3px] text-xs font-semibold text-orange-600">GET OUT THERE</div>
+        <h2 class="section-header tracking-tighter">Upcoming Rides &amp; Events</h2>
+        <span id="events-admin-badge" class="hidden inline-block mt-2 text-xs font-semibold text-orange-500 bg-orange-950/50 border border-orange-900 px-2 py-0.5 rounded-lg">Admin mode</span>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" id="btn-add-event" onclick="openEventModal()"
+                class="hidden text-sm font-semibold px-5 py-2 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white transition-all">
+          <i class="fa-solid fa-plus mr-1"></i> Add Event
+        </button>
+        <button type="button" onclick="showAllEvents()"
+                class="text-sm font-semibold px-5 py-2 rounded-2xl border border-zinc-700 hover:bg-zinc-900 transition-all">
+          REFRESH
+        </button>
+      </div>
+    </div>
+
+    <!-- Filled by js/events.js from Supabase -->
+    <div id="events-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div class="col-span-full flex justify-center py-16 text-zinc-500">
+        <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+      </div>
+    </div>
+  </section>
+
+  <!-- RSVP Modal -->
+  <div id="rsvp-modal" onclick="if (event.target.id === 'rsvp-modal') hideRSVPModal()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex items-center justify-center p-6">
+    <div onclick="event.stopImmediatePropagation()" class="modal bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-8">
+      <div class="flex justify-between items-start mb-6">
+        <div>
+          <div id="rsvp-event-title" class="font-bold text-2xl tracking-tight"></div>
+          <div id="rsvp-event-date" class="text-sm text-zinc-400"></div>
+        </div>
+        <button type="button" onclick="hideRSVPModal()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
+      </div>
+      <form id="rsvp-form" onsubmit="submitRSVP(event)">
+        <input type="hidden" id="rsvp-event-id" value="">
+        <div class="space-y-5">
+          <div>
+            <label class="text-xs font-medium text-zinc-400">FULL NAME</label>
+            <input type="text" id="rsvp-name" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
+          </div>
+          <div class="grid grid-cols-2 gap-4">
             <div>
-                <div class="uppercase tracking-[3px] text-xs font-semibold text-orange-600">GET OUT THERE</div>
-                <h2 class="section-header tracking-tighter">Upcoming Rides &amp; Events</h2>
+              <label class="text-xs font-medium text-zinc-400">EMAIL</label>
+              <input type="email" id="rsvp-email" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
             </div>
-            <button onclick="showAllEvents()" 
-                    class="hidden md:block text-sm font-semibold px-5 py-2 rounded-2xl border border-zinc-700 hover:bg-zinc-900 transition-all">
-                VIEW FULL CALENDAR
-            </button>
+            <div>
+              <label class="text-xs font-medium text-zinc-400">EMERGENCY CONTACT</label>
+              <input type="tel" id="rsvp-emergency" placeholder="403-555-1234" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
+            </div>
+          </div>
+          <div class="flex items-start gap-x-3 pt-2">
+            <input type="checkbox" id="waiver-check" checked class="mt-1 accent-orange-600">
+            <label for="waiver-check" class="text-xs leading-tight text-zinc-400">I have read and agree to the SB Racing waiver and release of liability. I understand the risks involved in mountain biking.</label>
+          </div>
         </div>
-
-        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Event 1 -->
-            <div class="trail-card bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex flex-col">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <div class="text-xs font-mono tracking-widest text-emerald-400">THIS WEEK</div>
-                        <div class="font-bold text-xl mt-1">Friday Night Coulee Cruise</div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-xs text-zinc-400">JAN 9</div>
-                        <div class="font-mono text-sm">6:30 PM</div>
-                    </div>
-                </div>
-                <div class="mt-auto pt-6">
-                    <div class="flex items-center gap-x-2 text-xs mb-4">
-                        <span class="px-3 py-1 bg-emerald-900/60 text-emerald-400 rounded-full text-[10px] font-medium">EASY / INTERMEDIATE</span>
-                        <span class="px-3 py-1 bg-zinc-800 rounded-full text-[10px]">Echo Dale Park</span>
-                    </div>
-                    <p class="text-sm text-zinc-400 line-clamp-2">Social paced ride through the coulees. Perfect for newer riders or anyone wanting a relaxed start to the weekend.</p>
-                    
-                    <div class="flex items-center justify-between mt-6">
-                        <div class="text-xs text-zinc-400">18 spots left • 24 signed up</div>
-                        <button onclick="rsvpEvent(0, 'Friday Night Coulee Cruise', 'Jan 9 • 6:30 PM')" 
-                                class="text-xs font-semibold px-5 py-2 rounded-2xl border border-orange-600 text-orange-500 hover:bg-orange-950 active:bg-orange-900 transition-all">
-                            RSVP
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Event 2 -->
-            <div class="trail-card bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex flex-col">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <div class="text-xs font-mono tracking-widest text-orange-400">FEATURED</div>
-                        <div class="font-bold text-xl mt-1">Badlands Epic 40K</div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-xs text-zinc-400">JAN 17</div>
-                        <div class="font-mono text-sm">8:00 AM</div>
-                    </div>
-                </div>
-                <div class="mt-auto pt-6">
-                    <div class="flex items-center gap-x-2 text-xs mb-4">
-                        <span class="px-3 py-1 bg-orange-900/60 text-orange-400 rounded-full text-[10px] font-medium">ADVANCED</span>
-                        <span class="px-3 py-1 bg-zinc-800 rounded-full text-[10px]">Cypress Hills</span>
-                    </div>
-                    <p class="text-sm text-zinc-400 line-clamp-2">Our signature endurance ride. 40km of mixed terrain through the stunning badlands. Bring lights and a big smile.</p>
-                    
-                    <div class="flex items-center justify-between mt-6">
-                        <div class="text-xs text-zinc-400">9 spots left • 31 signed up</div>
-                        <button onclick="rsvpEvent(1, 'Badlands Epic 40K', 'Jan 17 • 8:00 AM')" 
-                                class="text-xs font-semibold px-5 py-2 rounded-2xl border border-orange-600 text-orange-500 hover:bg-orange-950 active:bg-orange-900 transition-all">
-                            RSVP
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Event 3 -->
-            <div class="trail-card bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex flex-col">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <div class="text-xs font-mono tracking-widest text-sky-400">CLINIC</div>
-                        <div class="font-bold text-xl mt-1">Winter Skills &amp; Maintenance</div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-xs text-zinc-400">JAN 24</div>
-                        <div class="font-mono text-sm">10:00 AM</div>
-                    </div>
-                </div>
-                <div class="mt-auto pt-6">
-                    <div class="flex items-center gap-x-2 text-xs mb-4">
-                        <span class="px-3 py-1 bg-sky-900/60 text-sky-400 rounded-full text-[10px] font-medium">ALL LEVELS</span>
-                        <span class="px-3 py-1 bg-zinc-800 rounded-full text-[10px]">UFA Hall</span>
-                    </div>
-                    <p class="text-sm text-zinc-400 line-clamp-2">Hands-on clinic covering cold weather riding, tire choice, and basic bike maintenance. Coffee &amp; donuts provided.</p>
-                    
-                    <div class="flex items-center justify-between mt-6">
-                        <div class="text-xs text-zinc-400">12 spots left</div>
-                        <button onclick="rsvpEvent(2, 'Winter Skills & Maintenance Clinic', 'Jan 24 • 10:00 AM')" 
-                                class="text-xs font-semibold px-5 py-2 rounded-2xl border border-orange-600 text-orange-500 hover:bg-orange-950 active:bg-orange-900 transition-all">
-                            RSVP
-                        </button>
-                    </div>
-                </div>
-            </div>
+        <div class="flex gap-x-3 mt-8">
+          <button type="button" onclick="hideRSVPModal()" class="flex-1 py-3 rounded-2xl border border-zinc-700 font-semibold text-sm">CANCEL</button>
+          <button type="submit" class="flex-1 py-3 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-sm">CONFIRM MY SPOT</button>
         </div>
-
-        <div class="text-center mt-8">
-            <button onclick="showAllEvents()" 
-                    class="md:hidden text-sm font-semibold px-6 py-3 rounded-2xl border border-zinc-700 hover:bg-zinc-900 transition-all inline-flex items-center gap-x-2">
-                <span>VIEW FULL EVENT CALENDAR</span>
-            </button>
-        </div>
-    </section>
-
-    <!-- Modals -->
-    <!-- RSVP Modal -->
-    <div id="rsvp-modal" onclick="if (event.target.id === 'rsvp-modal') hideRSVPModal()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex items-center justify-center p-6">
-        <div onclick="event.stopImmediatePropagation()" class="modal bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-8">
-            <div class="flex justify-between items-start mb-6">
-                <div>
-                    <div id="rsvp-event-title" class="font-bold text-2xl tracking-tight"></div>
-                    <div id="rsvp-event-date" class="text-sm text-zinc-400"></div>
-                </div>
-                <button onclick="hideRSVPModal()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
-            </div>
-
-            <form id="rsvp-form" onsubmit="submitRSVP(event)">
-                <div class="space-y-5">
-                    <div>
-                        <label class="text-xs font-medium text-zinc-400">FULL NAME</label>
-                        <input type="text" id="rsvp-name" value="Trevor Wood" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="text-xs font-medium text-zinc-400">EMAIL</label>
-                            <input type="email" id="rsvp-email" value="trevor@sb-racing.ca" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
-                        </div>
-                        <div>
-                            <label class="text-xs font-medium text-zinc-400">EMERGENCY CONTACT</label>
-                            <input type="tel" id="rsvp-emergency" placeholder="403-555-1234" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
-                        </div>
-                    </div>
-                    <div class="flex items-start gap-x-3 pt-2">
-                        <input type="checkbox" id="waiver-check" checked class="mt-1 accent-orange-600">
-                        <label for="waiver-check" class="text-xs leading-tight text-zinc-400">I have read and agree to the SB Racing waiver and release of liability. I understand the risks involved in mountain biking.</label>
-                    </div>
-                </div>
-
-                <div class="flex gap-x-3 mt-8">
-                    <button type="button" onclick="hideRSVPModal()" 
-                            class="flex-1 py-3 rounded-2xl border border-zinc-700 font-semibold text-sm">CANCEL</button>
-                    <button type="submit" 
-                            class="flex-1 py-3 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-sm">CONFIRM MY SPOT</button>
-                </div>
-            </form>
-        </div>
+      </form>
     </div>
+  </div>
 
-    <!-- Payment Modal -->
-    <div id="payment-modal" onclick="if (event.target.id === 'payment-modal') hidePaymentModal()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[80] flex items-center justify-center p-6">
-        <div onclick="event.stopImmediatePropagation()" class="modal bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-8">
-            <div class="flex justify-between mb-2">
-                <div class="font-bold text-xl">Complete Payment</div>
-                <button onclick="hidePaymentModal()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
-            </div>
-            <div class="text-sm text-zinc-400 mb-6">Membership: <span id="payment-tier-name" class="font-semibold text-white"></span></div>
-
-            <div class="bg-zinc-950 border border-zinc-700 rounded-2xl p-5 mb-6">
-                <div class="flex justify-between text-sm">
-                    <span>Subtotal</span>
-                    <span id="payment-amount" class="font-mono font-semibold"></span>
-                </div>
-                <div class="h-px bg-zinc-700 my-3"></div>
-                <div class="flex justify-between font-bold text-lg">
-                    <span>Total due today</span>
-                    <span id="payment-total" class="font-mono"></span>
-                </div>
-            </div>
-
-            <form id="payment-form" onsubmit="processPayment(event)">
-                <div class="space-y-4">
-                    <div>
-                        <label class="text-xs font-medium text-zinc-400">CARD NUMBER</label>
-                        <input type="text" id="card-number" value="4242 4242 4242 4242" maxlength="19" 
-                               class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 font-mono text-sm tracking-widest outline-none focus:border-orange-600">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="text-xs font-medium text-zinc-400">EXPIRY DATE</label>
-                            <input type="text" id="card-expiry" value="04 / 28" maxlength="7" 
-                                   class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 font-mono text-sm outline-none focus:border-orange-600">
-                        </div>
-                        <div>
-                            <label class="text-xs font-medium text-zinc-400">CVC</label>
-                            <input type="text" id="card-cvc" value="424" maxlength="4" 
-                                   class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 font-mono text-sm outline-none focus:border-orange-600">
-                        </div>
-                    </div>
-                </div>
-
-                <button type="submit" 
-                        class="mt-8 w-full py-4 rounded-3xl bg-emerald-600 hover:bg-emerald-700 font-bold text-sm tracking-wider flex justify-center items-center gap-x-2 active:scale-[0.985]">
-                    <span>PAY &amp; ACTIVATE MEMBERSHIP</span>
-                </button>
-                <p class="text-center text-[10px] text-zinc-500 mt-4">This is a demo. No real payment will be processed.</p>
-            </form>
+  <!-- Event admin modal (add / edit) -->
+  <div id="event-modal" onclick="if (event.target.id === 'event-modal') closeEventModal()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[80] items-center justify-center p-4">
+    <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
+      <div class="flex justify-between items-center mb-5">
+        <div class="font-bold text-xl" id="event-modal-title">Add Event</div>
+        <button type="button" onclick="closeEventModal()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+      </div>
+      <form onsubmit="saveEvent(event)" class="space-y-4 text-sm">
+        <div>
+          <label class="block text-zinc-400 mb-1">Title *</label>
+          <input id="ev-title" required class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 focus:border-orange-600 outline-none">
         </div>
-    </div>
-
-    <!-- Cart Drawer -->
-    </div><!-- /.page-body -->
-<div id="cart-drawer" onclick="if (event.target.id === 'cart-drawer') hideCart()" class="hidden fixed inset-0 bg-black/60 z-[90] flex justify-end">
-        <div onclick="event.stopImmediatePropagation()" class="w-full max-w-md bg-zinc-900 border-l border-zinc-700 h-full flex flex-col">
-            <div class="p-6 flex justify-between items-center border-b border-zinc-700">
-                <div class="font-bold text-xl">Your Cart</div>
-                <button onclick="hideCart()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
-            </div>
-            
-            <div id="cart-items" class="flex-1 overflow-auto p-6 space-y-4 text-sm"></div>
-            
-            <div class="p-6 border-t border-zinc-700 bg-zinc-950">
-                <div class="flex justify-between font-bold text-lg mb-5">
-                    <span>Total</span>
-                    <span id="cart-total" class="font-mono">$0</span>
-                </div>
-                <button onclick="checkout()" 
-                        class="w-full py-4 rounded-2xl bg-white text-zinc-900 font-bold tracking-wider active:scale-[0.985]">
-                    CHECKOUT
-                </button>
-                <p class="text-center text-xs text-zinc-500 mt-3">or 4 interest-free payments of $X with Shop Pay</p>
-            </div>
+        <div>
+          <label class="block text-zinc-400 mb-1">Description</label>
+          <textarea id="ev-description" rows="3" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 focus:border-orange-600 outline-none"></textarea>
         </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-zinc-400 mb-1">Date *</label>
+            <input type="date" id="ev-date" required class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none">
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Time</label>
+            <input type="time" id="ev-time" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none">
+          </div>
+        </div>
+        <div>
+          <label class="block text-zinc-400 mb-1">Location</label>
+          <input id="ev-location" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none" placeholder="e.g. Echo Dale Park">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-zinc-400 mb-1">Difficulty</label>
+            <select id="ev-difficulty" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none">
+              <option value="all_levels">All levels</option>
+              <option value="easy">Easy</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Category</label>
+            <select id="ev-category" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none">
+              <option value="ride">Ride</option>
+              <option value="clinic">Clinic</option>
+              <option value="social">Social</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-zinc-400 mb-1">Capacity</label>
+          <input type="number" id="ev-capacity" min="1" value="40" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none">
+        </div>
+        <div class="flex flex-wrap gap-4">
+          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="ev-featured" class="accent-orange-600"> Featured</label>
+          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="ev-members-only" class="accent-orange-600"> Members only</label>
+        </div>
+        <button type="submit" class="w-full py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-white">Save event</button>
+      </form>
     </div>
+  </div>
 
-    <!-- Success Toast -->
-    <div id="success-toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-8 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm font-medium z-[100]">
-        <i class="fa-solid fa-check-circle"></i>
-        <span id="toast-message"></span>
-    </div>
-
-<footer class="bg-black border-t border-zinc-800 py-12">
+  <!-- Footer -->
+  <footer class="bg-black border-t border-zinc-800 py-12">
     <div class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 text-xs text-zinc-400">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-y-4">
-            <div>
-                © 2026 SB Racing • Medicine Hat, Alberta<br>
-                <span class="text-zinc-600">Proudly riding the traditional lands of the Blackfoot Confederacy.</span>
-            </div>
-            <div class="flex gap-x-6">
-                <a href="#" class="hover:text-white">Instagram</a>
-                <a href="#" class="hover:text-white">Discord</a>
-                <a href="#" class="hover:text-white">Trail Reports</a>
-                <a href="#" class="hover:text-white">Contact</a>
-            </div>
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-y-4">
+        <div>
+          © 2026 SB Racing • Medicine Hat, Alberta<br>
+          <span class="text-zinc-600">Proudly riding the traditional lands of the Blackfoot Confederacy.</span>
         </div>
+        <div class="flex gap-x-6">
+          <a href="#" class="hover:text-white">Instagram</a>
+          <a href="#" class="hover:text-white">Discord</a>
+          <a href="#" class="hover:text-white">Trail Reports</a>
+          <a href="#" class="hover:text-white">Contact</a>
+        </div>
+      </div>
     </div>
-</footer>
+  </footer>
+</div><!-- /.page-body -->
 
+<!-- Cart Drawer -->
 <div id="cart-drawer" onclick="if (event.target.id === 'cart-drawer') hideCart()" class="hidden fixed inset-0 bg-black/60 z-[90] flex justify-end">
-    <div onclick="event.stopImmediatePropagation()" class="w-full max-w-md bg-zinc-900 border-l border-zinc-700 h-full flex flex-col">
-        <div class="p-6 flex justify-between items-center border-b border-zinc-700">
-            <div class="font-bold text-xl">Your Cart</div>
-            <button onclick="hideCart()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
-        </div>
-        <div id="cart-items" class="flex-1 overflow-auto p-6 space-y-4 text-sm"></div>
-        <div class="p-6 border-t border-zinc-700 bg-zinc-950">
-            <div class="flex justify-between font-bold text-lg mb-5"><span>Total</span><span id="cart-total" class="font-mono">$0</span></div>
-            <button onclick="checkout()" class="w-full py-4 rounded-2xl bg-white text-zinc-900 font-bold tracking-wider active:scale-[0.985]">CHECKOUT</button>
-        </div>
+  <div onclick="event.stopImmediatePropagation()" class="w-full max-w-md bg-zinc-900 border-l border-zinc-700 h-full flex flex-col">
+    <div class="p-6 flex justify-between items-center border-b border-zinc-700">
+      <div class="font-bold text-xl">Your Cart</div>
+      <button type="button" onclick="hideCart()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
     </div>
+    <div id="cart-items" class="flex-1 overflow-auto p-6 space-y-4 text-sm"></div>
+    <div class="p-6 border-t border-zinc-700 bg-zinc-950">
+      <div class="flex justify-between font-bold text-lg mb-5">
+        <span>Total</span>
+        <span id="cart-total" class="font-mono">$0</span>
+      </div>
+      <button type="button" onclick="checkout()" class="w-full py-4 rounded-2xl bg-white text-zinc-900 font-bold tracking-wider active:scale-[0.985]">CHECKOUT</button>
+    </div>
+  </div>
 </div>
 
+<!-- Success Toast -->
 <div id="success-toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-8 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm font-medium z-[100]">
-    <i class="fa-solid fa-check-circle"></i><span id="toast-message"></span>
+  <i class="fa-solid fa-check-circle"></i>
+  <span id="toast-message"></span>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/shared.js"></script>
 <script src="js/events.js"></script>
-
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    // Prefer same-folder sw.js; ignore failures (login/merch do not depend on it)
     var swUrl = 'sw.js';
     navigator.serviceWorker.getRegistrations().then(function (regs) {
-      // If sw is missing, clear any old broken registrations so they don't cache stale pages
       fetch(swUrl, { method: 'HEAD' }).then(function (res) {
         if (res.ok) {
           navigator.serviceWorker.register(swUrl).catch(function () {});
