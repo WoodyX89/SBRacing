@@ -176,7 +176,7 @@
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    // Prefer same-folder sw.js; ignore failures (login/merch do not depend on it)
+    // Prefer same-folder sw.js; ignore failures (login/merch do not depend on it) duh duh
     var swUrl = 'sw.js';
     navigator.serviceWorker.getRegistrations().then(function (regs) {
       // If sw is missing, clear any old broken registrations so they don't cache stale pages
