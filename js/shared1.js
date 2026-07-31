@@ -1,31 +1,4 @@
 
-/** Ensure Trails link exists even if an old partials/nav.html is cached/deployed */
-function ensureTrailsNavLink() {
-    var desktop = document.querySelector('#navbar .nav-link[href="trails.html"]');
-    var mobile = document.querySelector('#mobile-menu .mobile-nav-link[href="trails.html"]');
-    if (!desktop) {
-        var events = document.querySelector('#navbar .nav-link[href="events.html"]');
-        if (events && events.parentElement) {
-            var a = document.createElement('a');
-            a.href = 'trails.html';
-            a.className = 'nav-link px-3 py-2 hover:text-white transition-colors';
-            a.textContent = 'Trails';
-            events.insertAdjacentElement('afterend', a);
-        }
-    }
-    if (!mobile) {
-        var mevents = document.querySelector('#mobile-menu .mobile-nav-link[href="events.html"]');
-        if (mevents && mevents.parentElement) {
-            var m = document.createElement('a');
-            m.href = 'trails.html';
-            m.className = 'mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800';
-            m.textContent = 'Trails & Routes';
-            mevents.insertAdjacentElement('afterend', m);
-        }
-    }
-}
-
-
 function isMerchPage() {
     const path = (location.pathname || '').toLowerCase();
     return path.endsWith('merch.html') || path.includes('/merch');
@@ -52,7 +25,6 @@ async function loadSiteNav() {
         const res = await fetch('partials/nav.html', { cache: 'no-cache' });
         if (!res.ok) throw new Error('nav ' + res.status);
         mount.innerHTML = await res.text();
-        ensureTrailsNavLink();
         updateNavCartVisibility();
     } catch (e) {
         console.error('[nav] failed to load partials/nav.html', e);
@@ -305,22 +277,12 @@ async function updateNavAuth(forcedUser) {
         const display = name.length > 14 ? name.slice(0, 12) + '…' : name;
         const initial = (display.charAt(0) || 'M').toUpperCase();
 
-        const avatarUrl = (profile && profile.avatar_url) ? profile.avatar_url : '';
-        const avatarHtml = avatarUrl
-            ? `<img src="${escapeAttrNav(avatarUrl)}" alt="" class="w-8 h-8 rounded-full object-cover bg-zinc-800" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="w-8 h-8 rounded-full bg-orange-600 text-white hidden items-center justify-center text-xs font-bold">${initial}</span>`
-            : `<span class="w-8 h-8 rounded-full bg-orange-600 text-white flex items-center justify-center text-xs font-bold">${initial}</span>`;
-        const avatarHtmlLg = avatarUrl
-            ? `<img src="${escapeAttrNav(avatarUrl)}" alt="" class="w-9 h-9 rounded-full object-cover bg-zinc-800" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="w-9 h-9 rounded-full bg-orange-600 text-white hidden items-center justify-center font-bold">${initial}</span>`
-            : `<span class="w-9 h-9 rounded-full bg-orange-600 text-white flex items-center justify-center font-bold">${initial}</span>`;
-
         slot.style.display = 'flex';
         slot.innerHTML = `
             <div class="flex items-center gap-x-1.5">
                 <a href="members.html" class="relative flex items-center gap-x-2 px-1.5 py-1 rounded-2xl hover:bg-zinc-800/80 transition-all" title="${escapeAttrNav(email)}">
-                    <span class="relative inline-flex">
-                        ${avatarHtml}
-                        <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-zinc-900" title="Logged in"></span>
-                    </span>
+                    <span class="w-8 h-8 rounded-full bg-orange-600 text-white flex items-center justify-center text-xs font-bold">${initial}</span>
+                    <span class="absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-zinc-900" title="Logged in"></span>
                     <span class="text-sm font-medium max-w-[100px] truncate hidden md:inline pl-1">${escapeHtmlNav(display)}</span>
                 </a>
                 <button type="button" onclick="navLogout()" class="hidden md:inline-flex text-xs text-zinc-500 hover:text-white px-1.5 py-1" title="Log out">
@@ -333,7 +295,7 @@ async function updateNavAuth(forcedUser) {
         if (mobileSlot) {
             mobileSlot.innerHTML = `
                 <a href="members.html" class="flex items-center gap-x-3 px-4 py-3 rounded-2xl bg-zinc-800/80">
-                    <span class="relative inline-flex">${avatarHtmlLg}</span>
+                    <span class="w-9 h-9 rounded-full bg-orange-600 text-white flex items-center justify-center font-bold">${initial}</span>
                     <div class="min-w-0">
                         <div class="font-medium truncate">${escapeHtmlNav(profile?.full_name || display)}</div>
                         <div class="text-xs text-emerald-400">Logged in</div>
@@ -392,7 +354,6 @@ function escapeAttrNav(str) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSiteNav();
-    ensureTrailsNavLink();
     updateNavCartVisibility();
     initNavbar();
     setActiveNav();

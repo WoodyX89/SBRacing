@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Trails &amp; Routes • SB Racing</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<style>
+  #trail-map { height: min(70vh, 640px); width: 100%; border-radius: 1rem; z-index: 1; background: #18181b; }
+  .leaflet-container { font-family: inherit; background: #18181b; }
+  .leaflet-control-zoom a { background: #18181b !important; color: #e4e4e7 !important; border-color: #3f3f46 !important; }
+  .leaflet-popup-content-wrapper { background: #18181b; color: #e4e4e7; border-radius: 12px; }
+  .leaflet-popup-tip { background: #18181b; }
+  .diff-easy { stroke: #34d399; }
+  .diff-intermediate { stroke: #fbbf24; }
+  .diff-advanced { stroke: #f97316; }
+</style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+<div id="site-nav"></div>
+<div class="page-top-spacer" aria-hidden="true"></div>
+
+<main class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 py-10">
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div>
+      <div class="uppercase tracking-[3px] text-xs font-semibold text-orange-600">RIDE LOCAL</div>
+      <h1 class="section-header tracking-tighter">Trails &amp; Routes</h1>
+      <p class="text-zinc-400 text-sm mt-1 max-w-xl">Medicine Hat, Redcliff, Elkwater &amp; Cypress Hills. Tap the map to build a route. Log in to save it.</p>
+    </div>
+    <div class="flex flex-wrap gap-2 text-xs">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700"><span class="w-2.5 h-2.5 rounded-full bg-green-500"></span> Easy</span>
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Intermediate</span>
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700"><span class="w-2.5 h-2.5 rounded-full bg-black ring-1 ring-zinc-500"></span> Advanced</span>
+    </div>
+  </div>
+
+  <div class="grid lg:grid-cols-12 gap-6">
+    <div class="lg:col-span-8 space-y-3">
+      <div id="trail-map" class="border border-zinc-800 shadow-xl"></div>
+      <p class="text-xs text-zinc-500">Sample trail lines are illustrative. Replace <code class="text-zinc-400">assets/trails/region.geojson</code> with real GPX/GeoJSON when ready. Always check park rules and conditions.</p>
+    </div>
+
+    <div class="lg:col-span-4 space-y-4">
+      <!-- Build route -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
+        <div class="font-semibold flex items-center gap-2"><i class="fa-solid fa-route text-orange-500"></i> Build route</div>
+        <p class="text-xs text-zinc-400">Turn on <strong class="text-zinc-200">Build route</strong>, then <strong class="text-zinc-200">click trails</strong> to add them. Click again to remove. Order = ride order.</p>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" id="btn-route-mode" onclick="toggleRouteMode()" class="px-4 py-2 rounded-2xl bg-orange-600 hover:bg-orange-700 text-sm font-semibold">Build route</button>
+          <button type="button" onclick="undoWaypoint()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Undo</button>
+          <button type="button" onclick="clearRoute()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Clear</button>
+        </div>
+        <div id="selected-trails-list" class="pt-2 border-t border-zinc-800 max-h-40 overflow-y-auto">
+          <p class="text-xs text-zinc-500">Click trails on the map to build a route.</p>
+        </div>
+        <div class="text-sm">
+          <span class="text-zinc-500">Distance</span>
+          <div class="text-2xl font-black tracking-tight" id="route-distance">0.0 km</div>
+          <div class="text-xs text-zinc-500" id="route-points">0 points</div>
+        </div>
+        <div id="save-route-panel" class="space-y-3 pt-2 border-t border-zinc-800">
+          <input id="route-name" type="text" placeholder="Route name" class="w-full px-4 py-2.5 rounded-2xl bg-zinc-950 border border-zinc-700 text-sm outline-none focus:border-orange-600">
+          <textarea id="route-desc" rows="2" placeholder="Notes (optional)" class="w-full px-4 py-2.5 rounded-2xl bg-zinc-950 border border-zinc-700 text-sm outline-none focus:border-orange-600"></textarea>
+          <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+            <input type="checkbox" id="route-public" class="accent-orange-600"> Share publicly with club
+          </label>
+          <button type="button" onclick="saveRoute()" class="w-full py-3 rounded-2xl bg-white text-zinc-900 font-semibold text-sm hover:bg-amber-50">
+            Save route
+          </button>
+          <p id="save-route-hint" class="text-xs text-zinc-500">Log in on Members to save routes to your account.</p>
+        </div>
+      </div>
+
+      <!-- Jump areas -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+        <div class="font-semibold mb-3 text-sm">Jump to area</div>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" onclick="flyTo('hat')" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">Medicine Hat</button>
+          <button type="button" onclick="flyTo('redcliff')" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">Redcliff</button>
+          <button type="button" onclick="flyTo('elkwater')" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">Elkwater</button>
+          <button type="button" onclick="flyTo('cypress')" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">Cypress Hills</button>
+        </div>
+      </div>
+
+      <!-- Saved routes -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+        <div class="font-semibold mb-3 text-sm flex items-center justify-between">
+          <span>My saved routes</span>
+          <button type="button" onclick="loadMyRoutes()" class="text-xs text-orange-500 hover:underline">Refresh</button>
+        </div>
+        <div id="saved-routes-list" class="space-y-2 text-sm text-zinc-500">
+          Sign in to see saved routes.
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="success-toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-8 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm font-medium z-[100]">
+  <i class="fa-solid fa-check-circle"></i><span id="toast-message"></span>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/shared.js"></script>
+<script src="js/trails-map.js"></script>
+</body>
+</html>

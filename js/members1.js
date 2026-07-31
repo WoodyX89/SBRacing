@@ -83,120 +83,7 @@ async function showDashboard(user) {
 
     // Load community feed
     await loadPosts();
-    await loadMemberDirectory();
 }
-
-let _memberDirCache = [];
-
-async function loadMemberDirectory() {
-  const grid = document.getElementById('member-directory');
-  if (!grid || !window.sb) return;
-  try {
-    const { data, error } = await window.sb
-      .from('profiles')
-      .select('id, full_name, avatar_url, membership_tier, membership_status, created_at')
-      .order('full_name', { ascending: true });
-    if (error) throw error;
-    _memberDirCache = data || [];
-    renderMemberDirectory(_memberDirCache);
-  } catch (e) {
-    console.error(e);
-    grid.innerHTML = '<div class="col-span-full text-center text-zinc-500 py-8">Could not load members</div>';
-  }
-}
-
-function filterMemberDirectory() {
-  const q = (document.getElementById('member-dir-search')?.value || '').trim().toLowerCase();
-  const list = !_memberDirCache ? [] : _memberDirCache.filter(function (p) {
-    if (!q) return true;
-    return String(p.full_name || '').toLowerCase().includes(q) || String(p.membership_tier || '').includes(q);
-  });
-  renderMemberDirectory(list);
-}
-
-function renderMemberDirectory(list) {
-  const grid = document.getElementById('member-directory');
-  if (!grid) return;
-  if (!list.length) {
-    grid.innerHTML = '<div class="col-span-full text-center text-zinc-500 py-8">No members found</div>';
-    return;
-  }
-  const tierLabel = { trail_rider: 'Trail Rider', coulee_crusher: 'Coulee Crusher', youth: 'Youth', none: 'Member' };
-  grid.innerHTML = list.map(function (p) {
-    const name = p.full_name || 'Member';
-    const initial = name.charAt(0).toUpperCase();
-    const av = p.avatar_url
-      ? '<img src="' + escapeAttr(p.avatar_url) + '" class="w-12 h-12 rounded-2xl object-cover bg-zinc-800" alt="">'
-      : '<div class="w-12 h-12 rounded-2xl bg-orange-600 text-white flex items-center justify-center font-bold">' + initial + '</div>';
-    const tier = tierLabel[p.membership_tier] || 'Member';
-    const active = p.membership_status === 'active';
-    return '<button type="button" onclick="openMemberProfile(\'' + p.id + '\')" class="text-left flex items-center gap-3 p-4 rounded-2xl bg-zinc-950 border border-zinc-800 hover:border-orange-700/60 transition-all w-full">' +
-      av +
-      '<div class="min-w-0 flex-1"><div class="font-semibold truncate">' + escapeHtml(name) + '</div>' +
-      '<div class="text-xs ' + (active ? 'text-emerald-400' : 'text-zinc-500') + '">' + escapeHtml(tier) + (active ? ' · Active' : '') + '</div></div>' +
-      '<i class="fa-solid fa-chevron-right text-zinc-600 text-xs"></i></button>';
-  }).join('');
-}
-
-async function openMemberProfile(userId) {
-  const modal = document.getElementById('member-profile-modal');
-  const body = document.getElementById('member-profile-body');
-  if (!modal || !body) return;
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
-  body.innerHTML = '<div class="text-zinc-500 text-sm">Loading…</div>';
-  try {
-    const { data: p, error } = await window.sb
-      .from('profiles')
-      .select('id, full_name, avatar_url, membership_tier, membership_status, created_at, email')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) throw error;
-    if (!p) {
-      body.innerHTML = '<p class="text-zinc-500">Member not found</p>';
-      return;
-    }
-    const tierLabel = { trail_rider: 'Trail Rider', coulee_crusher: 'Coulee Crusher', youth: 'Youth', none: 'Member' };
-    const name = p.full_name || 'Member';
-    const initial = name.charAt(0).toUpperCase();
-    const av = p.avatar_url
-      ? '<img src="' + escapeAttr(p.avatar_url) + '" class="w-20 h-20 rounded-2xl object-cover bg-zinc-800" alt="">'
-      : '<div class="w-20 h-20 rounded-2xl bg-orange-600 text-white flex items-center justify-center text-2xl font-bold">' + initial + '</div>';
-    // public ride count if allowed
-    let rideHtml = '';
-    try {
-      const { data: rides } = await window.sb.from('rides').select('trail_name, rating, ride_date').eq('user_id', userId).order('ride_date', { ascending: false }).limit(5);
-      if (rides && rides.length) {
-        rideHtml = '<div class="mt-4"><div class="text-xs uppercase tracking-widest text-zinc-500 mb-2">Recent rides</div><div class="space-y-2">' +
-          rides.map(function (r) {
-            return '<div class="text-sm bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 flex justify-between gap-2"><span class="truncate">' + escapeHtml(r.trail_name || 'Ride') + '</span><span class="text-zinc-500 text-xs shrink-0">' + (r.rating ? r.rating + '★' : '') + '</span></div>';
-          }).join('') + '</div></div>';
-      }
-    } catch (_) {}
-    const joined = p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '';
-    body.innerHTML =
-      '<div class="flex items-center gap-4">' + av +
-      '<div><div class="text-xl font-bold">' + escapeHtml(name) + '</div>' +
-      '<div class="text-sm text-emerald-400 mt-1">' + escapeHtml(tierLabel[p.membership_tier] || 'Member') +
-      (p.membership_status === 'active' ? ' · Active' : '') + '</div>' +
-      (joined ? '<div class="text-xs text-zinc-500 mt-1">Joined ' + joined + '</div>' : '') +
-      '</div></div>' + rideHtml;
-  } catch (e) {
-    body.innerHTML = '<p class="text-red-400 text-sm">' + escapeHtml(e.message || 'Failed to load') + '</p>';
-  }
-}
-
-function closeMemberProfile() {
-  const modal = document.getElementById('member-profile-modal');
-  if (!modal) return;
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
-}
-
-function escapeAttr(str) {
-  return escapeHtml(str).replace(/'/g, '&#39;');
-}
-
 
 function fillProfileForm(profile, user) {
     const name = document.getElementById('profile-full-name');
@@ -357,11 +244,10 @@ async function logoutMember() {
 
 function switchMemberTab(tabIndex) {
     document.querySelectorAll('.member-tab-content').forEach(el => el.classList.add('hidden'));
-    document.getElementById('tab-' + tabIndex)?.classList.remove('hidden');
+    document.getElementById(`tab-${tabIndex}`)?.classList.remove('hidden');
 
-    document.querySelectorAll('.member-tab').forEach((btn) => {
-        const id = btn.getAttribute('data-tab');
-        if (String(id) === String(tabIndex)) {
+    document.querySelectorAll('.member-tab').forEach((btn, idx) => {
+        if (idx == tabIndex) {
             btn.classList.add('border-b-2', 'border-orange-600', 'text-orange-500', 'font-semibold');
             btn.classList.remove('text-zinc-400');
         } else {
@@ -369,7 +255,6 @@ function switchMemberTab(tabIndex) {
             btn.classList.add('text-zinc-400');
         }
     });
-    if (String(tabIndex) === '5') loadMemberDirectory();
 }
 
 async function loadRides(userId) {

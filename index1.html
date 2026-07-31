@@ -13,8 +13,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="SB Racing">
-    <link rel="apple-touch-icon" href="/assets/logo.JPG">
-    <link rel="icon" type="image/jpeg" href="/assets/logo.JPG">
+    <link rel="apple-touch-icon" href="/assets/logo.png">
+    <link rel="icon" type="image/jpeg" href="/assets/logo.png">
 </head>
 <body class="bg-zinc-950 text-zinc-200">
 <!-- Shared nav (edit partials/nav.html only) -->
@@ -25,7 +25,7 @@
     <header class="hero-bg min-h-[100svh] md:min-h-[640px] flex items-center relative">
         <div class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 w-full">
             <div class="max-w-3xl">
-                <div class="inline-flex items-center gap-x-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 mb-6">
+                <div class="inline-flex items-center gap-x-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 mb-6 mt-12">
                     <div class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
                     <span class="text-sm font-medium tracking-widest">MEDICINE HAT • ALBERTA</span>
                 </div>
@@ -51,7 +51,7 @@
                         <div class="w-8 h-8 rounded-full border-2 border-zinc-900 overflow-hidden ring-1 ring-white/30"><img src="https://picsum.photos/id/201/32/32" class="object-cover"></div>
                     </div>
                     <div class="text-white/60 text-sm">
-                        <span class="font-semibold text-white"><span id="hero-active-count">—</span> riders</span> active
+                        <span class="font-semibold text-white">87 riders</span> active this month
                     </div>
                 </div>
             </div>
@@ -70,19 +70,19 @@
     <div class="border-b border-zinc-800 bg-zinc-900">
         <div class="max-w-screen-2xl mx-auto px-4 sm:px-8 py-5 grid grid-cols-2 md:grid-cols-4 gap-y-6 text-center">
             <div>
-                <div class="text-4xl font-black tracking-tighter stat-number" id="stat-active-members">—</div>
+                <div class="text-4xl font-black tracking-tighter stat-number">87</div>
                 <div class="text-xs uppercase tracking-[1.5px] text-zinc-500 font-medium">Active Members</div>
             </div>
             <div>
-                <div class="text-4xl font-black tracking-tighter stat-number" id="stat-group-rides">—</div>
+                <div class="text-4xl font-black tracking-tighter stat-number">142</div>
                 <div class="text-xs uppercase tracking-[1.5px] text-zinc-500 font-medium">Group Rides in 2026</div>
             </div>
             <div>
-                <div class="text-4xl font-black tracking-tighter stat-number" id="stat-trails-logged">—</div>
+                <div class="text-4xl font-black tracking-tighter stat-number">19</div>
                 <div class="text-xs uppercase tracking-[1.5px] text-zinc-500 font-medium">Trails Logged</div>
             </div>
             <div>
-                <div class="text-4xl font-black tracking-tighter" id="stat-avg-rating">—</div>
+                <div class="text-4xl font-black tracking-tighter">4.9</div>
                 <div class="text-xs uppercase tracking-[1.5px] text-zinc-500 font-medium">Average Ride Rating</div>
             </div>
         </div>
@@ -171,7 +171,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/shared.js"></script>
-<script src="js/home-stats.js"></script>
 
 <script>
 if ('serviceWorker' in navigator) {
