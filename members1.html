@@ -88,6 +88,7 @@
                         <button onclick="switchMemberTab(2)" class="member-tab px-5 py-3 text-zinc-400 hover:text-white" data-tab="2">Perks &amp; Resources</button>
                         <button onclick="switchMemberTab(3)" class="member-tab px-5 py-3 text-zinc-400 hover:text-white" data-tab="3">Community Feed</button>
                         <button onclick="switchMemberTab(4)" class="member-tab px-5 py-3 text-zinc-400 hover:text-white" data-tab="4">Profile</button>
+                        <button onclick="switchMemberTab(5)" class="member-tab px-5 py-3 text-zinc-400 hover:text-white" data-tab="5">Members</button>
                     </div>
                 </div>
 
@@ -143,6 +144,22 @@
                                     <a href="#" class="block hover:text-orange-400 transition-colors">↓ Winter Tire Pressure Guide (PDF)</a>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Members directory -->
+                    <div id="tab-5" class="member-tab-content hidden">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+                            <div>
+                                <div class="font-semibold">Club members</div>
+                                <p class="text-xs text-zinc-500 mt-0.5">Click a member to view their public profile</p>
+                            </div>
+                            <input type="search" id="member-dir-search" oninput="filterMemberDirectory()" placeholder="Search members…"
+                                   class="px-4 py-2 rounded-2xl bg-zinc-950 border border-zinc-700 text-sm outline-none focus:border-orange-600 w-full sm:w-56">
+                        </div>
+                        <div id="member-directory" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <div class="col-span-full text-center text-zinc-500 py-8"><i class="fa-solid fa-spinner fa-spin"></i></div>
                         </div>
                     </div>
 
@@ -250,6 +267,20 @@
 </footer>
 
 </div><!-- /.page-body -->
+
+<!-- Public member profile modal -->
+<div id="member-profile-modal" onclick="if(event.target.id==='member-profile-modal')closeMemberProfile()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[80] items-center justify-center p-4">
+  <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-start mb-5">
+      <div class="font-bold text-lg">Member profile</div>
+      <button type="button" onclick="closeMemberProfile()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+    </div>
+    <div id="member-profile-body" class="space-y-4">
+      <div class="text-zinc-500 text-sm">Loading…</div>
+    </div>
+  </div>
+</div>
+
 <div id="cart-drawer" onclick="if (event.target.id === 'cart-drawer') hideCart()" class="hidden fixed inset-0 bg-black/60 z-[90] flex justify-end">
     <div onclick="event.stopImmediatePropagation()" class="w-full max-w-md bg-zinc-900 border-l border-zinc-700 h-full flex flex-col">
         <div class="p-6 flex justify-between items-center border-b border-zinc-700">

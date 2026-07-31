@@ -365,3 +365,23 @@ input, select, textarea { font-size: 16px !important; }
   gap: 0.25rem !important;
   align-items: center !important;
 }
+
+/* Members dashboard tabs: horizontal scroll on mobile */
+.member-tabs-scroll {
+  gap: 0;
+  max-width: 100%;
+}
+.member-tabs-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+.member-tabs-scroll::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 4px;
+}
+@media (max-width: 767px) {
+  .member-tabs-scroll .member-tab {
+    font-size: 0.8125rem;
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+}
