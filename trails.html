@@ -19,6 +19,14 @@
   .diff-easy { stroke: #34d399; }
   .diff-intermediate { stroke: #fbbf24; }
   .diff-advanced { stroke: #f97316; }
+
+  .leaflet-control-layers {
+    background: #18181b !important;
+    color: #e4e4e7 !important;
+    border: 1px solid #3f3f46 !important;
+    border-radius: 12px !important;
+  }
+  .leaflet-control-layers-list label { color: #e4e4e7; }
 </style>
 </head>
 <body class="bg-zinc-950 text-zinc-200">
@@ -49,7 +57,7 @@
       <!-- Build route -->
       <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
         <div class="font-semibold flex items-center gap-2"><i class="fa-solid fa-route text-orange-500"></i> Build route</div>
-        <p class="text-xs text-zinc-400">Turn on <strong class="text-zinc-200">Build route</strong>, then <strong class="text-zinc-200">click trails</strong> to add them. Click again to remove. Order = ride order.</p>
+        <p class="text-xs text-zinc-400">Turn on <strong class="text-zinc-200">Build route</strong>, then <strong class="text-zinc-200">click trails</strong> (click near where you want to hop on). Gaps between trails are linked automatically. Click empty map to add a free hop point. Click a trail again to remove it.</p>
         <div class="flex flex-wrap gap-2">
           <button type="button" id="btn-route-mode" onclick="toggleRouteMode()" class="px-4 py-2 rounded-2xl bg-orange-600 hover:bg-orange-700 text-sm font-semibold">Build route</button>
           <button type="button" onclick="undoWaypoint()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Undo</button>

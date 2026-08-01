@@ -161,7 +161,78 @@ function pathLengthKm(latlngs) {
   return d;
 }
 
-/** Prefer direction that continues from last waypoint */
+/** Find index of vertex on path closest to point [lat,lng] */
+function nearestVertexIndex(latlngs, point) {
+  var bestI = 0, bestD = Infinity;
+  for (var i = 0; i < latlngs.length; i++) {
+    var d = haversineM(point, latlngs[i]);
+    if (d < bestD) { bestD = d; bestI = i; }
+  }
+  return { index: bestI, distM: bestD };
+}
+
+/**
+ * Join onto a trail from the current route end (and optional click point).
+ * - Hops on at the closest point to where you are / where you clicked
+ * - Continues along the trail in the direction that makes sense (not forced full length from end)
+ * - Inserts a short connector if you hopped off the previous trail (gap > 25m)
+ */
+function joinPathFromRoute(latlngs, clickLatLng) {
+  if (!latlngs || latlngs.length < 2) return { path: [], connector: null };
+
+  // First trail in route: use full line, oriented by click if any
+  if (!waypoints.length) {
+    if (clickLatLng) {
+      var p0 = [clickLatLng.lat, clickLatLng.lng];
+      var nv0 = nearestVertexIndex(latlngs, p0);
+      // Prefer the longer leg from click so you get a useful segment
+      var forward = latlngs.slice(nv0.index);
+      var backward = latlngs.slice(0, nv0.index + 1).reverse();
+      var path0 = pathLengthKm(forward) >= pathLengthKm(backward) ? forward : backward;
+      if (path0.length < 2) path0 = latlngs.slice();
+      return { path: path0, connector: null };
+    }
+    return { path: latlngs.slice(), connector: null };
+  }
+
+  var last = waypoints[waypoints.length - 1];
+  // Prefer hop-on near the click; fall back to nearest to current route end
+  var anchor = clickLatLng ? [clickLatLng.lat, clickLatLng.lng] : last;
+  var nv = nearestVertexIndex(latlngs, anchor);
+  var hopIdx = nv.index;
+  var hopPt = latlngs[hopIdx];
+
+  // Two possible continuations from hop point
+  var toEnd = latlngs.slice(hopIdx);
+  var toStart = latlngs.slice(0, hopIdx + 1).reverse();
+
+  // If click is closer to one end direction, bias that way; else take longer remaining
+  var path;
+  if (clickLatLng && pathLengthKm(toEnd) >= 0.05 && pathLengthKm(toStart) >= 0.05) {
+    // Project which direction the user is "facing" from previous point toward hop
+    // Prefer longer segment so one click still builds a rideable piece
+    path = pathLengthKm(toEnd) >= pathLengthKm(toStart) ? toEnd : toStart;
+  } else {
+    path = pathLengthKm(toEnd) >= pathLengthKm(toStart) ? toEnd : toStart;
+  }
+  if (path.length < 2) {
+    // Degenerate (clicked near an endpoint) — use full trail oriented toward last
+    var dS = haversineM(last, latlngs[0]);
+    var dE = haversineM(last, latlngs[latlngs.length - 1]);
+    path = dE < dS ? latlngs.slice().reverse() : latlngs.slice();
+    hopPt = path[0];
+  }
+
+  // Connector from previous trail end → hop-on point (the "hop off / hop on")
+  var connector = null;
+  var gap = haversineM(last, path[0]);
+  if (gap > 25) {
+    connector = [last, path[0]];
+  }
+  return { path: path, connector: connector, hopDistM: gap };
+}
+
+/** Prefer direction that continues from last waypoint (legacy full-trail) */
 function orientPath(latlngs) {
   if (!waypoints.length || latlngs.length < 2) return latlngs.slice();
   var last = waypoints[waypoints.length - 1];
@@ -200,16 +271,23 @@ function rebuildWaypointsFromSelection() {
   routeMarkers.forEach(function (m) { map.removeLayer(m); });
   routeMarkers = [];
   selectedTrails.forEach(function (t, ti) {
-    var path = orientPath(t.latlngs);
-    // If continuing, skip duplicate join point
+    // Use precomputed joined path if present, else join now
+    var path = (t.joinedPath && t.joinedPath.length) ? t.joinedPath.slice() : orientPath(t.latlngs);
+    if (t.connector && t.connector.length === 2 && waypoints.length) {
+      // hop-off connector into this trail
+      var c0 = t.connector[0], c1 = t.connector[1];
+      var last = waypoints[waypoints.length - 1];
+      if (haversineM(last, c1) > 15) {
+        waypoints.push(c1);
+      }
+    }
     path.forEach(function (ll, i) {
       if (waypoints.length && i === 0) {
-        var last = waypoints[waypoints.length - 1];
-        if (haversineM(last, ll) < 15) return;
+        var last2 = waypoints[waypoints.length - 1];
+        if (haversineM(last2, ll) < 15) return;
       }
       waypoints.push(ll);
     });
-    // Marker at start of each trail segment
     if (path.length) {
       var marker = L.circleMarker(path[0], {
         radius: 6,
@@ -218,7 +296,9 @@ function rebuildWaypointsFromSelection() {
         fillColor: '#f97316',
         fillOpacity: 1
       }).addTo(map);
-      marker.bindTooltip(t.name || ('Trail ' + (ti + 1)), { direction: 'top' });
+      var tip = t.name || ('Trail ' + (ti + 1));
+      if (t.connector) tip += ' (linked)';
+      marker.bindTooltip(tip, { direction: 'top' });
       routeMarkers.push(marker);
     }
   });
@@ -226,13 +306,15 @@ function rebuildWaypointsFromSelection() {
   updateSelectedList();
 }
 
-function toggleTrailInRoute(feature, idx, layer) {
+function toggleTrailInRoute(feature, idx, layer, clickLatLng) {
   var id = featureId(feature, idx);
   var existing = selectedTrails.findIndex(function (t) { return t.id === id; });
   if (existing >= 0) {
     selectedTrails.splice(existing, 1);
+    // clear joined paths after this removal and re-join chain
+    selectedTrails.forEach(function (t) { t.joinedPath = null; t.connector = null; });
+    rejoinAllSelected();
     restyleTrailLayer(id);
-    rebuildWaypointsFromSelection();
     showToast('Removed from route');
     return;
   }
@@ -242,16 +324,47 @@ function toggleTrailInRoute(feature, idx, layer) {
     return;
   }
   var name = (feature.properties && (feature.properties.name || feature.properties.Name)) || 'Trail';
+  var joined = joinPathFromRoute(latlngs, clickLatLng || null);
   selectedTrails.push({
     id: id,
     name: name,
     difficulty: normalizeDifficulty(feature.properties && (feature.properties.difficulty || feature.properties.Difficulty || feature.properties.rating)),
     latlngs: latlngs,
+    joinedPath: joined.path,
+    connector: joined.connector,
     feature: feature
   });
   restyleTrailLayer(id);
   rebuildWaypointsFromSelection();
-  showToast('Added: ' + name);
+  var msg = 'Added: ' + name;
+  if (joined.connector && joined.hopDistM > 25) {
+    msg += ' · linked ' + Math.round(joined.hopDistM) + ' m hop';
+  }
+  showToast(msg);
+}
+
+/** Recompute hop-on segments in order after an edit */
+function rejoinAllSelected() {
+  var saved = selectedTrails.slice();
+  selectedTrails = [];
+  waypoints = [];
+  saved.forEach(function (t) {
+    var joined = joinPathFromRoute(t.latlngs, null);
+    t.joinedPath = joined.path;
+    t.connector = joined.connector;
+    selectedTrails.push(t);
+    // advance waypoints so next join sees current end
+    if (joined.connector && joined.connector.length === 2 && waypoints.length) {
+      if (haversineM(waypoints[waypoints.length - 1], joined.connector[1]) > 15) {
+        waypoints.push(joined.connector[1]);
+      }
+    }
+    (joined.path || []).forEach(function (ll, i) {
+      if (waypoints.length && i === 0 && haversineM(waypoints[waypoints.length - 1], ll) < 15) return;
+      waypoints.push(ll);
+    });
+  });
+  rebuildWaypointsFromSelection();
 }
 
 function updateSelectedList() {
@@ -375,10 +488,42 @@ function flyTo(key) {
 async function initMap() {
   map = L.map('trail-map', { scrollWheelZoom: true }).setView(AREAS.hat.center, 11);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 18,
+  var streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
     attribution: '&copy; OpenStreetMap'
-  }).addTo(map);
+  });
+
+  // Esri World Imagery — free satellite basemap (attribution required)
+  var satellite = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    {
+      maxZoom: 19,
+      attribution: 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+    }
+  );
+
+  // Labels overlay so names stay readable on satellite
+  var satLabels = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    {
+      maxZoom: 19,
+      opacity: 0.85,
+      attribution: 'Labels &copy; Esri'
+    }
+  );
+
+  var satelliteGroup = L.layerGroup([satellite, satLabels]);
+
+  streets.addTo(map);
+
+  L.control.layers(
+    {
+      'Street map': streets,
+      'Satellite': satelliteGroup
+    },
+    null,
+    { position: 'topright', collapsed: false }
+  ).addTo(map);
 
   try {
     var res = await fetch('assets/trails/region.geojson');
@@ -431,7 +576,7 @@ async function initMap() {
         layer.on('click', function (e) {
           if (!routeMode) return;
           L.DomEvent.stopPropagation(e);
-          toggleTrailInRoute(f, i, layer);
+          toggleTrailInRoute(f, i, layer, e.latlng);
         });
       }
     }).addTo(map);
@@ -447,7 +592,7 @@ async function initMap() {
   // Point-click still works in route mode (snap) if you miss a line
   map.on('click', function (e) {
     if (!routeMode) return;
-    // Prefer trail clicks (handled above). Map click = optional point snap.
+    // Off-trail hop: drop a connector point so you can leave one trail and aim for another
     addWaypoint(e.latlng);
   });
 
