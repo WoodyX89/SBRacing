@@ -1,15 +1,22 @@
-// SB Racing — Leaflet trails: green/blue/black, click-trail routing, save
+// SB Racing — Leaflet trails: green/blue/black, start + checkpoints routing, save
 
 var map, trailLayer, routeLine, routeMarkers = [];
-var waypoints = [];
 var routeMode = false;
 var snapEnabled = true;
 var trailSegments = [];
+var trailFeatures = []; // {id, name, difficulty, latlngs}
 var SNAP_MAX_M = 80;
-/** Ordered list of selected trail features for the current route */
-var selectedTrails = [];
-/** layer <-> feature id for highlight */
-var trailLayerById = {};
+
+/** Ordered route points: first = start, rest = checkpoints / end */
+var routePoints = [];
+
+var gpsWatchId = null;
+var gpsMarker = null;
+var gpsAccuracyCircle = null;
+var gpsTrackLine = null;
+var gpsTrackPoints = [];
+var gpsFollow = true;
+
 
 var AREAS = {
   hat: { center: [50.04, -110.68], zoom: 12 },
@@ -18,7 +25,6 @@ var AREAS = {
   cypress: { center: [49.65, -110.26], zoom: 12 }
 };
 
-/** Normalize difficulty from many GeoJSON styles → easy | intermediate | advanced */
 function normalizeDifficulty(raw) {
   var s = String(raw || '').toLowerCase().trim();
   if (!s) return 'intermediate';
@@ -31,12 +37,11 @@ function normalizeDifficulty(raw) {
   return 'intermediate';
 }
 
-/** Classic trail colors: green / blue / black */
 function diffColor(d) {
   var n = normalizeDifficulty(d);
-  if (n === 'easy') return '#22c55e';       // green
-  if (n === 'advanced') return '#0a0a0a';   // black
-  return '#3b82f6';                        // blue intermediate
+  if (n === 'easy') return '#22c55e';
+  if (n === 'advanced') return '#0a0a0a';
+  return '#3b82f6';
 }
 
 function diffLabel(d) {
@@ -63,7 +68,7 @@ function haversineM(a, b) {
 
 function closestOnSegment(p, a, b) {
   var toRad = Math.PI / 180;
-  var cosLat = Math.cos(p[0] * toRad);
+  var cosLat = Math.cos(p[0] * toRad) || 1e-6;
   var ax = (a[1] - p[1]) * cosLat, ay = a[0] - p[0];
   var bx = (b[1] - p[1]) * cosLat, by = b[0] - p[0];
   var abx = bx - ax, aby = by - ay;
@@ -76,23 +81,6 @@ function closestOnSegment(p, a, b) {
   var lng = p[1] + (ax + t * abx) / cosLat;
   var pt = [lat, lng];
   return { point: pt, distM: haversineM(p, pt), t: t };
-}
-
-function snapToTrails(latlng) {
-  var p = [latlng.lat, latlng.lng];
-  if (!snapEnabled || !trailSegments.length) {
-    return { lat: p[0], lng: p[1], snapped: false, distM: null };
-  }
-  var best = null;
-  for (var i = 0; i < trailSegments.length; i++) {
-    var seg = trailSegments[i];
-    var r = closestOnSegment(p, seg.a, seg.b);
-    if (!best || r.distM < best.distM) best = r;
-  }
-  if (best && best.distM <= SNAP_MAX_M) {
-    return { lat: best.point[0], lng: best.point[1], snapped: true, distM: best.distM };
-  }
-  return { lat: p[0], lng: p[1], snapped: false, distM: best ? best.distM : null };
 }
 
 function densifyLine(coords, maxStepDeg) {
@@ -113,55 +101,77 @@ function densifyLine(coords, maxStepDeg) {
   return out;
 }
 
-function ingestTrailGeometry(geom) {
-  if (!geom) return;
-  if (geom.type === 'LineString') {
-    var densified = densifyLine(geom.coordinates);
-    for (var i = 1; i < densified.length; i++) {
-      trailSegments.push({ a: densified[i - 1], b: densified[i] });
-    }
-  } else if (geom.type === 'MultiLineString') {
-    geom.coordinates.forEach(function (line) {
-      ingestTrailGeometry({ type: 'LineString', coordinates: line });
-    });
-  } else if (geom.type === 'GeometryCollection' && geom.geometries) {
-    geom.geometries.forEach(ingestTrailGeometry);
-  }
-}
-
-function buildSnapNetwork(geojson) {
-  trailSegments = [];
-  if (!geojson || !geojson.features) return;
-  geojson.features.forEach(function (f) {
-    if (f.geometry) ingestTrailGeometry(f.geometry);
-  });
-  console.log('[trails] snap segments:', trailSegments.length);
-}
-
-/** LineString / MultiLineString → [lat,lng][] path (first line only for Multi) */
 function geometryToLatLngs(geom) {
   if (!geom) return [];
   if (geom.type === 'LineString') {
-    return geom.coordinates.map(function (c) { return [c[1], c[0]]; });
+    return densifyLine(geom.coordinates);
   }
   if (geom.type === 'MultiLineString' && geom.coordinates.length) {
-    // concatenate all parts
     var all = [];
     geom.coordinates.forEach(function (line) {
-      line.forEach(function (c) { all.push([c[1], c[0]]); });
+      densifyLine(line).forEach(function (ll) { all.push(ll); });
     });
     return all;
   }
   return [];
 }
 
-function pathLengthKm(latlngs) {
-  var d = 0;
-  for (var i = 1; i < latlngs.length; i++) d += haversineKm(latlngs[i - 1], latlngs[i]);
-  return d;
+function buildSnapNetwork(geojson) {
+  trailSegments = [];
+  trailFeatures = [];
+  if (!geojson || !geojson.features) return;
+  geojson.features.forEach(function (f, idx) {
+    if (!f.geometry) return;
+    var latlngs = geometryToLatLngs(f.geometry);
+    if (latlngs.length < 2) return;
+    var id = (f.id != null) ? String(f.id)
+      : (f.properties && f.properties.id != null) ? String(f.properties.id)
+      : 'idx:' + idx;
+    var name = (f.properties && (f.properties.name || f.properties.Name)) || ('Trail ' + (idx + 1));
+    var difficulty = normalizeDifficulty(f.properties && (f.properties.difficulty || f.properties.Difficulty || f.properties.rating));
+    trailFeatures.push({ id: id, name: name, difficulty: difficulty, latlngs: latlngs, feature: f, index: idx });
+    for (var i = 1; i < latlngs.length; i++) {
+      trailSegments.push({ a: latlngs[i - 1], b: latlngs[i], trailId: id });
+    }
+  });
+  console.log('[trails] features:', trailFeatures.length, 'segments:', trailSegments.length);
 }
 
-/** Find index of vertex on path closest to point [lat,lng] */
+/** Snap click → point + optional trail id + vertex index */
+function snapToTrails(latlng) {
+  var p = [latlng.lat, latlng.lng];
+  if (!snapEnabled || !trailSegments.length) {
+    return { lat: p[0], lng: p[1], snapped: false, trailId: null, vertexIndex: null };
+  }
+  var best = null;
+  var bestTrailId = null;
+  for (var i = 0; i < trailSegments.length; i++) {
+    var seg = trailSegments[i];
+    var r = closestOnSegment(p, seg.a, seg.b);
+    if (!best || r.distM < best.distM) {
+      best = r;
+      bestTrailId = seg.trailId;
+    }
+  }
+  if (best && best.distM <= SNAP_MAX_M) {
+    var trail = trailFeatures.find(function (tf) { return tf.id === bestTrailId; });
+    var vIdx = 0;
+    if (trail) {
+      var nv = nearestVertexIndex(trail.latlngs, best.point);
+      vIdx = nv.index;
+    }
+    return {
+      lat: best.point[0],
+      lng: best.point[1],
+      snapped: true,
+      trailId: bestTrailId,
+      vertexIndex: vIdx,
+      distM: best.distM
+    };
+  }
+  return { lat: p[0], lng: p[1], snapped: false, trailId: null, vertexIndex: null, distM: best ? best.distM : null };
+}
+
 function nearestVertexIndex(latlngs, point) {
   var bestI = 0, bestD = Infinity;
   for (var i = 0; i < latlngs.length; i++) {
@@ -171,223 +181,53 @@ function nearestVertexIndex(latlngs, point) {
   return { index: bestI, distM: bestD };
 }
 
-/**
- * Join onto a trail from the current route end (and optional click point).
- * - Hops on at the closest point to where you are / where you clicked
- * - Continues along the trail in the direction that makes sense (not forced full length from end)
- * - Inserts a short connector if you hopped off the previous trail (gap > 25m)
- */
-function joinPathFromRoute(latlngs, clickLatLng) {
-  if (!latlngs || latlngs.length < 2) return { path: [], connector: null };
+/** Subpath along a single trail between two vertex indices (inclusive) */
+function subpathAlongTrail(trailId, i0, i1) {
+  var trail = trailFeatures.find(function (tf) { return tf.id === trailId; });
+  if (!trail) return null;
+  var a = Math.min(i0, i1), b = Math.max(i0, i1);
+  var slice = trail.latlngs.slice(a, b + 1);
+  if (i0 > i1) slice = slice.reverse();
+  return slice.length >= 2 ? slice : null;
+}
 
-  // First trail in route: use full line, oriented by click if any
-  if (!waypoints.length) {
-    if (clickLatLng) {
-      var p0 = [clickLatLng.lat, clickLatLng.lng];
-      var nv0 = nearestVertexIndex(latlngs, p0);
-      // Prefer the longer leg from click so you get a useful segment
-      var forward = latlngs.slice(nv0.index);
-      var backward = latlngs.slice(0, nv0.index + 1).reverse();
-      var path0 = pathLengthKm(forward) >= pathLengthKm(backward) ? forward : backward;
-      if (path0.length < 2) path0 = latlngs.slice();
-      return { path: path0, connector: null };
+/** Build full polyline from routePoints (follow trail between pts when same trail) */
+function buildRouteLatLngs() {
+  if (!routePoints.length) return [];
+  if (routePoints.length === 1) return [[routePoints[0].lat, routePoints[0].lng]];
+
+  var out = [];
+  for (var i = 0; i < routePoints.length; i++) {
+    var pt = routePoints[i];
+    var ll = [pt.lat, pt.lng];
+    if (i === 0) {
+      out.push(ll);
+      continue;
     }
-    return { path: latlngs.slice(), connector: null };
-  }
-
-  var last = waypoints[waypoints.length - 1];
-  // Prefer hop-on near the click; fall back to nearest to current route end
-  var anchor = clickLatLng ? [clickLatLng.lat, clickLatLng.lng] : last;
-  var nv = nearestVertexIndex(latlngs, anchor);
-  var hopIdx = nv.index;
-  var hopPt = latlngs[hopIdx];
-
-  // Two possible continuations from hop point
-  var toEnd = latlngs.slice(hopIdx);
-  var toStart = latlngs.slice(0, hopIdx + 1).reverse();
-
-  // If click is closer to one end direction, bias that way; else take longer remaining
-  var path;
-  if (clickLatLng && pathLengthKm(toEnd) >= 0.05 && pathLengthKm(toStart) >= 0.05) {
-    // Project which direction the user is "facing" from previous point toward hop
-    // Prefer longer segment so one click still builds a rideable piece
-    path = pathLengthKm(toEnd) >= pathLengthKm(toStart) ? toEnd : toStart;
-  } else {
-    path = pathLengthKm(toEnd) >= pathLengthKm(toStart) ? toEnd : toStart;
-  }
-  if (path.length < 2) {
-    // Degenerate (clicked near an endpoint) — use full trail oriented toward last
-    var dS = haversineM(last, latlngs[0]);
-    var dE = haversineM(last, latlngs[latlngs.length - 1]);
-    path = dE < dS ? latlngs.slice().reverse() : latlngs.slice();
-    hopPt = path[0];
-  }
-
-  // Connector from previous trail end → hop-on point (the "hop off / hop on")
-  var connector = null;
-  var gap = haversineM(last, path[0]);
-  if (gap > 25) {
-    connector = [last, path[0]];
-  }
-  return { path: path, connector: connector, hopDistM: gap };
-}
-
-/** Prefer direction that continues from last waypoint (legacy full-trail) */
-function orientPath(latlngs) {
-  if (!waypoints.length || latlngs.length < 2) return latlngs.slice();
-  var last = waypoints[waypoints.length - 1];
-  var dStart = haversineM(last, latlngs[0]);
-  var dEnd = haversineM(last, latlngs[latlngs.length - 1]);
-  if (dEnd < dStart) return latlngs.slice().reverse();
-  return latlngs.slice();
-}
-
-function featureId(f, idx) {
-  if (f.id != null) return String(f.id);
-  if (f.properties && f.properties.id != null) return String(f.properties.id);
-  if (f.properties && f.properties.name) return 'n:' + f.properties.name + ':' + idx;
-  return 'idx:' + idx;
-}
-
-function isTrailSelected(id) {
-  return selectedTrails.some(function (t) { return t.id === id; });
-}
-
-function restyleTrailLayer(id) {
-  var layer = trailLayerById[id];
-  if (!layer) return;
-  var selected = isTrailSelected(id);
-  var base = layer.options._baseColor || '#3b82f6';
-  layer.setStyle({
-    color: selected ? '#f97316' : base,
-    weight: selected ? 7 : 5,
-    opacity: selected ? 1 : 0.9
-  });
-  if (selected) layer.bringToFront();
-}
-
-function rebuildWaypointsFromSelection() {
-  waypoints = [];
-  routeMarkers.forEach(function (m) { map.removeLayer(m); });
-  routeMarkers = [];
-  selectedTrails.forEach(function (t, ti) {
-    // Use precomputed joined path if present, else join now
-    var path = (t.joinedPath && t.joinedPath.length) ? t.joinedPath.slice() : orientPath(t.latlngs);
-    if (t.connector && t.connector.length === 2 && waypoints.length) {
-      // hop-off connector into this trail
-      var c0 = t.connector[0], c1 = t.connector[1];
-      var last = waypoints[waypoints.length - 1];
-      if (haversineM(last, c1) > 15) {
-        waypoints.push(c1);
+    var prev = routePoints[i - 1];
+    // Same trail → only the section between the two points
+    if (prev.trailId && pt.trailId && prev.trailId === pt.trailId &&
+        prev.vertexIndex != null && pt.vertexIndex != null) {
+      var along = subpathAlongTrail(pt.trailId, prev.vertexIndex, pt.vertexIndex);
+      if (along && along.length) {
+        along.forEach(function (p, j) {
+          if (j === 0 && out.length && haversineM(out[out.length - 1], p) < 8) return;
+          out.push(p);
+        });
+        continue;
       }
     }
-    path.forEach(function (ll, i) {
-      if (waypoints.length && i === 0) {
-        var last2 = waypoints[waypoints.length - 1];
-        if (haversineM(last2, ll) < 15) return;
-      }
-      waypoints.push(ll);
-    });
-    if (path.length) {
-      var marker = L.circleMarker(path[0], {
-        radius: 6,
-        color: '#fff',
-        weight: 2,
-        fillColor: '#f97316',
-        fillOpacity: 1
-      }).addTo(map);
-      var tip = t.name || ('Trail ' + (ti + 1));
-      if (t.connector) tip += ' (linked)';
-      marker.bindTooltip(tip, { direction: 'top' });
-      routeMarkers.push(marker);
-    }
-  });
-  updateRouteUI();
-  updateSelectedList();
-}
-
-function toggleTrailInRoute(feature, idx, layer, clickLatLng) {
-  var id = featureId(feature, idx);
-  var existing = selectedTrails.findIndex(function (t) { return t.id === id; });
-  if (existing >= 0) {
-    selectedTrails.splice(existing, 1);
-    // clear joined paths after this removal and re-join chain
-    selectedTrails.forEach(function (t) { t.joinedPath = null; t.connector = null; });
-    rejoinAllSelected();
-    restyleTrailLayer(id);
-    showToast('Removed from route');
-    return;
+    // Different trails / free points → straight connector (hop)
+    if (out.length && haversineM(out[out.length - 1], ll) < 8) continue;
+    out.push(ll);
   }
-  var latlngs = geometryToLatLngs(feature.geometry);
-  if (latlngs.length < 2) {
-    showToast('Trail has no line geometry', true);
-    return;
-  }
-  var name = (feature.properties && (feature.properties.name || feature.properties.Name)) || 'Trail';
-  var joined = joinPathFromRoute(latlngs, clickLatLng || null);
-  selectedTrails.push({
-    id: id,
-    name: name,
-    difficulty: normalizeDifficulty(feature.properties && (feature.properties.difficulty || feature.properties.Difficulty || feature.properties.rating)),
-    latlngs: latlngs,
-    joinedPath: joined.path,
-    connector: joined.connector,
-    feature: feature
-  });
-  restyleTrailLayer(id);
-  rebuildWaypointsFromSelection();
-  var msg = 'Added: ' + name;
-  if (joined.connector && joined.hopDistM > 25) {
-    msg += ' · linked ' + Math.round(joined.hopDistM) + ' m hop';
-  }
-  showToast(msg);
-}
-
-/** Recompute hop-on segments in order after an edit */
-function rejoinAllSelected() {
-  var saved = selectedTrails.slice();
-  selectedTrails = [];
-  waypoints = [];
-  saved.forEach(function (t) {
-    var joined = joinPathFromRoute(t.latlngs, null);
-    t.joinedPath = joined.path;
-    t.connector = joined.connector;
-    selectedTrails.push(t);
-    // advance waypoints so next join sees current end
-    if (joined.connector && joined.connector.length === 2 && waypoints.length) {
-      if (haversineM(waypoints[waypoints.length - 1], joined.connector[1]) > 15) {
-        waypoints.push(joined.connector[1]);
-      }
-    }
-    (joined.path || []).forEach(function (ll, i) {
-      if (waypoints.length && i === 0 && haversineM(waypoints[waypoints.length - 1], ll) < 15) return;
-      waypoints.push(ll);
-    });
-  });
-  rebuildWaypointsFromSelection();
-}
-
-function updateSelectedList() {
-  var el = document.getElementById('selected-trails-list');
-  if (!el) return;
-  if (!selectedTrails.length) {
-    el.innerHTML = '<p class="text-xs text-zinc-500">Click trails on the map to build a route.</p>';
-    return;
-  }
-  el.innerHTML = selectedTrails.map(function (t, i) {
-    return '<div class="flex items-center gap-2 text-sm py-1.5 border-b border-zinc-800 last:border-0">' +
-      '<span class="text-zinc-500 text-xs w-5">' + (i + 1) + '.</span>' +
-      '<span class="flex-1 truncate font-medium">' + escapeHtmlTrail(t.name) + '</span>' +
-      '<span class="text-[10px] uppercase tracking-wide ' +
-        (t.difficulty === 'easy' ? 'text-green-400' : t.difficulty === 'advanced' ? 'text-zinc-300' : 'text-blue-400') +
-      '">' + diffLabel(t.difficulty) + '</span>' +
-      '</div>';
-  }).join('');
+  return out;
 }
 
 function routeDistanceKm() {
+  var line = buildRouteLatLngs();
   var d = 0;
-  for (var i = 1; i < waypoints.length; i++) d += haversineKm(waypoints[i - 1], waypoints[i]);
+  for (var i = 1; i < line.length; i++) d += haversineKm(line[i - 1], line[i]);
   return d;
 }
 
@@ -396,28 +236,68 @@ function updateRouteUI() {
   var pts = document.getElementById('route-points');
   if (el) el.textContent = routeDistanceKm().toFixed(1) + ' km';
   if (pts) {
-    pts.textContent = selectedTrails.length
-      ? (selectedTrails.length + ' trail' + (selectedTrails.length === 1 ? '' : 's'))
-      : (waypoints.length + ' point' + (waypoints.length === 1 ? '' : 's'));
+    if (!routePoints.length) pts.textContent = 'No start point yet';
+    else if (routePoints.length === 1) pts.textContent = 'Start set · add checkpoints';
+    else pts.textContent = 'Start + ' + (routePoints.length - 1) + ' checkpoint' + (routePoints.length === 2 ? '' : 's');
   }
-  if (routeLine) map.removeLayer(routeLine);
-  routeLine = null;
-  if (waypoints.length >= 2) {
-    routeLine = L.polyline(waypoints, { color: '#f97316', weight: 4, opacity: 0.95, dashArray: null }).addTo(map);
-    routeLine.bringToFront();
+
+  routeMarkers.forEach(function (m) { map.removeLayer(m); });
+  routeMarkers = [];
+  if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+
+  var line = buildRouteLatLngs();
+  if (line.length >= 2) {
+    routeLine = L.polyline(line, { color: '#f97316', weight: 4, opacity: 0.95 }).addTo(map);
   }
+
+  routePoints.forEach(function (pt, i) {
+    var isStart = i === 0;
+    var isEnd = i === routePoints.length - 1 && i > 0;
+    var marker = L.circleMarker([pt.lat, pt.lng], {
+      radius: isStart ? 9 : 7,
+      color: '#fff',
+      weight: 2,
+      fillColor: isStart ? '#22c55e' : (isEnd ? '#f97316' : '#3b82f6'),
+      fillOpacity: 1
+    }).addTo(map);
+    var label = isStart ? 'Start' : (isEnd && routePoints.length > 2 ? 'End' : ('CP ' + i));
+    marker.bindTooltip(label, { direction: 'top', permanent: false });
+    routeMarkers.push(marker);
+  });
+
+  updateSelectedList();
+}
+
+function updateSelectedList() {
+  var el = document.getElementById('selected-trails-list');
+  if (!el) return;
+  if (!routePoints.length) {
+    el.innerHTML = '<p class="text-xs text-zinc-500">Click the map or a trail to set <strong class="text-zinc-300">Start</strong>, then add checkpoints. Only the section between points is used — not the whole trail.</p>';
+    return;
+  }
+  el.innerHTML = routePoints.map(function (pt, i) {
+    var label = i === 0 ? 'Start' : ('Checkpoint ' + i);
+    var trail = pt.trailId ? trailFeatures.find(function (tf) { return tf.id === pt.trailId; }) : null;
+    var extra = trail ? escapeHtmlTrail(trail.name) : (pt.snapped ? 'on trail' : 'off-trail');
+    return '<div class="flex items-center gap-2 text-sm py-1.5 border-b border-zinc-800 last:border-0">' +
+      '<span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:' + (i === 0 ? '#22c55e' : '#3b82f6') + '"></span>' +
+      '<span class="flex-1 min-w-0"><span class="font-medium">' + label + '</span>' +
+      '<span class="text-xs text-zinc-500 block truncate">' + extra + '</span></span></div>';
+  }).join('');
 }
 
 function toggleRouteMode() {
   routeMode = !routeMode;
   var btn = document.getElementById('btn-route-mode');
   if (btn) {
-    btn.textContent = routeMode ? 'Click trails to add…' : 'Build route';
+    btn.textContent = routeMode ? 'Picking points…' : 'Build route';
     btn.classList.toggle('bg-emerald-600', routeMode);
     btn.classList.toggle('bg-orange-600', !routeMode);
   }
-  if (map) map.getContainer().style.cursor = routeMode ? 'pointer' : '';
-  showToast(routeMode ? 'Click a trail to add it to your route' : 'Route mode off');
+  if (map) map.getContainer().style.cursor = routeMode ? 'crosshair' : '';
+  showToast(routeMode
+    ? (routePoints.length ? 'Click to add a checkpoint' : 'Click to set the START point')
+    : 'Route mode off');
 }
 
 function toggleSnap() {
@@ -428,62 +308,65 @@ function toggleSnap() {
     btn.classList.toggle('border-emerald-600', snapEnabled);
     btn.classList.toggle('text-emerald-400', snapEnabled);
   }
-  showToast(snapEnabled ? 'Point snap on' : 'Point snap off');
+  showToast(snapEnabled ? 'Snap to trails on' : 'Free placement');
 }
 
 function clearRoute() {
-  selectedTrails.forEach(function (t) { restyleTrailLayer(t.id); });
-  selectedTrails = [];
-  waypoints = [];
-  routeMarkers.forEach(function (m) { map.removeLayer(m); });
-  routeMarkers = [];
-  if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+  routePoints = [];
   updateRouteUI();
-  updateSelectedList();
+  showToast('Route cleared');
 }
 
 function undoWaypoint() {
-  // Undo last selected trail if any
-  if (selectedTrails.length) {
-    var t = selectedTrails.pop();
-    restyleTrailLayer(t.id);
-    rebuildWaypointsFromSelection();
-    showToast('Removed: ' + t.name);
-    return;
-  }
-  if (!waypoints.length) return;
-  waypoints.pop();
-  var m = routeMarkers.pop();
-  if (m) map.removeLayer(m);
+  if (!routePoints.length) return;
+  var removed = routePoints.pop();
   updateRouteUI();
+  showToast(routePoints.length === 0 ? 'Start cleared' : 'Removed last point');
 }
 
-function addWaypoint(latlng, opts) {
+function addRoutePoint(latlng, opts) {
   opts = opts || {};
-  var snapped = opts.skipSnap ? { lat: latlng.lat, lng: latlng.lng, snapped: false }
+  var snapped = opts.skipSnap
+    ? { lat: latlng.lat, lng: latlng.lng, snapped: false, trailId: null, vertexIndex: null }
     : snapToTrails(latlng);
-  if (routeMode && snapEnabled && !opts.skipSnap && !snapped.snapped) {
-    showToast('Click a trail (or closer to one)', true);
-    return;
+
+  // Optional: require snap when enabled and near trails
+  // Allow off-trail for true hops between networks
+  var pt = {
+    lat: snapped.lat,
+    lng: snapped.lng,
+    snapped: !!snapped.snapped,
+    trailId: snapped.trailId || null,
+    vertexIndex: snapped.vertexIndex != null ? snapped.vertexIndex : null
+  };
+
+  // Avoid stacking duplicates
+  if (routePoints.length) {
+    var last = routePoints[routePoints.length - 1];
+    if (haversineM([last.lat, last.lng], [pt.lat, pt.lng]) < 5) return;
   }
-  var ll = [snapped.lat, snapped.lng];
-  if (waypoints.length) {
-    var last = waypoints[waypoints.length - 1];
-    if (haversineM(last, ll) < 2) return;
-  }
-  waypoints.push(ll);
-  var marker = L.circleMarker(ll, {
-    radius: 6, color: '#fff', weight: 2,
-    fillColor: '#f97316', fillOpacity: 1
-  }).addTo(map);
-  routeMarkers.push(marker);
+
+  routePoints.push(pt);
   updateRouteUI();
+
+  if (routePoints.length === 1) {
+    showToast('Start set' + (pt.snapped ? ' (on trail)' : '') + ' · click checkpoints next');
+  } else {
+    showToast('Checkpoint ' + (routePoints.length - 1) + ' added');
+  }
+}
+
+/** Trail click: use as start/checkpoint at that location — NOT the whole trail */
+function onTrailClick(feature, idx, latlng) {
+  if (!routeMode) return;
+  addRoutePoint(latlng || L.latLng(0, 0), {});
 }
 
 function flyTo(key) {
   var a = AREAS[key];
   if (a && map) map.flyTo(a.center, a.zoom, { duration: 1.2 });
 }
+
 
 async function initMap() {
   map = L.map('trail-map', { scrollWheelZoom: true }).setView(AREAS.hat.center, 11);
@@ -493,7 +376,6 @@ async function initMap() {
     attribution: '&copy; OpenStreetMap'
   });
 
-  // Esri World Imagery — free satellite basemap (attribution required)
   var satellite = L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     {
@@ -502,25 +384,16 @@ async function initMap() {
     }
   );
 
-  // Labels overlay so names stay readable on satellite
   var satLabels = L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-    {
-      maxZoom: 19,
-      opacity: 0.85,
-      attribution: 'Labels &copy; Esri'
-    }
+    { maxZoom: 19, opacity: 0.85, attribution: 'Labels &copy; Esri' }
   );
 
   var satelliteGroup = L.layerGroup([satellite, satLabels]);
-
   streets.addTo(map);
 
   L.control.layers(
-    {
-      'Street map': streets,
-      'Satellite': satelliteGroup
-    },
+    { 'Street map': streets, 'Satellite': satelliteGroup },
     null,
     { position: 'topright', collapsed: false }
   ).addTo(map);
@@ -529,17 +402,7 @@ async function initMap() {
     var res = await fetch('assets/trails/region.geojson');
     var geo = await res.json();
     buildSnapNetwork(geo);
-    trailLayer = L.geoJSON(geo, {
-      style: function (f) {
-        var col = diffColor(f.properties && (f.properties.difficulty || f.properties.Difficulty || f.properties.rating));
-        return { color: col, weight: 5, opacity: 0.9 };
-      },
-      onEachFeature: function (f, layer, idx) {
-        // Leaflet doesn't pass idx reliably in onEachFeature — use feature index counter
-      }
-    });
 
-    // Re-bind with index for stable ids
     var idx = 0;
     trailLayer = L.geoJSON(geo, {
       style: function (f) {
@@ -548,35 +411,23 @@ async function initMap() {
       },
       onEachFeature: function (f, layer) {
         var i = idx++;
-        var id = featureId(f, i);
-        var col = diffColor(f.properties && (f.properties.difficulty || f.properties.Difficulty || f.properties.rating));
-        layer.options._baseColor = col;
-        layer.options._featureId = id;
-        layer.options._featureIndex = i;
-        trailLayerById[id] = layer;
-
         var p = f.properties || {};
         var name = p.name || p.Name || 'Trail';
+        var col = diffColor(p.difficulty || p.Difficulty || p.rating);
         var diff = diffLabel(p.difficulty || p.Difficulty || p.rating);
+        var area = p.area ? ' · ' + escapeHtmlTrail(p.area) : '';
+        var baseWeight = 5;
+
         layer.bindPopup(
           '<strong>' + escapeHtmlTrail(name) + '</strong><br>' +
-          '<span style="color:' + col + '">' + diff + '</span>' +
-          (p.area ? ' · ' + escapeHtmlTrail(p.area) : '') +
-          '<br><button type="button" class="trail-add-btn" style="margin-top:6px;padding:4px 10px;border-radius:8px;background:#ea580c;color:#fff;border:0;cursor:pointer;font-size:12px">Add to route</button>'
+          '<span style="color:' + col + '">' + diff + '</span>' + area +
+          '<br><span style="font-size:11px;opacity:.8">In Build route mode, click the trail to set start / checkpoint here</span>'
         );
-        layer.on('popupopen', function () {
-          var btn = document.querySelector('.trail-add-btn');
-          if (btn) {
-            btn.onclick = function () {
-              toggleTrailInRoute(f, i, layer);
-              map.closePopup();
-            };
-          }
-        });
+
         layer.on('click', function (e) {
           if (!routeMode) return;
           L.DomEvent.stopPropagation(e);
-          toggleTrailInRoute(f, i, layer, e.latlng);
+          addRoutePoint(e.latlng);
         });
       }
     }).addTo(map);
@@ -584,16 +435,15 @@ async function initMap() {
     try {
       map.fitBounds(trailLayer.getBounds(), { padding: [30, 30], maxZoom: 13 });
     } catch (e) {}
+
   } catch (e) {
     console.warn('[trails] geojson', e);
     showToast('Could not load region.geojson', true);
   }
 
-  // Point-click still works in route mode (snap) if you miss a line
   map.on('click', function (e) {
     if (!routeMode) return;
-    // Off-trail hop: drop a connector point so you can leave one trail and aim for another
-    addWaypoint(e.latlng);
+    addRoutePoint(e.latlng);
   });
 
   updateSaveHint();
@@ -615,8 +465,9 @@ async function updateSaveHint() {
 }
 
 async function saveRoute() {
-  if (waypoints.length < 2) {
-    showToast('Select at least one trail (or 2 points)', true);
+  var line = buildRouteLatLngs();
+  if (line.length < 2) {
+    showToast('Set a start and at least one more point', true);
     return;
   }
   var user = null;
@@ -631,19 +482,24 @@ async function saveRoute() {
     return;
   }
   var description = ((document.getElementById('route-desc') || {}).value || '').trim() || null;
-  if (selectedTrails.length && !description) {
-    description = selectedTrails.map(function (t) { return t.name; }).join(' → ');
-  }
   var is_public = !!(document.getElementById('route-public') || {}).checked;
   var geojson = {
     type: 'Feature',
     properties: {
       name: name,
-      trails: selectedTrails.map(function (t) { return t.name; })
+      pointCount: routePoints.length,
+      points: routePoints.map(function (pt, i) {
+        return {
+          role: i === 0 ? 'start' : 'checkpoint',
+          lat: pt.lat,
+          lng: pt.lng,
+          trailId: pt.trailId
+        };
+      })
     },
     geometry: {
       type: 'LineString',
-      coordinates: waypoints.map(function (w) { return [w[1], w[0]]; })
+      coordinates: line.map(function (w) { return [w[1], w[0]]; })
     }
   };
   try {
@@ -715,10 +571,21 @@ async function loadMyRoutes() {
 function showSavedRoute(row) {
   clearRoute();
   var coords = row.geojson && row.geojson.geometry && row.geojson.geometry.coordinates;
-  if (!coords || !coords.length) return;
-  coords.forEach(function (c) {
-    addWaypoint({ lat: c[1], lng: c[0] }, { skipSnap: true });
-  });
+  var pts = row.geojson && row.geojson.properties && row.geojson.properties.points;
+  if (pts && pts.length) {
+    pts.forEach(function (p) {
+      addRoutePoint({ lat: p.lat, lng: p.lng }, { skipSnap: true });
+    });
+  } else if (coords && coords.length) {
+    // Legacy full line — use endpoints + mid samples as points
+    addRoutePoint({ lat: coords[0][1], lng: coords[0][0] }, { skipSnap: true });
+    if (coords.length > 2) {
+      var mid = coords[Math.floor(coords.length / 2)];
+      addRoutePoint({ lat: mid[1], lng: mid[0] }, { skipSnap: true });
+    }
+    var last = coords[coords.length - 1];
+    addRoutePoint({ lat: last[1], lng: last[0] }, { skipSnap: true });
+  }
   if (routeLine) map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
   var nameEl = document.getElementById('route-name');
   if (nameEl) nameEl.value = row.name || '';
@@ -736,6 +603,175 @@ async function deleteRoute(id) {
     showToast(e.message || 'Delete failed', true);
   }
 }
+
+
+// ---------- Live GPS tracking ----------
+function isGpsTracking() {
+  return gpsWatchId != null;
+}
+
+function updateGpsButton() {
+  var btn = document.getElementById('btn-gps-track');
+  if (!btn) return;
+  if (isGpsTracking()) {
+    btn.textContent = 'Stop GPS';
+    btn.classList.remove('bg-emerald-600', 'border-zinc-600');
+    btn.classList.add('bg-red-600', 'hover:bg-red-700');
+  } else {
+    btn.textContent = 'Track GPS';
+    btn.classList.remove('bg-red-600', 'hover:bg-red-700');
+    btn.classList.add('border-zinc-600');
+  }
+  var followBtn = document.getElementById('btn-gps-follow');
+  if (followBtn) {
+    followBtn.classList.toggle('hidden', !isGpsTracking());
+    followBtn.textContent = gpsFollow ? 'Follow: ON' : 'Follow: OFF';
+  }
+  var useBtn = document.getElementById('btn-gps-use-track');
+  if (useBtn) useBtn.classList.toggle('hidden', !gpsTrackPoints.length);
+}
+
+function toggleGpsFollow() {
+  gpsFollow = !gpsFollow;
+  updateGpsButton();
+  showToast(gpsFollow ? 'Map follows you' : 'Follow off');
+}
+
+function onGpsPosition(pos) {
+  if (!map) return;
+  var lat = pos.coords.latitude;
+  var lng = pos.coords.longitude;
+  var acc = pos.coords.accuracy || 30;
+  var ll = L.latLng(lat, lng);
+
+  if (!gpsMarker) {
+    gpsMarker = L.circleMarker(ll, {
+      radius: 8,
+      color: '#fff',
+      weight: 3,
+      fillColor: '#3b82f6',
+      fillOpacity: 1
+    }).addTo(map);
+    gpsMarker.bindTooltip('You', { direction: 'top' });
+  } else {
+    gpsMarker.setLatLng(ll);
+  }
+
+  if (!gpsAccuracyCircle) {
+    gpsAccuracyCircle = L.circle(ll, {
+      radius: acc,
+      color: '#3b82f6',
+      weight: 1,
+      opacity: 0.4,
+      fillColor: '#3b82f6',
+      fillOpacity: 0.1
+    }).addTo(map);
+  } else {
+    gpsAccuracyCircle.setLatLng(ll);
+    gpsAccuracyCircle.setRadius(acc);
+  }
+
+  // Record track (min ~5 m between points)
+  var pt = [lat, lng];
+  if (!gpsTrackPoints.length || haversineM(gpsTrackPoints[gpsTrackPoints.length - 1], pt) >= 5) {
+    gpsTrackPoints.push(pt);
+    if (gpsTrackLine) {
+      gpsTrackLine.addLatLng(ll);
+    } else if (gpsTrackPoints.length >= 2) {
+      gpsTrackLine = L.polyline(gpsTrackPoints, {
+        color: '#60a5fa',
+        weight: 4,
+        opacity: 0.85,
+        dashArray: '6 8'
+      }).addTo(map);
+    }
+  }
+
+  if (gpsFollow) {
+    map.panTo(ll, { animate: true, duration: 0.4 });
+  }
+  updateGpsButton();
+}
+
+function onGpsError(err) {
+  var msg = 'GPS error';
+  if (err && err.code === 1) msg = 'Location permission denied';
+  else if (err && err.code === 2) msg = 'Position unavailable';
+  else if (err && err.code === 3) msg = 'GPS timed out';
+  else if (err && err.message) msg = err.message;
+  showToast(msg, true);
+  stopGpsTracking();
+}
+
+function startGpsTracking() {
+  if (!navigator.geolocation) {
+    showToast('GPS not supported in this browser', true);
+    return;
+  }
+  // Secure context required (https or localhost)
+  if (typeof window.isSecureContext === 'boolean' && !window.isSecureContext) {
+    showToast('GPS needs HTTPS (or localhost)', true);
+    return;
+  }
+  gpsTrackPoints = [];
+  if (gpsTrackLine) { map.removeLayer(gpsTrackLine); gpsTrackLine = null; }
+
+  gpsWatchId = navigator.geolocation.watchPosition(onGpsPosition, onGpsError, {
+    enableHighAccuracy: true,
+    maximumAge: 2000,
+    timeout: 15000
+  });
+  updateGpsButton();
+  showToast('GPS tracking on — ride safe');
+}
+
+function stopGpsTracking() {
+  if (gpsWatchId != null) {
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null;
+  }
+  updateGpsButton();
+  showToast('GPS tracking stopped');
+}
+
+function toggleGpsTracking() {
+  if (isGpsTracking()) stopGpsTracking();
+  else startGpsTracking();
+}
+
+/** Turn recorded GPS track into start + checkpoints on the route builder */
+function useGpsTrackAsRoute() {
+  if (gpsTrackPoints.length < 2) {
+    showToast('Not enough GPS points yet', true);
+    return;
+  }
+  routePoints = [];
+  // Start
+  var first = gpsTrackPoints[0];
+  addRoutePoint({ lat: first[0], lng: first[1] }, { skipSnap: false });
+  // Sample checkpoints along the track (~every 200m or key points)
+  var acc = 0;
+  var last = first;
+  for (var i = 1; i < gpsTrackPoints.length - 1; i++) {
+    acc += haversineM(last, gpsTrackPoints[i]);
+    last = gpsTrackPoints[i];
+    if (acc >= 200) {
+      addRoutePoint({ lat: last[0], lng: last[1] }, { skipSnap: false });
+      acc = 0;
+    }
+  }
+  var end = gpsTrackPoints[gpsTrackPoints.length - 1];
+  addRoutePoint({ lat: end[0], lng: end[1] }, { skipSnap: false });
+  if (gpsTrackLine) map.fitBounds(gpsTrackLine.getBounds(), { padding: [40, 40] });
+  showToast('GPS track applied to route — save if you want');
+}
+
+function clearGpsTrack() {
+  gpsTrackPoints = [];
+  if (gpsTrackLine) { map.removeLayer(gpsTrackLine); gpsTrackLine = null; }
+  updateGpsButton();
+}
+
 
 function escapeHtmlTrail(s) {
   if (!s) return '';

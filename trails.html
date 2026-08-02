@@ -27,6 +27,8 @@
     border-radius: 12px !important;
   }
   .leaflet-control-layers-list label { color: #e4e4e7; }
+
+
 </style>
 </head>
 <body class="bg-zinc-950 text-zinc-200">
@@ -57,12 +59,20 @@
       <!-- Build route -->
       <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
         <div class="font-semibold flex items-center gap-2"><i class="fa-solid fa-route text-orange-500"></i> Build route</div>
-        <p class="text-xs text-zinc-400">Turn on <strong class="text-zinc-200">Build route</strong>, then <strong class="text-zinc-200">click trails</strong> (click near where you want to hop on). Gaps between trails are linked automatically. Click empty map to add a free hop point. Click a trail again to remove it.</p>
+        <p class="text-xs text-zinc-400">Turn on <strong class="text-zinc-200">Build route</strong>. <strong class="text-zinc-200">First click = Start</strong> (green). More clicks = checkpoints (blue). Only the trail section between points is used — not the whole trail. Snap stays on so points stick to trails when you're close.</p>
         <div class="flex flex-wrap gap-2">
           <button type="button" id="btn-route-mode" onclick="toggleRouteMode()" class="px-4 py-2 rounded-2xl bg-orange-600 hover:bg-orange-700 text-sm font-semibold">Build route</button>
+          <button type="button" id="btn-snap-toggle" onclick="toggleSnap()" class="px-4 py-2 rounded-2xl border border-emerald-600 text-emerald-400 text-sm hover:bg-zinc-800">Snap: ON</button>
           <button type="button" onclick="undoWaypoint()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Undo</button>
           <button type="button" onclick="clearRoute()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Clear</button>
         </div>
+                <div class="flex flex-wrap gap-2 pt-1 border-t border-zinc-800">
+          <button type="button" id="btn-gps-track" onclick="toggleGpsTracking()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800 font-semibold">Track GPS</button>
+          <button type="button" id="btn-gps-follow" onclick="toggleGpsFollow()" class="hidden px-4 py-2 rounded-2xl border border-blue-600 text-blue-400 text-sm hover:bg-zinc-800">Follow: ON</button>
+          <button type="button" id="btn-gps-use-track" onclick="useGpsTrackAsRoute()" class="hidden px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Use as route</button>
+        </div>
+        <p class="text-xs text-zinc-500">GPS works on <strong class="text-zinc-400">HTTPS</strong> or localhost. Blue dashed line is your live track. “Use as route” turns it into start + checkpoints you can save.</p>
+
         <div id="selected-trails-list" class="pt-2 border-t border-zinc-800 max-h-40 overflow-y-auto">
           <p class="text-xs text-zinc-500">Click trails on the map to build a route.</p>
         </div>
