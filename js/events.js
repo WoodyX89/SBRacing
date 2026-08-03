@@ -186,13 +186,9 @@ function renderEvents() {
         <button type="button" onclick="openEventModal(${ev.id})" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">
           <i class="fa-solid fa-pen mr-1"></i>Edit
         </button>
-        <button type="button" onclick="deleteEvent(${ev.id})" class="text-xs px-3 py-1.5 rounded-xl border border-red-900 text-red-400 hover:bg-red-950/50">
-          <i class="fa-solid fa-trash mr-1"></i>Delete
-        </button>
       </div>` : '';
 
-    return `
-      <div class="trail-card bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex flex-col">
+    const cardBody = `
         <div class="flex justify-between items-start gap-3">
           <div class="min-w-0">
             <div class="text-xs font-mono tracking-widest ${badgeColor}">${badgeText}</div>
@@ -217,9 +213,100 @@ function renderEvents() {
           ${pokerBtn ? `<div class="flex flex-wrap gap-2 mt-3">${pokerBtn}</div>` : ''}
           ${adminBtns}
           ${renderEventSocial(ev.id)}
+        </div>`;
+
+    if (!isAdmin) {
+      return `<div class="trail-card bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex flex-col">${cardBody}</div>`;
+    }
+
+    // Admin: swipe-left to delete
+    return `
+      <div class="relative overflow-hidden rounded-3xl" data-swipe-event="${ev.id}">
+        <div class="absolute inset-y-0 right-0 w-24 flex items-stretch">
+          <button type="button" onclick="deleteEvent(${ev.id})" class="flex-1 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex flex-col items-center justify-center gap-1">
+            <i class="fa-solid fa-trash text-base"></i>Delete
+          </button>
+        </div>
+        <div class="trail-card relative bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex flex-col touch-pan-y transition-transform duration-200 will-change-transform" data-swipe-content>
+          ${cardBody}
         </div>
       </div>`;
   }).join('');
+
+  initEventSwipeToDelete(grid);
+}
+
+/** Swipe-left to reveal Delete on event cards (admin only) */
+function initEventSwipeToDelete(container) {
+  if (!container) return;
+  var openEl = null;
+  var startX = 0;
+  var startY = 0;
+  var currentX = 0;
+  var tracking = false;
+  var horizontal = null;
+  var content = null;
+  var maxSwipe = -96;
+
+  function closeOpen() {
+    if (openEl) {
+      openEl.style.transform = 'translateX(0)';
+      openEl = null;
+    }
+  }
+
+  container.querySelectorAll('[data-swipe-event]').forEach(function (wrap) {
+    var article = wrap.querySelector('[data-swipe-content]');
+    if (!article) return;
+
+    article.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) return;
+      if (openEl && openEl !== article) closeOpen();
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      currentX = 0;
+      tracking = true;
+      horizontal = null;
+      content = article;
+      article.style.transition = 'none';
+    }, { passive: true });
+
+    article.addEventListener('touchmove', function (e) {
+      if (!tracking || !content) return;
+      var dx = e.touches[0].clientX - startX;
+      var dy = e.touches[0].clientY - startY;
+      if (horizontal === null) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        horizontal = Math.abs(dx) > Math.abs(dy);
+        if (!horizontal) { tracking = false; return; }
+      }
+      if (!horizontal) return;
+      currentX = Math.min(0, Math.max(maxSwipe, dx));
+      content.style.transform = 'translateX(' + currentX + 'px)';
+    }, { passive: true });
+
+    article.addEventListener('touchend', function () {
+      if (!tracking || !content) return;
+      tracking = false;
+      content.style.transition = 'transform 0.2s ease';
+      if (currentX < maxSwipe / 2) {
+        content.style.transform = 'translateX(' + maxSwipe + 'px)';
+        openEl = content;
+      } else {
+        content.style.transform = 'translateX(0)';
+        if (openEl === content) openEl = null;
+      }
+      content = null;
+    });
+
+    article.addEventListener('click', function (e) {
+      if (openEl === article && currentX < -10) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeOpen();
+      }
+    });
+  });
 }
 
 function renderEventSocial(eventId) {
@@ -227,9 +314,15 @@ function renderEventSocial(eventId) {
   var likeCount = (s.likes && s.likes.length) || 0;
   var comments = s.comments || [];
   var commentsHtml = comments.map(function (c) {
-    return '<div class="text-xs text-zinc-400 border-t border-zinc-800 py-1.5">' +
+    var canDelete = (eventsCurrentUserId && c.user_id === eventsCurrentUserId) || isAdmin;
+    return '<div class="text-xs text-zinc-400 border-t border-zinc-800 py-1.5 flex items-start gap-2">' +
+      '<div class="min-w-0 flex-1">' +
       '<span class="text-zinc-300 font-medium">' + escapeHtml(c._name || 'Member') + '</span> ' +
       escapeHtml(c.body) +
+      '</div>' +
+      (canDelete
+        ? '<button type="button" onclick="deleteEventComment(' + c.id + ')" class="shrink-0 w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center" title="Delete comment"><i class="fa-solid fa-xmark text-[10px]"></i></button>'
+        : '') +
       '</div>';
   }).join('');
   return (
@@ -364,6 +457,19 @@ async function submitEventComment(eventId) {
     if (panel) panel.classList.remove('hidden');
   } catch (e) {
     showToast(e.message || 'Comment failed — run forum.sql?', true);
+  }
+}
+
+async function deleteEventComment(commentId) {
+  if (!confirm('Delete this comment?')) return;
+  try {
+    var res = await window.sb.from('event_comments').delete().eq('id', commentId);
+    if (res.error) throw res.error;
+    showToast('Comment deleted');
+    await loadEventSocial();
+    renderEvents();
+  } catch (e) {
+    showToast(e.message || 'Delete failed', true);
   }
 }
 

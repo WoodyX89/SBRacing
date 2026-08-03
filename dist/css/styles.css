@@ -385,3 +385,47 @@ input, select, textarea { font-size: 16px !important; }
     padding-right: 0.85rem;
   }
 }
+
+/* ===== Native bottom tab bar (mobile) ===== */
+:root {
+  --bottom-tabs-height: 3.5rem; /* 56px = h-14 */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --bottom-tabs-total: calc(var(--bottom-tabs-height) + var(--safe-bottom));
+}
+
+#bottom-tabs {
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+.bottom-tab {
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s ease;
+}
+
+.bottom-tab-active {
+  color: #f97316 !important; /* orange-500 */
+}
+
+.bottom-tab-active i {
+  color: #f97316 !important;
+}
+
+/* Room for bottom tabs on mobile so content isn't hidden */
+@media (max-width: 767px) {
+  body {
+    padding-bottom: var(--bottom-tabs-total) !important;
+  }
+
+  /* Toasts sit above the tab bar */
+  #success-toast {
+    bottom: calc(var(--bottom-tabs-total) + 1rem) !important;
+  }
+}
+
+/* Desktop: no bottom tabs padding */
+@media (min-width: 768px) {
+  body {
+    padding-bottom: 0 !important;
+  }
+}

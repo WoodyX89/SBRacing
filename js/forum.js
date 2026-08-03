@@ -298,6 +298,18 @@ async function deleteForumPost(postId) {
   }
 }
 
+async function deleteForumComment(commentId) {
+  if (!confirm('Delete this comment?')) return;
+  try {
+    var res = await window.sb.from('forum_comments').delete().eq('id', commentId);
+    if (res.error) throw res.error;
+    showToast('Comment deleted');
+    await loadForumFeed();
+  } catch (e) {
+    showToast(e.message || 'Delete failed', true);
+  }
+}
+
 function renderPoll(post, options, votes, myVoteOptionId) {
   var total = votes.length;
   var counts = {};
@@ -335,22 +347,28 @@ function renderPostCard(post, meta) {
     var mv = votes.find(function (v) { return v.user_id === forumUser.id; });
     if (mv) myVote = mv.option_id;
   }
-  var canDelete = forumUser && (forumUser.id === post.user_id);
+  var isAdmin = forumUser && forumProfiles[forumUser.id] && forumProfiles[forumUser.id].is_admin;
+  var canDelete = forumUser && (forumUser.id === post.user_id || isAdmin);
 
   var commentsHtml = comments.map(function (c) {
+    var canDeleteComment = forumUser && (forumUser.id === c.user_id || isAdmin);
     return (
-      '<div class="flex gap-2 py-2 border-t border-zinc-800">' +
+      '<div class="flex gap-2 py-2 border-t border-zinc-800 group">' +
       avatarHtml(c.user_id, 'w-7 h-7') +
       '<div class="min-w-0 flex-1">' +
-      '<div class="text-xs"><span class="font-medium">' + esc(displayName(c.user_id)) + '</span>' +
-      ' <span class="text-zinc-500">' + timeAgo(c.created_at) + '</span></div>' +
+      '<div class="text-xs flex items-center gap-2">' +
+      '<span class="font-medium">' + esc(displayName(c.user_id)) + '</span>' +
+      ' <span class="text-zinc-500">' + timeAgo(c.created_at) + '</span>' +
+      (canDeleteComment
+        ? '<button type="button" onclick="deleteForumComment(' + c.id + ')" class="ml-auto w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shrink-0" title="Delete comment"><i class="fa-solid fa-xmark text-[10px]"></i></button>'
+        : '') +
+      '</div>' +
       '<div class="text-sm text-zinc-300">' + esc(c.body) + '</div>' +
       '</div></div>'
     );
   }).join('');
 
-  return (
-    '<article class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">' +
+  var cardInner =
     '<div class="flex items-start gap-3">' +
     avatarHtml(post.user_id) +
     '<div class="flex-1 min-w-0">' +
@@ -372,9 +390,6 @@ function renderPostCard(post, meta) {
     '<i class="fa-' + (liked ? 'solid' : 'regular') + ' fa-heart mr-1"></i>' + likes.length +
     '</button>' +
     '<span class="text-zinc-500"><i class="fa-regular fa-comment mr-1"></i>' + comments.length + '</span>' +
-    (canDelete
-      ? '<button type="button" onclick="deleteForumPost(' + post.id + ')" class="ml-auto text-xs text-zinc-500 hover:text-red-400">Delete</button>'
-      : '') +
     '</div>' +
     '<div class="mt-3 space-y-0">' + commentsHtml + '</div>' +
     '<div class="mt-3 flex gap-2">' +
@@ -383,7 +398,22 @@ function renderPostCard(post, meta) {
     'onkeydown="if(event.key===\'Enter\'){event.preventDefault();submitForumComment(' + post.id + ')}">' +
     '<button type="button" onclick="submitForumComment(' + post.id + ')" class="px-4 py-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-sm">Send</button>' +
     '</div>' +
-    '</div></div></article>'
+    '</div></div>';
+
+  if (!canDelete) {
+    return '<article class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">' + cardInner + '</article>';
+  }
+
+  // Swipeable card — reveal Delete action on swipe left
+  return (
+    '<div class="relative overflow-hidden rounded-3xl" data-swipe-post="' + post.id + '">' +
+    '<div class="absolute inset-y-0 right-0 w-24 flex items-stretch">' +
+    '<button type="button" onclick="deleteForumPost(' + post.id + ')" class="flex-1 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex flex-col items-center justify-center gap-1">' +
+    '<i class="fa-solid fa-trash text-base"></i>Delete' +
+    '</button></div>' +
+    '<article class="relative bg-zinc-900 border border-zinc-800 rounded-3xl p-5 touch-pan-y transition-transform duration-200 will-change-transform" data-swipe-content>' +
+    cardInner +
+    '</article></div>'
   );
 }
 
@@ -431,11 +461,95 @@ async function loadForumFeed() {
         votes: votes.filter(function (v) { return v.post_id === post.id; })
       });
     }).join('');
+    initSwipeToDelete(feed);
   } catch (e) {
     console.error(e);
     feed.innerHTML = '<p class="text-center text-red-400 py-10">' + esc(e.message || 'Could not load feed') +
       '<br><span class="text-xs text-zinc-500">Run supabase/forum.sql in Supabase if tables are missing.</span></p>';
   }
+}
+
+/** Native-style swipe-left to reveal Delete on own/admin posts */
+function initSwipeToDelete(container) {
+  if (!container) return;
+  var openEl = null;
+  var startX = 0;
+  var startY = 0;
+  var currentX = 0;
+  var tracking = false;
+  var horizontal = null;
+  var content = null;
+  var maxSwipe = -96; // width of the delete panel
+
+  function closeOpen() {
+    if (openEl) {
+      openEl.style.transform = 'translateX(0)';
+      openEl = null;
+    }
+  }
+
+  container.querySelectorAll('[data-swipe-post]').forEach(function (wrap) {
+    var article = wrap.querySelector('[data-swipe-content]');
+    if (!article) return;
+
+    article.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) return;
+      // Close any other open swipe
+      if (openEl && openEl !== article) closeOpen();
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      currentX = 0;
+      tracking = true;
+      horizontal = null;
+      content = article;
+      article.style.transition = 'none';
+    }, { passive: true });
+
+    article.addEventListener('touchmove', function (e) {
+      if (!tracking || !content) return;
+      var dx = e.touches[0].clientX - startX;
+      var dy = e.touches[0].clientY - startY;
+
+      if (horizontal === null) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        horizontal = Math.abs(dx) > Math.abs(dy);
+        if (!horizontal) {
+          tracking = false;
+          return;
+        }
+      }
+      if (!horizontal) return;
+
+      // Only allow left swipe
+      currentX = Math.min(0, Math.max(maxSwipe, dx));
+      content.style.transform = 'translateX(' + currentX + 'px)';
+    }, { passive: true });
+
+    article.addEventListener('touchend', function () {
+      if (!tracking || !content) return;
+      tracking = false;
+      content.style.transition = 'transform 0.2s ease';
+      if (currentX < maxSwipe / 2) {
+        // Snap open
+        content.style.transform = 'translateX(' + maxSwipe + 'px)';
+        openEl = content;
+      } else {
+        content.style.transform = 'translateX(0)';
+        if (openEl === content) openEl = null;
+      }
+      content = null;
+    });
+
+    // Tap outside / on card to close
+    article.addEventListener('click', function (e) {
+      if (openEl === article && currentX < -10) {
+        // If already open, a tap closes it (unless they hit the delete button)
+        e.preventDefault();
+        e.stopPropagation();
+        closeOpen();
+      }
+    });
+  });
 }
 
 async function initForum() {

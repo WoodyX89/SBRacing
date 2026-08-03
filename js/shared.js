@@ -103,6 +103,14 @@ function setActiveNav() {
             link.classList.add('nav-active');
         }
     });
+    // Bottom tab bar (mobile)
+    document.querySelectorAll('.bottom-tab').forEach(tab => {
+        const href = tab.getAttribute('href') || tab.getAttribute('data-tab');
+        tab.classList.remove('bottom-tab-active');
+        if (href === path) {
+            tab.classList.add('bottom-tab-active');
+        }
+    });
 }
 
 function showToast(message, isError = false) {

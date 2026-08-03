@@ -57,16 +57,8 @@ async function initPushNotifications() {
     return;
   }
 
-  try {
-    var perm = await Push.requestPermissions();
-    console.log('[push] permissions', JSON.stringify(perm));
-    if (perm.receive !== 'granted') return;
-    await Push.register();
-  } catch (e) {
-    console.warn('[push] register failed', e);
-    return;
-  }
-
+  // IMPORTANT: attach listeners BEFORE calling register()
+  // otherwise the registration event can fire before we are listening
   Push.addListener('registration', function (token) {
     var value = token && (token.value || token);
     console.log('[push] device token', value);
@@ -94,6 +86,15 @@ async function initPushNotifications() {
       window.location.href = 'events.html';
     }
   });
+
+  try {
+    var perm = await Push.requestPermissions();
+    console.log('[push] permissions', JSON.stringify(perm));
+    if (perm.receive !== 'granted') return;
+    await Push.register();
+  } catch (e) {
+    console.warn('[push] register failed', e);
+  }
 }
 
 /** Generic remote push to all registered devices via edge function */
