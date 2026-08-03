@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>SB Racing • Medicine Hat Mountain Bike Club</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="SB Racing">
+    <link rel="apple-touch-icon" href="/assets/logo.png">
+    <link rel="icon" type="image/jpeg" href="/assets/logo.png">
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+<!-- Shared nav (edit partials/nav.html only) -->
+<div id="site-nav"></div>
+
+
+    <!-- HERO -->
+    <header class="hero-bg min-h-[100svh] md:min-h-[640px] flex items-center relative">
+        <div class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 w-full">
+            <div class="max-w-3xl">
+                <div class="inline-flex items-center gap-x-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 mb-6 mt-12">
+                    <div class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                    <span class="text-sm font-medium tracking-widest">MEDICINE HAT • ALBERTA</span>
+                </div>
+                <h1 class="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-none mb-4">SB RACING</h1>
+                <p class="max-w-md text-2xl md:text-3xl font-light tracking-tight text-white/90 mb-3">
+                    Ride the Badlands.<br>Embrace the Mud.
+                </p>
+                <p class="max-w-sm text-lg text-white/70 mb-10">
+                    Medicine Hat's premier mountain bike community. From coulee singletrack to Cypress Hills epics.
+                </p>
+                <div class="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4">
+                    <a href="join.html" class="inline-flex items-center justify-center px-9 py-4 rounded-3xl bg-white text-zinc-900 font-bold text-base tracking-wider shadow-xl active:scale-[0.985] transition-all hover:bg-amber-50">
+                        BECOME A MEMBER
+                    </a>
+                    <a href="events.html" class="inline-flex items-center justify-center gap-x-3 px-8 py-4 rounded-3xl border border-white/40 hover:bg-white/10 font-semibold text-base tracking-wider active:scale-[0.985] transition-all">
+                        <i class="fa-solid fa-calendar"></i><span>UPCOMING RIDES</span>
+                    </a>
+                </div>
+                <div class="flex items-center gap-x-8 mt-12 text-sm">
+                    <div class="flex -space-x-2">
+                        <div class="w-8 h-8 rounded-full border-2 border-zinc-900 overflow-hidden ring-1 ring-white/30"><img src="https://picsum.photos/id/1005/32/32" class="object-cover"></div>
+                        <div class="w-8 h-8 rounded-full border-2 border-zinc-900 overflow-hidden ring-1 ring-white/30"><img src="https://picsum.photos/id/1011/32/32" class="object-cover"></div>
+                        <div class="w-8 h-8 rounded-full border-2 border-zinc-900 overflow-hidden ring-1 ring-white/30"><img src="https://picsum.photos/id/201/32/32" class="object-cover"></div>
+                    </div>
+                    <div class="text-white/60 text-sm">
+                        <span class="font-semibold text-white">87 riders</span> active this month
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="absolute bottom-10 left-1/2 -translate-x-1/2 hidden md:block">
+            <div class="flex flex-col items-center text-white/40 text-xs tracking-[3px]">
+                <span>SCROLL TO EXPLORE</span>
+                <i class="fa-solid fa-chevron-down mt-1 animate-bounce"></i>
+            </div>
+        </div>
+    </header>
+
+    <div class="page-body">
+
+    <!-- STATS BAR -->
+    <div class="border-b border-zinc-800 bg-zinc-900">
+        <div class="max-w-screen-2xl mx-auto px-4 sm:px-8 py-5 grid grid-cols-2 md:grid-cols-4 gap-y-6 text-center">
+            <div>
+                <div class="text-4xl font-black tracking-tighter stat-number">87</div>
+                <div class="text-xs uppercase tracking-[1.5px] text-zinc-500 font-medium">Active Members</div>
+            </div>
+            <div>
+                <div class="text-4xl font-black tracking-tighter stat-number">142</div>
+                <div class="text-xs uppercase tracking-[1.5px] text-zinc-500 font-medium">Group Rides in 2026</div>
+            </div>
+            <div>
+                <div class="text-4xl font-black tracking-tighter stat-number">19</div>
+                <div class="text-xs uppercase tracking-[1.5px] text-zinc-500 font-medium">Trails Logged</div>
+            </div>
+            <div>
+                <div class="text-4xl font-black tracking-tighter">4.9</div>
+                <div class="text-xs uppercase tracking-[1.5px] text-zinc-500 font-medium">Average Ride Rating</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick About teaser -->
+    <section class="bg-zinc-950 max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 pt-12 sm:pt-16 md:pt-20 pb-12 sm:pb-16">
+        <div class="grid md:grid-cols-12 gap-x-12 items-center">
+            <div class="md:col-span-7">
+                <div class="uppercase tracking-[3px] text-xs font-semibold text-orange-600 mb-3">OUR STORY</div>
+                <h2 class="section-header tracking-tighter mb-6">Born in the mud.<br>Built for the trails.</h2>
+                <p class="text-lg text-zinc-300 mb-5">SB Racing (Soggy Bottom Racing) started in 2024 when a group of shift workers from CF Industries in Medicine Hat needed an outlet after long days at the plant. What began as after-work rides through the coulees quickly became something bigger.</p>
+                <p class="text-lg text-zinc-300 mb-8">We ride year-round in the stunning badlands and prairie trails surrounding Medicine Hat — from technical coulee singletrack to high-speed flow trails in Cypress Hills.</p>
+                <a href="about.html" class="inline-flex items-center gap-x-2 text-orange-500 font-semibold hover:text-orange-400">
+                    Read our full story <i class="fa-solid fa-arrow-right"></i>
+                </a>
+            </div>
+            <div class="md:col-span-5 mt-10 md:mt-0">
+                <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
+                    <div class="uppercase text-xs tracking-widest text-orange-600 mb-4 font-semibold">THE SB DIFFERENCE</div>
+                    <ul class="space-y-5 text-sm">
+                        <li class="flex gap-x-4"><i class="fa-solid fa-check-circle text-emerald-500 mt-0.5"></i><span>Weekly group rides every Tuesday &amp; Thursday evening + weekend adventures</span></li>
+                        <li class="flex gap-x-4"><i class="fa-solid fa-check-circle text-emerald-500 mt-0.5"></i><span>Private Discord with trail reports, weather alerts &amp; ride planning</span></li>
+                        <li class="flex gap-x-4"><i class="fa-solid fa-check-circle text-emerald-500 mt-0.5"></i><span>Skills clinics, bike maintenance workshops &amp; youth programs</span></li>
+                        <li class="flex gap-x-4"><i class="fa-solid fa-check-circle text-emerald-500 mt-0.5"></i><span>Annual Soggy Bottom Wind-Up: BBQ, race, and awards night</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="bg-zinc-900 border-y border-zinc-800 py-16">
+        <div class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 text-center">
+            <h2 class="section-header tracking-tighter mb-4">Ready to ride with us?</h2>
+            <p class="text-zinc-400 max-w-lg mx-auto mb-8">Join Medicine Hat's most active mountain bike community. All levels welcome.</p>
+            <div class="flex flex-wrap justify-center gap-4">
+                <a href="join.html" class="px-8 py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-white transition-all">Become a Member</a>
+                <a href="events.html" class="px-8 py-3.5 rounded-2xl border border-zinc-600 hover:bg-zinc-800 font-semibold transition-all">See Upcoming Rides</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER + CART + TOAST -->
+    <footer class="bg-black border-t border-zinc-800 py-12">
+        <div class="max-w-screen-2xl mx-auto px-8 md:px-12 text-xs text-zinc-400">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-y-4">
+                <div>
+                    © 2026 SB Racing • Medicine Hat, Alberta<br>
+                    <span class="text-zinc-600">Proudly riding the traditional lands of the Blackfoot Confederacy.</span>
+                </div>
+                <div class="flex gap-x-6">
+                    <a href="#" class="hover:text-white">Instagram</a>
+                    <a href="#" class="hover:text-white">Discord</a>
+                    <a href="#" class="hover:text-white">Trail Reports</a>
+                    <a href="#" class="hover:text-white">Contact</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    </div><!-- /.page-body -->
+
+    <div id="cart-drawer" onclick="if (event.target.id === 'cart-drawer') hideCart()" class="hidden fixed inset-0 bg-black/60 z-[90] flex justify-end">
+        <div onclick="event.stopImmediatePropagation()" class="w-full max-w-md bg-zinc-900 border-l border-zinc-700 h-full flex flex-col">
+            <div class="p-6 flex justify-between items-center border-b border-zinc-700">
+                <div class="font-bold text-xl">Your Cart</div>
+                <button onclick="hideCart()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
+            </div>
+            <div id="cart-items" class="flex-1 overflow-auto p-6 space-y-4 text-sm"></div>
+            <div class="p-6 border-t border-zinc-700 bg-zinc-950">
+                <div class="flex justify-between font-bold text-lg mb-5">
+                    <span>Total</span>
+                    <span id="cart-total" class="font-mono">$0</span>
+                </div>
+                <button onclick="checkout()" class="w-full py-4 rounded-2xl bg-white text-zinc-900 font-bold tracking-wider active:scale-[0.985]">CHECKOUT</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="success-toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-8 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm font-medium z-[100]">
+        <i class="fa-solid fa-check-circle"></i>
+        <span id="toast-message"></span>
+    </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/shared.js"></script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    // Prefer same-folder sw.js; ignore failures (login/merch do not depend on it)
+    var swUrl = 'sw.js';
+    navigator.serviceWorker.getRegistrations().then(function (regs) {
+      // If sw is missing, clear any old broken registrations so they don't cache stale pages
+      fetch(swUrl, { method: 'HEAD' }).then(function (res) {
+        if (res.ok) {
+          navigator.serviceWorker.register(swUrl).catch(function () {});
+        } else {
+          regs.forEach(function (r) { r.unregister(); });
+        }
+      }).catch(function () {
+        regs.forEach(function (r) { r.unregister(); });
+      });
+    });
+  });
+}
+</script>
+</body>
+</html>

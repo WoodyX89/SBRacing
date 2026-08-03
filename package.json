@@ -1,0 +1,37 @@
+{
+  "name": "soggybottomracing",
+  "version": "1.0.0",
+  "description": "Multi-page static website for SB Racing (Soggy Bottom Racing).",
+  "main": "sw.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node scripts/copy-to-dist.js",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:ios": "npm run cap:sync && npx cap open ios",
+    "cap:android": "npm run cap:sync && npx cap open android",
+    "cap:copy": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WoodyX89/SBRacing.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/WoodyX89/SBRacing/issues"
+  },
+  "homepage": "https://github.com/WoodyX89/SBRacing#readme",
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
+    "@capacitor/local-notifications": "^8.2.1",
+    "@capacitor/push-notifications": "^8.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}
