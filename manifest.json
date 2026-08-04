@@ -4,7 +4,7 @@
   "description": "Medicine Hat mountain bike club. Ride the Badlands.",
   "start_url": "/index.html",
   "scope": "/",
-  "display": "standalone",
+  "display": "browser",
   "orientation": "portrait-primary",
   "background_color": "#09090b",
   "theme_color": "#c2410f",

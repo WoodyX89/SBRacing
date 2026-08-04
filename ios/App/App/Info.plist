@@ -4,6 +4,11 @@
 <dict>
 	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SB Racing uses your location to record your mountain bike rides, show you on the map, and calculate distance and elevation.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>SB Racing continues recording your ride in the background so your full track, distance, and elevation are saved even when the screen is locked.</string>
+
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
@@ -45,6 +50,7 @@
 	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>location</string>
 		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>

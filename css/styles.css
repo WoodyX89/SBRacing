@@ -386,16 +386,47 @@ input, select, textarea { font-size: 16px !important; }
   }
 }
 
-/* ===== Native bottom tab bar (mobile) ===== */
+/* ===== Website vs native app navigation ===== */
 :root {
-  --bottom-tabs-height: 3.5rem; /* 56px = h-14 */
+  --bottom-tabs-height: 3.5rem;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --bottom-tabs-total: calc(var(--bottom-tabs-height) + var(--safe-bottom));
 }
 
+/* Default (website / browser): hide bottom tabs, keep top nav */
 #bottom-tabs {
+  display: none !important;
+}
+
+/* Native Capacitor app only */
+/* Native app keeps slim top header (logo / cart / avatar) — only hide website menus via JS */
+html.is-native-app #navbar .nav-link,
+body.is-native-app #navbar .nav-link {
+  /* desktop links hidden by JS; leave rule as safety for link row */
+}
+html.is-native-app #mobile-menu,
+body.is-native-app #mobile-menu {
+  display: none !important;
+}
+
+html.is-native-app #bottom-tabs, body.is-native-app #bottom-tabs {
+  display: block !important;
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
+}
+
+html.is-native-app body, body.is-native-app {
+  /* Keep top header (logo/cart/avatar) + bottom tabs safe area */
+  padding-bottom: var(--bottom-tabs-total) !important;
+}
+
+/* Hero still needs full top offset under the slim header */
+html.is-native-app .hero-bg, body.is-native-app .hero-bg {
+  padding-top: var(--nav-total) !important;
+}
+
+html.is-native-app #success-toast, body.is-native-app #success-toast {
+  bottom: calc(var(--bottom-tabs-total) + 1rem) !important;
 }
 
 .bottom-tab {
@@ -404,28 +435,381 @@ input, select, textarea { font-size: 16px !important; }
 }
 
 .bottom-tab-active {
-  color: #f97316 !important; /* orange-500 */
+  color: #f97316 !important;
 }
 
 .bottom-tab-active i {
   color: #f97316 !important;
 }
 
-/* Room for bottom tabs on mobile so content isn't hidden */
-@media (max-width: 767px) {
-  body {
-    padding-bottom: var(--bottom-tabs-total) !important;
-  }
-
-  /* Toasts sit above the tab bar */
-  #success-toast {
-    bottom: calc(var(--bottom-tabs-total) + 1rem) !important;
-  }
+/* ===== Native app top bar (logo / cart / avatar) ===== */
+#native-topbar {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 110;
+  background: #000;
+  border-bottom: 1px solid #27272a;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
-/* Desktop: no bottom tabs padding */
-@media (min-width: 768px) {
-  body {
-    padding-bottom: 0 !important;
-  }
+html.is-native-app #native-topbar,
+body.is-native-app #native-topbar {
+  display: block !important;
+}
+
+.native-topbar-inner {
+  height: 3.5rem;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.native-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+}
+
+.native-topbar-logo {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: linear-gradient(to bottom right, #c2410f, #92400e);
+  flex-shrink: 0;
+}
+
+.native-topbar-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.15);
+}
+
+.native-topbar-sb {
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  font-size: 1.25rem;
+  color: #fff;
+}
+
+.native-topbar-racing {
+  font-weight: 600;
+  letter-spacing: -0.06em;
+  font-size: 0.85rem;
+  color: #a1a1aa;
+  margin-left: 0.15rem;
+}
+
+.native-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.native-topbar-cart {
+  position: relative;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  background: #18181b;
+  border: 1px solid #3f3f46;
+  color: #e4e4e7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.native-topbar-cart #cart-count-native {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: #ea580c;
+  color: #fff;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.native-avatar-link {
+  display: inline-flex;
+  text-decoration: none;
+}
+
+.native-avatar {
+  position: relative;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  overflow: visible;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.native-avatar img {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  object-fit: cover;
+  background: #27272a;
+}
+
+.native-avatar-fallback {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  background: #ea580c;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.native-avatar-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: #34d399;
+  box-shadow: 0 0 0 2px #09090b;
+}
+
+.native-login-btn {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid #3f3f46;
+  color: #a1a1aa;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+/* Native app: content clears both top header and bottom tabs */
+html.is-native-app {
+  /* Same top offset as website header */
+  --nav-total: calc(var(--nav-row) + var(--safe-top));
+}
+
+html.is-native-app #navbar,
+body.is-native-app #navbar {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  z-index: 200 !important;
+  background: #000 !important;
+}
+
+
+
+/* native: keep real website header, only menus hidden via JS */
+html.is-native-app #navbar,
+body.is-native-app #navbar {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+html.is-native-app #mobile-menu,
+body.is-native-app #mobile-menu {
+  display: none !important;
+}
+html.is-native-app #native-topbar {
+  display: none !important;
+}
+
+/* Native app: hide website nav links / menu, keep logo + actions */
+html.is-native-app #navbar a.nav-link,
+html.is-native-app #navbar button.nav-link,
+body.is-native-app #navbar a.nav-link,
+body.is-native-app #navbar button.nav-link {
+  display: none !important;
+}
+html.is-native-app #navbar a[href="join.html"],
+body.is-native-app #navbar a[href="join.html"] {
+  display: none !important;
+}
+html.is-native-app #navbar button[onclick*="toggleMobileMenu"],
+body.is-native-app #navbar button[onclick*="toggleMobileMenu"] {
+  display: none !important;
+}
+
+/* Native: exactly one header cart */
+html.is-native-app #nav-cart-native {
+  display: none !important;
+}
+html.is-native-app #nav-cart-desktop {
+  display: inline-flex !important;
+}
+html.is-native-app #nav-cart-btn,
+html.is-native-app #nav-cart-btn-mobile {
+  /* menu carts stay in hidden mobile menu */
+}
+
+
+/* ===== Native cart sheet (Capacitor) ===== */
+html.is-native-app #cart-drawer.native-cart-overlay,
+body.is-native-app #cart-drawer.native-cart-overlay,
+#cart-drawer.native-cart-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 99999 !important;
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: stretch !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+#cart-drawer.native-cart-overlay > div.native-cart-sheet,
+#cart-drawer.native-cart-overlay > div {
+  position: relative !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 24px) !important;
+  max-height: calc(100vh - env(safe-area-inset-top, 0px) - 24px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border-left: none !important;
+  border-radius: 16px 16px 0 0 !important;
+  background: #1c1c1e !important;
+  border-top: 1px solid #3a3a3c !important;
+  margin: 0 !important;
+  padding-bottom: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  transform: translateY(0) !important;
+}
+
+#cart-drawer.native-cart-overlay > div > div:first-child {
+  flex-shrink: 0 !important;
+  padding: 10px 16px 12px !important;
+  border-bottom: 1px solid #3a3a3c !important;
+}
+
+#cart-drawer.native-cart-overlay #cart-items {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 16px !important;
+  max-height: none !important;
+}
+
+#cart-drawer.native-cart-overlay > div > div:last-child {
+  flex-shrink: 0 !important;
+  background: #1c1c1e !important;
+  border-top: 1px solid #3a3a3c !important;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+.native-cart-grab {
+  width: 36px;
+  height: 5px;
+  border-radius: 999px;
+  background: #636366;
+  margin: 0 auto 10px auto;
+}
+
+.native-cart-done {
+  color: #f97316;
+  font-weight: 600;
+  font-size: 16px;
+  background: none;
+  border: none;
+  padding: 4px 2px;
+}
+
+.native-cart-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(180, 83, 9, 0.25);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.native-cart-banner i { margin-top: 2px; color: #fbbf24; }
+.native-cart-banner strong { display: block; color: #fde68a; margin-bottom: 2px; }
+.native-cart-banner p { margin: 0; color: rgba(254, 243, 199, 0.85); font-size: 12px; line-height: 1.35; }
+
+.native-cart-empty {
+  text-align: center;
+  padding: 28px 16px 16px;
+  color: #8e8e93;
+}
+.native-cart-empty i {
+  font-size: 36px;
+  margin-bottom: 10px;
+  display: block;
+  color: #636366;
+}
+
+.native-cart-list {
+  border-radius: 12px;
+  overflow: hidden;
+  background: #2c2c2e;
+  border: 1px solid #3a3a3c;
+}
+
+.native-cart-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid #3a3a3c;
+}
+.native-cart-row:last-child { border-bottom: none; }
+.native-cart-row-name { font-size: 15px; font-weight: 500; color: #f5f5f7; }
+.native-cart-row-price { font-size: 13px; color: #f97316; margin-top: 2px; }
+.native-cart-remove {
+  border: none;
+  background: none;
+  color: #ff453a;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 4px;
+  flex-shrink: 0;
+}
+
+.native-cart-checkout {
+  border-radius: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  background: #3a3a3c !important;
+  color: #8e8e93 !important;
+  width: 100% !important;
 }

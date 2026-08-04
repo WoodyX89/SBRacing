@@ -188,14 +188,25 @@ function renderEvents() {
         </button>
       </div>` : '';
 
+    // Website (http/https) always gets corner X for admins. Native (capacitor) gets swipe only.
+    var isNative = (location.protocol === 'capacitor:' || location.protocol === 'ionic:');
+    var showCornerX = isAdmin && !isNative;
+
+    const webDeleteX = showCornerX
+      ? ('<button type="button" onclick="deleteEvent(' + ev.id + ')" title="Delete event" ' +
+         'class="absolute top-3 right-3 z-20 w-7 h-7 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-lg border border-red-400">' +
+         '<i class="fa-solid fa-xmark text-xs"></i></button>')
+      : '';
+
     const cardBody = `
-        <div class="flex justify-between items-start gap-3">
+        ${webDeleteX}
+        <div class="flex justify-between items-start gap-3 ${showCornerX ? 'pr-10' : ''}">
           <div class="min-w-0">
             <div class="text-xs font-mono tracking-widest ${badgeColor}">${badgeText}</div>
             <div class="font-bold text-xl mt-1">${escapeHtml(ev.title)}</div>
             ${ev.location ? `<div class="text-xs text-zinc-500 mt-1"><i class="fa-solid fa-location-dot mr-1"></i>${escapeHtml(ev.location)}</div>` : ''}
           </div>
-          <div class="text-right shrink-0">
+          <div class="text-right shrink-0 ${showCornerX ? 'mr-2' : ''}">
             <div class="text-xs text-zinc-400">${dateLabel}</div>
             <div class="font-mono text-sm">${escapeHtml(timeLabel)}</div>
           </div>
@@ -216,11 +227,12 @@ function renderEvents() {
         </div>`;
 
     if (!isAdmin) {
-      return `<div class="trail-card bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex flex-col">${cardBody}</div>`;
+      return `<div class="trail-card relative bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex flex-col">${cardBody}</div>`;
     }
 
-    // Admin: swipe-left to delete
-    return `
+    // Native admin: swipe-left to delete
+    if (isNative) {
+      return `
       <div class="relative overflow-hidden rounded-3xl" data-swipe-event="${ev.id}">
         <div class="absolute inset-y-0 right-0 w-24 flex items-stretch">
           <button type="button" onclick="deleteEvent(${ev.id})" class="flex-1 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex flex-col items-center justify-center gap-1">
@@ -231,9 +243,16 @@ function renderEvents() {
           ${cardBody}
         </div>
       </div>`;
+    }
+
+    // Website admin: X in corner only (no swipe)
+    return `<div class="trail-card relative bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex flex-col">${cardBody}</div>`;
   }).join('');
 
-  initEventSwipeToDelete(grid);
+  // Swipe only in the Capacitor app
+  if (location.protocol === 'capacitor:' || location.protocol === 'ionic:') {
+    initEventSwipeToDelete(grid);
+  }
 }
 
 /** Swipe-left to reveal Delete on event cards (admin only) */

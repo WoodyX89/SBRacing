@@ -1,7 +1,7 @@
 <nav id="navbar" class="fixed top-0 left-0 right-0 z-[100] bg-black border-b border-zinc-800" style="background:#000!important;">
     <div class="max-w-screen-2xl mx-auto">
-        <div class="nav-row px-4 sm:px-8 flex items-center justify-between">
-            <a href="index.html" class="flex items-center gap-x-3">
+        <div class="nav-row px-4 sm:px-8 flex items-center justify-between gap-x-4">
+            <a href="index.html" class="flex items-center gap-x-3 shrink-0">
                 <div class="nav-logo flex items-center justify-center rounded-2xl bg-gradient-to-br from-orange-700 to-amber-800 shadow-inner overflow-hidden ring-2 ring-offset-2 ring-offset-zinc-900 ring-orange-900/50">
                     <img src="/assets/logo.png" alt="SB Racing Logo" class="w-full h-full object-cover scale-125" onerror="this.src='/assets/logo.jpg'">
                 </div>
@@ -10,14 +10,9 @@
                     <span class="nav-brand-racing font-semibold tracking-[-2px] text-zinc-400">RACING</span>
                 </div>
             </a>
-            <div class="hidden md:flex items-center gap-x-8 text-sm font-medium">
+            <div class="hidden md:flex items-center gap-x-6 text-sm font-medium flex-1 justify-center">
                 <a href="about.html" class="nav-link px-3 py-2 hover:text-white transition-colors">About</a>
                 <a href="merch.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Merch</a>
-                <button type="button" id="nav-cart-desktop" onclick="showCart()" class="nav-link px-3 py-2 hover:text-white transition-colors inline-flex items-center gap-x-2">
-                    <i class="fa-solid fa-shopping-cart text-sm"></i>
-                    <span>Cart</span>
-                    <span id="cart-count" class="min-w-[18px] h-[18px] flex items-center justify-center text-xs font-mono bg-orange-600 text-white rounded-full px-1.5">0</span>
-                </button>
                 <a href="events.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Events</a>
                 <a href="forum.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Soggy Bottom HQ</a>
                 <a href="trails.html" class="nav-link px-3 py-2 hover:text-white transition-colors">Trails</a>
@@ -25,19 +20,28 @@
                     <i class="fa-solid fa-lock text-xs"></i><span>Members</span>
                 </a>
             </div>
-            <div class="flex items-center gap-x-4">
-                <button type="button" class="md:hidden flex items-center justify-center w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 active:scale-95 transition-all" onclick="toggleMobileMenu()" aria-label="More">
+            <div class="flex items-center gap-x-3 shrink-0 ml-auto" id="nav-actions">
+                <button type="button" id="nav-cart-desktop" onclick="showCart()" class="hidden md:inline-flex items-center justify-center relative w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 active:scale-95 transition-all" aria-label="Cart">
+                    <i class="fa-solid fa-shopping-cart text-lg"></i>
+                    <span id="cart-count" class="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-mono bg-orange-600 text-white rounded-full px-1">0</span>
+                </button>
+                <div id="nav-auth" class="flex items-center"></div>
+                <button type="button" class="md:hidden flex items-center justify-center w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 active:scale-95 transition-all" onclick="toggleMobileMenu()" aria-label="Menu">
                     <i class="fa-solid fa-bars text-xl"></i>
                 </button>
                 <a href="join.html" class="hidden md:block px-6 py-2.5 rounded-2xl bg-white text-zinc-900 font-semibold text-sm tracking-wide hover:bg-amber-100 active:scale-[0.985] transition-all">JOIN THE CREW</a>
             </div>
         </div>
     </div>
-    <!-- Secondary mobile menu — primary navigation is the bottom tab bar -->
+    <!-- Website mobile menu (hidden in native Capacitor app) -->
     <div id="mobile-menu" class="hidden md:hidden border-t border-zinc-800 bg-zinc-900">
         <div class="px-6 py-4 flex flex-col gap-y-1 text-base font-medium">
             <a href="about.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">About Us</a>
-            <a href="index.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Home</a>
+            <a href="merch.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Merchandise</a>
+            <a href="events.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Events</a>
+            <a href="forum.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Soggy Bottom HQ</a>
+            <a href="trails.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Trails</a>
+            <a href="members.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800 flex items-center gap-x-2"><i class="fa-solid fa-lock"></i><span>Members Only Area</span></a>
             <button type="button" id="nav-cart-btn-mobile" onclick="showCart(); toggleMobileMenu();" class="mobile-nav-link w-full text-left px-4 py-3 rounded-2xl hover:bg-zinc-800 flex items-center gap-x-3">
                 <i class="fa-solid fa-shopping-cart"></i>
                 <span class="flex-1">Cart</span>
@@ -50,8 +54,8 @@
     </div>
 </nav>
 
-<!-- Native-style bottom tab bar (mobile only) -->
-<nav id="bottom-tabs" class="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-zinc-950/95 border-t border-zinc-800 backdrop-blur-xl" style="padding-bottom: env(safe-area-inset-bottom, 0px);">
+<!-- Native app bottom tab bar — only shown inside Capacitor (see body.is-native-app) -->
+<nav id="bottom-tabs" class="fixed bottom-0 left-0 right-0 z-[100] bg-zinc-950/95 border-t border-zinc-800 backdrop-blur-xl" style="padding-bottom: env(safe-area-inset-bottom, 0px); display: none;" aria-hidden="true">
     <div class="flex items-stretch justify-around h-14 max-w-lg mx-auto">
         <a href="forum.html" class="bottom-tab flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-zinc-500" data-tab="forum.html">
             <i class="fa-solid fa-comments text-lg mb-0.5"></i>
@@ -66,7 +70,7 @@
             <span>Trails</span>
         </a>
         <a href="members.html" class="bottom-tab flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-zinc-500" data-tab="members.html">
-            <i class="fa-solid fa-lock text-lg mb-0.5"></i>
+            <i class="fa-solid fa-users text-lg mb-0.5"></i>
             <span>Members</span>
         </a>
         <a href="merch.html" class="bottom-tab flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-zinc-500" data-tab="merch.html">

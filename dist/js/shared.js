@@ -56,16 +56,27 @@ function updateNavCartVisibility() {
 async function loadSiteNav() {
     const mount = document.getElementById('site-nav');
     if (!mount) return;
-    try {
-        const res = await fetch('partials/nav.html', { cache: 'no-cache' });
-        if (!res.ok) throw new Error('nav ' + res.status);
-        mount.innerHTML = await res.text();
-        ensureTrailsNavLink();
-        updateNavCartVisibility();
-    } catch (e) {
-        console.error('[nav] failed to load partials/nav.html', e);
-        mount.innerHTML = '<nav id="navbar" class="fixed top-0 left-0 right-0 z-[100] bg-black p-4 text-white"><a href="index.html">SB Racing</a> — nav failed to load</nav>';
+    const candidates = [
+        'partials/nav.html',
+        './partials/nav.html',
+        '/partials/nav.html'
+    ];
+    let lastErr = null;
+    for (const url of candidates) {
+        try {
+            const res = await fetch(url, { cache: 'no-cache' });
+            if (!res.ok) throw new Error('nav ' + res.status + ' ' + url);
+            mount.innerHTML = await res.text();
+            ensureTrailsNavLink();
+            updateNavCartVisibility();
+            return;
+        } catch (e) {
+            lastErr = e;
+        }
     }
+    console.error('[nav] failed to load partials/nav.html', lastErr);
+    // Minimal top bar for website fallback — bottom tabs are injected by applyNavShell()
+    mount.innerHTML = '<nav id="navbar" class="fixed top-0 left-0 right-0 z-[100] bg-black p-4 text-white border-b border-zinc-800"><a href="index.html" class="font-bold">SB Racing</a></nav>';
 }
 
 // Shared navigation + cart + toast helpers for multi-page SB Racing site
@@ -149,7 +160,7 @@ let cart = JSON.parse(localStorage.getItem('sb_cart') || '[]');
 
 function updateCartCount() {
   var n = (typeof cart !== 'undefined' && cart) ? cart.length : 0;
-  ['cart-count', 'cart-count-mobile'].forEach(function (id) {
+  ['cart-count', 'cart-count-mobile', 'cart-count-native'].forEach(function (id) {
     var el = document.getElementById(id);
     if (el) el.textContent = n;
   });
@@ -258,11 +269,11 @@ document.addEventListener('keydown', function (e) {
 
 // ---------- Auth status in nav ----------
 async function updateNavAuth(forcedUser) {
-    // Find actions row: parent of the cart button (most reliable)
-    const cartBtn = document.querySelector('#navbar button[onclick*="showCart"], #navbar #cart-count');
-    const actions = cartBtn
-        ? (cartBtn.closest('button') || cartBtn).parentElement
-        : document.querySelector('#navbar .flex.items-center.gap-x-4');
+    // Prefer the right-side actions cluster (#nav-actions)
+    const actions = document.getElementById('nav-actions') ||
+        document.getElementById('native-header-actions') ||
+        document.querySelector('#navbar .nav-row > div:last-child') ||
+        document.querySelector('#navbar .flex.items-center.gap-x-3, #navbar .flex.items-center.gap-x-4');
     if (!actions) {
         console.warn('[nav-auth] actions row not found');
         return;
@@ -273,10 +284,13 @@ async function updateNavAuth(forcedUser) {
         slot = document.createElement('div');
         slot.id = 'nav-auth';
         slot.className = 'flex items-center';
-        // Place right after cart button
-        const cartEl = actions.querySelector('button[onclick*="showCart"]') || actions.firstElementChild;
+        // Place after cart, before hamburger / JOIN
+        const cartEl = document.getElementById('nav-cart-desktop') || document.getElementById('nav-cart-native');
+        const joinEl = actions.querySelector('a[href="join.html"]');
         if (cartEl && cartEl.nextSibling) {
             actions.insertBefore(slot, cartEl.nextSibling);
+        } else if (joinEl) {
+            actions.insertBefore(slot, joinEl);
         } else {
             actions.appendChild(slot);
         }
@@ -341,7 +355,7 @@ async function updateNavAuth(forcedUser) {
                     </span>
                     <span class="text-sm font-medium max-w-[100px] truncate hidden md:inline pl-1">${escapeHtmlNav(display)}</span>
                 </a>
-                <button type="button" onclick="navLogout()" class="hidden md:inline-flex text-xs text-zinc-500 hover:text-white px-1.5 py-1" title="Log out">
+                <button type="button" onclick="navLogout()" class="nav-logout-btn inline-flex items-center justify-center w-9 h-9 rounded-2xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all" title="Log out">
                     <i class="fa-solid fa-right-from-bracket"></i>
                 </button>
             </div>`;
@@ -408,8 +422,250 @@ function escapeAttrNav(str) {
     return escapeHtmlNav(str).replace(/'/g, '&#39;');
 }
 
+/** True only inside the Capacitor iOS/Android shell — not mobile Safari/Chrome */
+function isNativeAppShell() {
+    try {
+        var proto = String(window.location.protocol || '');
+        if (proto === 'capacitor:' || proto === 'ionic:') return true;
+    } catch (e0) {}
+    try {
+        if (window.Capacitor) {
+            if (typeof Capacitor.isNativePlatform === 'function' && Capacitor.isNativePlatform()) return true;
+            var p = typeof Capacitor.getPlatform === 'function' ? Capacitor.getPlatform() : '';
+            if (p === 'ios' || p === 'android') return true;
+        }
+    } catch (e) {}
+    try {
+        if (window.cordova && /ios|android/i.test(String(window.cordova.platformId || ''))) return true;
+    } catch (e2) {}
+    return false;
+}
+
+function ensureBottomTabsEl() {
+    var existing = document.getElementById('bottom-tabs');
+    if (existing) return existing;
+    var nav = document.createElement('nav');
+    nav.id = 'bottom-tabs';
+    nav.setAttribute('aria-hidden', 'true');
+    nav.style.cssText = 'display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(9,9,11,0.95);border-top:1px solid #27272a;padding-bottom:env(safe-area-inset-bottom,0px);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);';
+    nav.innerHTML =
+      '<div style="display:flex;align-items:stretch;justify-content:space-around;height:56px;max-width:32rem;margin:0 auto;">' +
+      tabLink('forum.html', 'fa-comments', 'HQ') +
+      tabLink('events.html', 'fa-calendar-days', 'Events') +
+      tabLink('trails.html', 'fa-route', 'Trails') +
+      tabLink('members.html', 'fa-users', 'Members') +
+      tabLink('merch.html', 'fa-shirt', 'Merch') +
+      '</div>';
+    document.body.appendChild(nav);
+    return nav;
+}
+
+function tabLink(href, icon, label) {
+    return (
+      '<a href="' + href + '" class="bottom-tab" data-tab="' + href + '" ' +
+      'style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10px;font-weight:500;color:#71717a;text-decoration:none;-webkit-tap-highlight-color:transparent;">' +
+      '<i class="fa-solid ' + icon + '" style="font-size:18px;margin-bottom:2px;"></i>' +
+      '<span>' + label + '</span></a>'
+    );
+}
+
+/** Website keeps full nav. Native app: same navbar, hide menu pieces only. */
+function applyNavShell() {
+    var native = isNativeAppShell();
+    document.documentElement.classList.toggle('is-native-app', native);
+    if (document.body) document.body.classList.toggle('is-native-app', native);
+
+    // Remove any old injected native-only bars
+    var extra = document.getElementById('native-topbar');
+    if (extra) extra.remove();
+
+    var tabs = ensureBottomTabsEl();
+    if (native) {
+        tabs.style.setProperty('display', 'block', 'important');
+        tabs.setAttribute('aria-hidden', 'false');
+        hideWebsiteMenuForNative();
+    } else {
+        tabs.style.setProperty('display', 'none', 'important');
+        tabs.setAttribute('aria-hidden', 'true');
+        showWebsiteMenuForWeb();
+    }
+
+    try {
+        var pathName = (window.location.pathname.split('/').pop() || 'index.html');
+        tabs.querySelectorAll('.bottom-tab').forEach(function (tab) {
+            var href = tab.getAttribute('href') || tab.getAttribute('data-tab');
+            var active = href === pathName;
+            tab.classList.toggle('bottom-tab-active', active);
+            tab.style.color = active ? '#f97316' : '#71717a';
+        });
+    } catch (e) {}
+
+    console.log('[nav] shell=', native ? 'native-app' : 'website', 'protocol=', location.protocol);
+}
+
+/** Hide only menu pieces — keep logo, cart, avatar (real website header). */
+function hideWebsiteMenuForNative() {
+    var navbar = document.getElementById('navbar');
+    if (!navbar) return;
+
+    navbar.style.removeProperty('display');
+    navbar.style.setProperty('display', 'block', 'important');
+    navbar.style.setProperty('visibility', 'visible', 'important');
+    navbar.style.setProperty('opacity', '1', 'important');
+
+    // Hide every text nav link (About, Merch, Events, HQ, Trails, Members, Join, Cart text link)
+    navbar.querySelectorAll('a.nav-link, button.nav-link').forEach(function (el) {
+        el.style.setProperty('display', 'none', 'important');
+    });
+
+    // Hide the whole desktop links container if present
+    var row = navbar.querySelector('.nav-row');
+    if (row) {
+        Array.prototype.forEach.call(row.children, function (kid) {
+            // Middle column: has multiple .nav-link children
+            if (kid.querySelectorAll && kid.querySelectorAll('a.nav-link, button.nav-link').length >= 2) {
+                kid.style.setProperty('display', 'none', 'important');
+            }
+        });
+    }
+
+    // Hamburger
+    navbar.querySelectorAll('button[onclick*="toggleMobileMenu"]').forEach(function (btn) {
+        btn.style.setProperty('display', 'none', 'important');
+    });
+
+    // Mobile dropdown
+    var mobileMenu = document.getElementById('mobile-menu');
+    if (mobileMenu) {
+        mobileMenu.classList.add('hidden');
+        mobileMenu.style.setProperty('display', 'none', 'important');
+    }
+
+    // JOIN THE CREW button
+    navbar.querySelectorAll('a[href="join.html"]').forEach(function (a) {
+        a.style.setProperty('display', 'none', 'important');
+    });
+
+    // Mobile menu links (if menu somehow visible)
+    document.querySelectorAll('#mobile-menu a, #mobile-menu button').forEach(function (el) {
+        // whole menu already hidden
+    });
+
+    // Right-side actions: show cart + avatar only
+    var actions = navbar.querySelector('.nav-row > div:last-child') ||
+        navbar.querySelector('.flex.items-center.gap-x-4');
+    if (actions) {
+        actions.style.setProperty('display', 'flex', 'important');
+        actions.style.setProperty('align-items', 'center', 'important');
+        actions.style.setProperty('gap', '0.75rem', 'important');
+
+        // Single cart only: force the real desktop cart button visible; remove any extra
+        document.querySelectorAll('#nav-cart-native').forEach(function (el) { el.remove(); });
+        var deskCart = document.getElementById('nav-cart-desktop');
+        if (!deskCart) {
+            deskCart = document.createElement('button');
+            deskCart.type = 'button';
+            deskCart.id = 'nav-cart-desktop';
+            deskCart.setAttribute('onclick', 'showCart()');
+            deskCart.setAttribute('aria-label', 'Cart');
+            deskCart.className = 'inline-flex items-center justify-center relative w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 active:scale-95 transition-all';
+            deskCart.innerHTML =
+                '<i class="fa-solid fa-shopping-cart text-lg"></i>' +
+                '<span id="cart-count" class="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-mono bg-orange-600 text-white rounded-full px-1">0</span>';
+            var authSlot = document.getElementById('nav-auth');
+            if (authSlot && authSlot.parentElement === actions) {
+                actions.insertBefore(deskCart, authSlot);
+            } else {
+                actions.insertBefore(deskCart, actions.firstChild);
+            }
+        }
+        deskCart.classList.remove('hidden');
+        deskCart.style.setProperty('display', 'inline-flex', 'important');
+
+        if (!document.getElementById('nav-auth')) {
+            var auth = document.createElement('div');
+            auth.id = 'nav-auth';
+            auth.className = 'flex items-center';
+            actions.appendChild(auth);
+        }
+    }
+
+
+    // Hide any leftover lock icons in the header
+    navbar.querySelectorAll('.fa-lock').forEach(function (ic) {
+        var wrap = ic.closest('a, button, span') || ic;
+        if (wrap && !wrap.closest('#nav-auth')) {
+            // don't strip avatar area
+            var parentLink = ic.closest('a.nav-link');
+            if (parentLink) parentLink.style.setProperty('display', 'none', 'important');
+        }
+    });
+
+    // Pin actions to the right of the header
+    var row = navbar.querySelector('.nav-row');
+    if (row) {
+        row.style.setProperty('display', 'flex', 'important');
+        row.style.setProperty('justify-content', 'space-between', 'important');
+        row.style.setProperty('align-items', 'center', 'important');
+        row.style.setProperty('width', '100%', 'important');
+    }
+    if (actions) {
+        actions.style.setProperty('margin-left', 'auto', 'important');
+    }
+
+    // Ensure logout icon is visible on native (not desktop-only)
+    setTimeout(function () {
+        navbar.querySelectorAll('.nav-logout-btn, button[onclick*="navLogout"]').forEach(function (btn) {
+            btn.classList.remove('hidden');
+            btn.style.setProperty('display', 'inline-flex', 'important');
+        });
+    }, 150);
+    setTimeout(function () {
+        navbar.querySelectorAll('.nav-logout-btn, button[onclick*="navLogout"]').forEach(function (btn) {
+            btn.classList.remove('hidden');
+            btn.style.setProperty('display', 'inline-flex', 'important');
+        });
+    }, 600);
+
+    try { if (typeof updateCartCount === 'function') updateCartCount(); } catch (e) {}
+    setTimeout(function () { try { updateNavAuth(); } catch (e2) {} }, 100);
+    setTimeout(function () { try { updateNavAuth(); } catch (e3) {} }, 500);
+}
+
+function showWebsiteMenuForWeb() {
+    var navbar = document.getElementById('navbar');
+    if (!navbar) return;
+    navbar.style.removeProperty('display');
+    navbar.querySelectorAll('button[onclick*="toggleMobileMenu"]').forEach(function (btn) {
+        btn.style.removeProperty('display');
+    });
+    var mm = document.getElementById('mobile-menu');
+    if (mm) mm.style.removeProperty('display');
+    var nativeOnly = document.getElementById('nav-cart-native');
+    if (nativeOnly) nativeOnly.remove();
+    var desk = document.getElementById('nav-cart-desktop');
+    if (desk) {
+        desk.classList.add('hidden');
+        desk.classList.add('md:inline-flex');
+        desk.style.removeProperty('display');
+    }
+}
+
+
+function startNavShellWatch() {
+    applyNavShell();
+    var tries = 0;
+    var timer = setInterval(function () {
+        tries += 1;
+        applyNavShell();
+        if (isNativeAppShell() || tries >= 25) clearInterval(timer);
+    }, 120);
+    window.addEventListener('load', applyNavShell);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSiteNav();
+    startNavShellWatch();
     ensureTrailsNavLink();
     updateNavCartVisibility();
     initNavbar();
@@ -433,5 +689,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         setTimeout(bootAuth, 1200);
     }
 });
+
+
 
 

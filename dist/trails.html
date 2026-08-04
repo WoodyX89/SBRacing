@@ -66,12 +66,6 @@
           <button type="button" onclick="undoWaypoint()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Undo</button>
           <button type="button" onclick="clearRoute()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Clear</button>
         </div>
-                <div class="flex flex-wrap gap-2 pt-1 border-t border-zinc-800">
-          <button type="button" id="btn-gps-track" onclick="toggleGpsTracking()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800 font-semibold">Track GPS</button>
-          <button type="button" id="btn-gps-follow" onclick="toggleGpsFollow()" class="hidden px-4 py-2 rounded-2xl border border-blue-600 text-blue-400 text-sm hover:bg-zinc-800">Follow: ON</button>
-          <button type="button" id="btn-gps-use-track" onclick="useGpsTrackAsRoute()" class="hidden px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Use as route</button>
-        </div>
-        <p class="text-xs text-zinc-500">GPS works on <strong class="text-zinc-400">HTTPS</strong> or localhost. Blue dashed line is your live track. “Use as route” turns it into start + checkpoints you can save.</p>
 
         <div id="selected-trails-list" class="pt-2 border-t border-zinc-800 max-h-40 overflow-y-auto">
           <p class="text-xs text-zinc-500">Click trails on the map to build a route.</p>
@@ -92,6 +86,66 @@
           </button>
           <p id="save-route-hint" class="text-xs text-zinc-500">Log in on Members to save routes to your account.</p>
         </div>
+      </div>
+
+      <!-- Live ride tracking (background-capable on native) -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4" id="ride-panel">
+        <div class="font-semibold flex items-center justify-between gap-2">
+          <span class="flex items-center gap-2"><i class="fa-solid fa-location-crosshairs text-orange-500"></i> Track ride</span>
+          <span id="ride-status-badge" class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">Idle</span>
+        </div>
+        <p class="text-xs text-zinc-400">Start a live GPS track of your actual ride. Works offline and continues in the background on the native app. Records distance, time, and elevation.</p>
+
+        <!-- Live stats HUD -->
+        <div class="grid grid-cols-2 gap-2" id="ride-stats">
+          <div class="rounded-2xl bg-zinc-950 border border-zinc-800 p-3">
+            <div class="text-[10px] uppercase tracking-wider text-zinc-500">Distance</div>
+            <div class="text-xl font-black tracking-tight" id="ride-distance">0.00 km</div>
+          </div>
+          <div class="rounded-2xl bg-zinc-950 border border-zinc-800 p-3">
+            <div class="text-[10px] uppercase tracking-wider text-zinc-500">Time</div>
+            <div class="text-xl font-black tracking-tight" id="ride-time">0:00</div>
+          </div>
+          <div class="rounded-2xl bg-zinc-950 border border-zinc-800 p-3">
+            <div class="text-[10px] uppercase tracking-wider text-zinc-500">Elev gain</div>
+            <div class="text-xl font-black tracking-tight" id="ride-elev">0 m</div>
+          </div>
+          <div class="rounded-2xl bg-zinc-950 border border-zinc-800 p-3">
+            <div class="text-[10px] uppercase tracking-wider text-zinc-500">Points</div>
+            <div class="text-xl font-black tracking-tight" id="ride-points">0</div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button type="button" id="btn-ride-start" onclick="rideStart()" class="flex-1 min-w-[7rem] px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold">
+            Start ride
+          </button>
+          <button type="button" id="btn-ride-pause" onclick="ridePause()" class="hidden flex-1 min-w-[7rem] px-4 py-2.5 rounded-2xl border border-amber-600 text-amber-400 text-sm font-semibold hover:bg-zinc-800">
+            Pause
+          </button>
+          <button type="button" id="btn-ride-stop" onclick="rideStop()" class="hidden flex-1 min-w-[7rem] px-4 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 text-sm font-semibold">
+            Stop
+          </button>
+          <button type="button" id="btn-ride-follow" onclick="toggleGpsFollow()" class="hidden px-4 py-2.5 rounded-2xl border border-blue-600 text-blue-400 text-sm hover:bg-zinc-800">
+            Follow: ON
+          </button>
+        </div>
+
+        <div class="flex flex-wrap gap-2 pt-1 border-t border-zinc-800">
+          <button type="button" id="btn-ride-use-as-route" onclick="useRideAsRoute()" class="hidden px-3 py-2 rounded-2xl border border-zinc-600 text-xs hover:bg-zinc-800">
+            Use track as route
+          </button>
+          <button type="button" id="btn-ride-save" onclick="saveRecordedRide()" class="hidden px-3 py-2 rounded-2xl border border-orange-600 text-orange-400 text-xs hover:bg-zinc-800 font-semibold">
+            Save ride
+          </button>
+          <button type="button" id="btn-ride-gpx" onclick="downloadRideGPX()" class="hidden px-3 py-2 rounded-2xl border border-zinc-600 text-xs hover:bg-zinc-800">
+            Export GPX
+          </button>
+        </div>
+
+        <p class="text-[11px] text-zinc-500 leading-relaxed" id="ride-hint">
+          On the native app this continues while the screen is locked. Browser tracking only works while the page is open.
+        </p>
       </div>
 
       <!-- Jump areas -->
@@ -127,6 +181,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/shared.js"></script>
+<script src="js/ride-tracker.js"></script>
 <script src="js/trails-map.js"></script>
 </body>
 </html>

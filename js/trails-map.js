@@ -605,173 +605,286 @@ async function deleteRoute(id) {
 }
 
 
-// ---------- Live GPS tracking ----------
-function isGpsTracking() {
-  return gpsWatchId != null;
+// ---------- Live ride tracking (RideTracker) ----------
+var rideFollow = true;
+var rideTimerId = null;
+var lastRideStatus = 'idle';
+
+function formatRideTime(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  var h = Math.floor(sec / 3600);
+  var m = Math.floor((sec % 3600) / 60);
+  var s = sec % 60;
+  if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  return m + ':' + String(s).padStart(2, '0');
 }
 
-function updateGpsButton() {
-  var btn = document.getElementById('btn-gps-track');
-  if (!btn) return;
-  if (isGpsTracking()) {
-    btn.textContent = 'Stop GPS';
-    btn.classList.remove('bg-emerald-600', 'border-zinc-600');
-    btn.classList.add('bg-red-600', 'hover:bg-red-700');
-  } else {
-    btn.textContent = 'Track GPS';
-    btn.classList.remove('bg-red-600', 'hover:bg-red-700');
-    btn.classList.add('border-zinc-600');
+function updateRideUI(snap) {
+  if (!snap) snap = (window.RideTracker && RideTracker.getSnapshot()) || { status: 'idle', distanceKm: 0, elevGainM: 0, elapsedSec: 0, pointCount: 0 };
+
+  var badge = document.getElementById('ride-status-badge');
+  if (badge) {
+    badge.textContent = snap.status === 'recording' ? 'Recording' : snap.status === 'paused' ? 'Paused' : 'Idle';
+    badge.className = 'text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border ' +
+      (snap.status === 'recording'
+        ? 'bg-emerald-950 text-emerald-400 border-emerald-700'
+        : snap.status === 'paused'
+          ? 'bg-amber-950 text-amber-400 border-amber-700'
+          : 'bg-zinc-800 text-zinc-400 border-zinc-700');
   }
-  var followBtn = document.getElementById('btn-gps-follow');
-  if (followBtn) {
-    followBtn.classList.toggle('hidden', !isGpsTracking());
-    followBtn.textContent = gpsFollow ? 'Follow: ON' : 'Follow: OFF';
+
+  var elDist = document.getElementById('ride-distance');
+  var elTime = document.getElementById('ride-time');
+  var elElev = document.getElementById('ride-elev');
+  var elPts = document.getElementById('ride-points');
+  if (elDist) elDist.textContent = (snap.distanceKm || 0).toFixed(2) + ' km';
+  if (elTime) elTime.textContent = formatRideTime(snap.elapsedSec);
+  if (elElev) elElev.textContent = (snap.elevGainM || 0) + ' m';
+  if (elPts) elPts.textContent = String(snap.pointCount || 0);
+
+  var isActive = snap.status === 'recording' || snap.status === 'paused';
+  var btnStart = document.getElementById('btn-ride-start');
+  var btnPause = document.getElementById('btn-ride-pause');
+  var btnStop = document.getElementById('btn-ride-stop');
+  var btnFollow = document.getElementById('btn-ride-follow');
+  var btnUse = document.getElementById('btn-ride-use-as-route');
+  var btnSave = document.getElementById('btn-ride-save');
+  var btnGpx = document.getElementById('btn-ride-gpx');
+
+  if (btnStart) {
+    if (snap.status === 'paused') {
+      btnStart.textContent = 'Resume';
+      btnStart.classList.remove('hidden');
+    } else if (snap.status === 'recording') {
+      btnStart.classList.add('hidden');
+    } else {
+      btnStart.textContent = 'Start ride';
+      btnStart.classList.remove('hidden');
+    }
   }
-  var useBtn = document.getElementById('btn-gps-use-track');
-  if (useBtn) useBtn.classList.toggle('hidden', !gpsTrackPoints.length);
+  if (btnPause) {
+    btnPause.classList.toggle('hidden', snap.status !== 'recording');
+  }
+  if (btnStop) {
+    btnStop.classList.toggle('hidden', !isActive && !(snap.pointCount > 0 && snap.status === 'idle'));
+    if (snap.status === 'idle' && snap.pointCount > 0) btnStop.classList.add('hidden');
+  }
+  if (btnFollow) {
+    btnFollow.classList.toggle('hidden', !isActive);
+    btnFollow.textContent = rideFollow ? 'Follow: ON' : 'Follow: OFF';
+  }
+  if (btnUse) btnUse.classList.toggle('hidden', !(snap.pointCount >= 2));
+  if (btnSave) btnSave.classList.toggle('hidden', !(snap.pointCount >= 2 && snap.status === 'idle'));
+  if (btnGpx) btnGpx.classList.toggle('hidden', !(snap.pointCount >= 2));
+
+  var hint = document.getElementById('ride-hint');
+  if (hint) {
+    if (window.RideTracker && RideTracker.hasBackgroundSupport && RideTracker.hasBackgroundSupport()) {
+      hint.textContent = 'Background tracking enabled. Ride continues with the screen locked. A system notification stays visible while recording.';
+    } else if (window.RideTracker && RideTracker.isNative && RideTracker.isNative()) {
+      hint.textContent = 'Native app — tracking runs while the app is open. Install @capgo/background-geolocation for true background support.';
+    } else {
+      hint.textContent = 'Browser mode: tracking only while this page is open. Open the native app for background recording.';
+    }
+  }
+
+  // Keep map line in sync
+  renderRideTrack(snap);
+}
+
+function renderRideTrack(snap) {
+  if (!map || !snap || !snap.points) return;
+  var latlngs = snap.points.map(function (p) { return [p.lat, p.lng]; });
+
+  if (gpsTrackLine) {
+    map.removeLayer(gpsTrackLine);
+    gpsTrackLine = null;
+  }
+  if (latlngs.length >= 2) {
+    gpsTrackLine = L.polyline(latlngs, {
+      color: '#f97316',
+      weight: 4,
+      opacity: 0.9
+    }).addTo(map);
+  }
+
+  var last = snap.lastPoint || (snap.points.length ? snap.points[snap.points.length - 1] : null);
+  if (last) {
+    var ll = L.latLng(last.lat, last.lng);
+    var acc = last.acc || 25;
+    if (!gpsMarker) {
+      gpsMarker = L.circleMarker(ll, {
+        radius: 8,
+        color: '#fff',
+        weight: 3,
+        fillColor: '#f97316',
+        fillOpacity: 1
+      }).addTo(map);
+      gpsMarker.bindTooltip('You', { direction: 'top' });
+    } else {
+      gpsMarker.setLatLng(ll);
+    }
+    if (!gpsAccuracyCircle) {
+      gpsAccuracyCircle = L.circle(ll, {
+        radius: acc,
+        color: '#f97316',
+        weight: 1,
+        opacity: 0.35,
+        fillColor: '#f97316',
+        fillOpacity: 0.08
+      }).addTo(map);
+    } else {
+      gpsAccuracyCircle.setLatLng(ll);
+      gpsAccuracyCircle.setRadius(acc);
+    }
+    if (rideFollow && (snap.status === 'recording' || snap.status === 'paused')) {
+      map.panTo(ll, { animate: true, duration: 0.35 });
+    }
+  }
 }
 
 function toggleGpsFollow() {
-  gpsFollow = !gpsFollow;
-  updateGpsButton();
-  showToast(gpsFollow ? 'Map follows you' : 'Follow off');
+  rideFollow = !rideFollow;
+  updateRideUI();
+  showToast(rideFollow ? 'Map follows you' : 'Follow off');
 }
 
-function onGpsPosition(pos) {
-  if (!map) return;
-  var lat = pos.coords.latitude;
-  var lng = pos.coords.longitude;
-  var acc = pos.coords.accuracy || 30;
-  var ll = L.latLng(lat, lng);
-
-  if (!gpsMarker) {
-    gpsMarker = L.circleMarker(ll, {
-      radius: 8,
-      color: '#fff',
-      weight: 3,
-      fillColor: '#3b82f6',
-      fillOpacity: 1
-    }).addTo(map);
-    gpsMarker.bindTooltip('You', { direction: 'top' });
-  } else {
-    gpsMarker.setLatLng(ll);
-  }
-
-  if (!gpsAccuracyCircle) {
-    gpsAccuracyCircle = L.circle(ll, {
-      radius: acc,
-      color: '#3b82f6',
-      weight: 1,
-      opacity: 0.4,
-      fillColor: '#3b82f6',
-      fillOpacity: 0.1
-    }).addTo(map);
-  } else {
-    gpsAccuracyCircle.setLatLng(ll);
-    gpsAccuracyCircle.setRadius(acc);
-  }
-
-  // Record track (min ~5 m between points)
-  var pt = [lat, lng];
-  if (!gpsTrackPoints.length || haversineM(gpsTrackPoints[gpsTrackPoints.length - 1], pt) >= 5) {
-    gpsTrackPoints.push(pt);
-    if (gpsTrackLine) {
-      gpsTrackLine.addLatLng(ll);
-    } else if (gpsTrackPoints.length >= 2) {
-      gpsTrackLine = L.polyline(gpsTrackPoints, {
-        color: '#60a5fa',
-        weight: 4,
-        opacity: 0.85,
-        dashArray: '6 8'
-      }).addTo(map);
-    }
-  }
-
-  if (gpsFollow) {
-    map.panTo(ll, { animate: true, duration: 0.4 });
-  }
-  updateGpsButton();
-}
-
-function onGpsError(err) {
-  var msg = 'GPS error';
-  if (err && err.code === 1) msg = 'Location permission denied';
-  else if (err && err.code === 2) msg = 'Position unavailable';
-  else if (err && err.code === 3) msg = 'GPS timed out';
-  else if (err && err.message) msg = err.message;
-  showToast(msg, true);
-  stopGpsTracking();
-}
-
-function startGpsTracking() {
-  if (!navigator.geolocation) {
-    showToast('GPS not supported in this browser', true);
+async function rideStart() {
+  if (!window.RideTracker) {
+    showToast('Ride tracker not loaded', true);
     return;
   }
-  // Secure context required (https or localhost)
-  if (typeof window.isSecureContext === 'boolean' && !window.isSecureContext) {
-    showToast('GPS needs HTTPS (or localhost)', true);
-    return;
+  try {
+    var snap = await RideTracker.start();
+    startRideTimer();
+    updateRideUI(snap);
+    showToast(snap.status === 'recording' ? 'Ride started — ride safe' : 'Recording');
+  } catch (e) {
+    console.error(e);
+    showToast((e && e.message) || 'Could not start GPS', true);
   }
-  gpsTrackPoints = [];
-  if (gpsTrackLine) { map.removeLayer(gpsTrackLine); gpsTrackLine = null; }
-
-  gpsWatchId = navigator.geolocation.watchPosition(onGpsPosition, onGpsError, {
-    enableHighAccuracy: true,
-    maximumAge: 2000,
-    timeout: 15000
-  });
-  updateGpsButton();
-  showToast('GPS tracking on — ride safe');
 }
 
-function stopGpsTracking() {
-  if (gpsWatchId != null) {
-    navigator.geolocation.clearWatch(gpsWatchId);
-    gpsWatchId = null;
+async function ridePause() {
+  if (!window.RideTracker) return;
+  try {
+    var snap = await RideTracker.pause();
+    updateRideUI(snap);
+    showToast('Ride paused');
+  } catch (e) {
+    showToast((e && e.message) || 'Pause failed', true);
   }
-  updateGpsButton();
-  showToast('GPS tracking stopped');
 }
 
-function toggleGpsTracking() {
-  if (isGpsTracking()) stopGpsTracking();
-  else startGpsTracking();
+async function rideStop() {
+  if (!window.RideTracker) return;
+  try {
+    var snap = await RideTracker.stop();
+    stopRideTimer();
+    updateRideUI(snap);
+    showToast(snap.pointCount >= 2 ? 'Ride stopped — save or export below' : 'Ride stopped');
+  } catch (e) {
+    showToast((e && e.message) || 'Stop failed', true);
+  }
 }
 
-/** Turn recorded GPS track into start + checkpoints on the route builder */
-function useGpsTrackAsRoute() {
-  if (gpsTrackPoints.length < 2) {
-    showToast('Not enough GPS points yet', true);
+function startRideTimer() {
+  stopRideTimer();
+  rideTimerId = setInterval(function () {
+    updateRideUI();
+  }, 1000);
+}
+
+function stopRideTimer() {
+  if (rideTimerId) {
+    clearInterval(rideTimerId);
+    rideTimerId = null;
+  }
+}
+
+/** Turn recorded ride into route-builder checkpoints */
+function useRideAsRoute() {
+  if (!window.RideTracker) return;
+  var snap = RideTracker.getSnapshot();
+  if (!snap.points || snap.points.length < 2) {
+    showToast('Not enough points yet', true);
     return;
   }
   routePoints = [];
-  // Start
-  var first = gpsTrackPoints[0];
-  addRoutePoint({ lat: first[0], lng: first[1] }, { skipSnap: false });
-  // Sample checkpoints along the track (~every 200m or key points)
+  var first = snap.points[0];
+  addRoutePoint({ lat: first.lat, lng: first.lng }, { skipSnap: false });
   var acc = 0;
   var last = first;
-  for (var i = 1; i < gpsTrackPoints.length - 1; i++) {
-    acc += haversineM(last, gpsTrackPoints[i]);
-    last = gpsTrackPoints[i];
+  for (var i = 1; i < snap.points.length - 1; i++) {
+    var p = snap.points[i];
+    acc += haversineM([last.lat, last.lng], [p.lat, p.lng]);
+    last = p;
     if (acc >= 200) {
-      addRoutePoint({ lat: last[0], lng: last[1] }, { skipSnap: false });
+      addRoutePoint({ lat: p.lat, lng: p.lng }, { skipSnap: false });
       acc = 0;
     }
   }
-  var end = gpsTrackPoints[gpsTrackPoints.length - 1];
-  addRoutePoint({ lat: end[0], lng: end[1] }, { skipSnap: false });
+  var end = snap.points[snap.points.length - 1];
+  addRoutePoint({ lat: end.lat, lng: end.lng }, { skipSnap: false });
   if (gpsTrackLine) map.fitBounds(gpsTrackLine.getBounds(), { padding: [40, 40] });
-  showToast('GPS track applied to route — save if you want');
+  showToast('Track applied to route builder — name & save it');
 }
 
-function clearGpsTrack() {
-  gpsTrackPoints = [];
-  if (gpsTrackLine) { map.removeLayer(gpsTrackLine); gpsTrackLine = null; }
-  updateGpsButton();
+async function saveRecordedRide() {
+  if (!window.RideTracker) return;
+  var snap = RideTracker.getSnapshot();
+  if (!snap.points || snap.points.length < 2) {
+    showToast('Nothing to save', true);
+    return;
+  }
+  var user = null;
+  try { user = await getCurrentUser(); } catch (e) {}
+  if (!user) {
+    showToast('Log in on Members to save rides', true);
+    return;
+  }
+  var name = prompt('Name this ride', 'Ride ' + new Date().toLocaleDateString());
+  if (!name) return;
+  name = name.trim();
+  if (!name) return;
+
+  var geojson = RideTracker.toGeoJSON(name);
+  try {
+    var result = await window.sb.from('member_routes').insert({
+      user_id: user.id,
+      name: name,
+      description: 'Recorded ride · ' + (snap.elevGainM || 0) + ' m elev · ' + formatRideTime(snap.elapsedSec),
+      distance_km: Math.round(snap.distanceKm * 100) / 100,
+      geojson: geojson,
+      is_public: false
+    });
+    if (result.error) throw result.error;
+    showToast('Ride saved');
+    loadMyRoutes();
+  } catch (e) {
+    console.error(e);
+    showToast(e.message || 'Save failed — is member_routes set up?', true);
+  }
 }
 
+function downloadRideGPX() {
+  if (!window.RideTracker) return;
+  var gpx = RideTracker.toGPX('SB Racing Ride');
+  if (!gpx) {
+    showToast('No track to export', true);
+    return;
+  }
+  var blob = new Blob([gpx], { type: 'application/gpx+xml' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'sb-ride-' + new Date().toISOString().slice(0, 10) + '.gpx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  showToast('GPX downloaded');
+}
 
 function escapeHtmlTrail(s) {
   if (!s) return '';
@@ -780,4 +893,21 @@ function escapeHtmlTrail(s) {
 
 document.addEventListener('DOMContentLoaded', function () {
   initMap();
+
+  if (window.RideTracker) {
+    RideTracker.onUpdate(function (snap) {
+      updateRideUI(snap);
+    });
+    var recovered = RideTracker.initFromStorage();
+    updateRideUI();
+    if (recovered) {
+      var s = RideTracker.getSnapshot();
+      if (s.status === 'recording' || s.status === 'paused') {
+        startRideTimer();
+        showToast('Recovered in-progress ride (' + (s.pointCount || 0) + ' points)');
+      } else if (s.pointCount >= 2) {
+        showToast('Recovered last ride — save or export it');
+      }
+    }
+  }
 });

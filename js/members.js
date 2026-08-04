@@ -448,47 +448,144 @@ async function logNewRide() {
     showToast('Ride logged! Thanks for riding with SB Racing.');
 }
 
+/** Community Feed: activity the current user is involved in (posts, comments). */
 async function loadPosts() {
     const container = document.querySelector('#tab-3 .space-y-4');
-    if (!container) return;
+    if (!container || !window.sb) return;
 
-    const { data, error } = await sb
-        .from('posts')
-        .select('*, profiles(full_name)')
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-    if (error) {
-        console.warn('Posts load error (table may be empty):', error.message);
+    let user = null;
+    try {
+        const { data: { session } } = await window.sb.auth.getSession();
+        user = session && session.user;
+    } catch (e) {}
+    if (!user) {
+        container.innerHTML = '<p class="text-center text-zinc-500 py-8">Log in to see your activity.</p>';
         return;
     }
 
-    if (!data || data.length === 0) return;
+    container.innerHTML = '<div class="text-center text-zinc-500 py-8"><i class="fa-solid fa-spinner fa-spin"></i></div>';
 
-    container.innerHTML = data.map(post => {
-        const name = post.profiles?.full_name || 'Member';
-        const timeAgo = formatTimeAgo(post.created_at);
-        return `
-            <div class="bg-zinc-950 border border-zinc-700 rounded-2xl p-4">
-                <div class="flex gap-x-3">
-                    <div class="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 text-xs font-bold text-orange-500">
-                        ${name.charAt(0).toUpperCase()}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-baseline justify-between">
-                            <span class="font-semibold">${escapeHtml(name)}</span>
-                            <span class="text-xs text-zinc-500">${timeAgo}</span>
-                        </div>
-                        <div class="text-sm mt-0.5">${escapeHtml(post.body)}</div>
-                        <div class="flex gap-x-5 mt-3 text-xs">
-                            <button onclick="likePost(${post.id}, this)" class="flex items-center gap-x-1 text-zinc-400 hover:text-orange-400">
-                                <i class="fa-solid fa-heart"></i> <span class="like-count">${post.likes || 0}</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-    }).join('');
+    try {
+        const uid = user.id;
+        const items = [];
+
+        // Forum posts the user authored
+        const myPosts = await window.sb
+            .from('forum_posts')
+            .select('id, body, created_at, post_type')
+            .eq('user_id', uid)
+            .order('created_at', { ascending: false })
+            .limit(25);
+        (myPosts.data || []).forEach(function (p) {
+            items.push({
+                kind: 'forum_post',
+                id: p.id,
+                body: p.body || (p.post_type === 'poll' ? 'Posted a poll' : 'Posted in Trail Talk'),
+                created_at: p.created_at,
+                url: 'forum.html',
+                label: 'You posted in Trail Talk'
+            });
+        });
+
+        // Forum comments by the user
+        const myForumComments = await window.sb
+            .from('forum_comments')
+            .select('id, body, created_at, post_id')
+            .eq('user_id', uid)
+            .order('created_at', { ascending: false })
+            .limit(25);
+        (myForumComments.data || []).forEach(function (c) {
+            items.push({
+                kind: 'forum_comment',
+                id: c.id,
+                body: c.body,
+                created_at: c.created_at,
+                url: 'forum.html',
+                label: 'You commented in Trail Talk'
+            });
+        });
+
+        // Event comments by the user
+        const myEventComments = await window.sb
+            .from('event_comments')
+            .select('id, body, created_at, event_id')
+            .eq('user_id', uid)
+            .order('created_at', { ascending: false })
+            .limit(25);
+        (myEventComments.data || []).forEach(function (c) {
+            items.push({
+                kind: 'event_comment',
+                id: c.id,
+                body: c.body,
+                created_at: c.created_at,
+                url: 'events.html',
+                label: 'You commented on an event'
+            });
+        });
+
+        // Comments from others on the user's forum posts
+        const myPostIds = (myPosts.data || []).map(function (p) { return p.id; });
+        if (myPostIds.length) {
+            const replies = await window.sb
+                .from('forum_comments')
+                .select('id, body, created_at, post_id, user_id')
+                .in('post_id', myPostIds)
+                .neq('user_id', uid)
+                .order('created_at', { ascending: false })
+                .limit(25);
+            const replyUserIds = (replies.data || []).map(function (r) { return r.user_id; }).filter(Boolean);
+            let nameMap = {};
+            if (replyUserIds.length) {
+                const profiles = await window.sb.from('profiles').select('id, full_name').in('id', replyUserIds);
+                (profiles.data || []).forEach(function (pr) { nameMap[pr.id] = pr.full_name || 'Member'; });
+            }
+            (replies.data || []).forEach(function (r) {
+                const who = nameMap[r.user_id] || 'Someone';
+                items.push({
+                    kind: 'forum_reply',
+                    id: r.id,
+                    body: r.body,
+                    created_at: r.created_at,
+                    url: 'forum.html',
+                    label: who + ' replied to your post'
+                });
+            });
+        }
+
+        items.sort(function (a, b) {
+            return new Date(b.created_at) - new Date(a.created_at);
+        });
+
+        if (!items.length) {
+            container.innerHTML =
+                '<div class="text-center text-zinc-500 py-10">' +
+                '<p class="mb-2">No activity yet.</p>' +
+                '<p class="text-sm">Post or comment in <a href="forum.html" class="text-orange-400 hover:underline">Trail Talk</a> or on an <a href="events.html" class="text-orange-400 hover:underline">event</a>.</p>' +
+                '</div>';
+            return;
+        }
+
+        container.innerHTML = items.slice(0, 40).map(function (item) {
+            const timeAgo = formatTimeAgo(item.created_at);
+            const icon = item.kind === 'forum_post' ? 'fa-pen' :
+                (item.kind.indexOf('comment') >= 0 || item.kind === 'forum_reply' ? 'fa-comment' : 'fa-bolt');
+            return (
+                '<a href="' + item.url + '" class="block bg-zinc-950 border border-zinc-700 rounded-2xl p-4 hover:border-zinc-500 transition-colors">' +
+                '<div class="flex gap-x-3">' +
+                '<div class="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 text-orange-500">' +
+                '<i class="fa-solid ' + icon + ' text-sm"></i></div>' +
+                '<div class="flex-1 min-w-0">' +
+                '<div class="flex items-baseline justify-between gap-2">' +
+                '<span class="font-semibold text-sm">' + escapeHtml(item.label) + '</span>' +
+                '<span class="text-xs text-zinc-500 shrink-0">' + timeAgo + '</span></div>' +
+                '<div class="text-sm mt-0.5 text-zinc-300 line-clamp-3">' + escapeHtml(item.body || '') + '</div>' +
+                '</div></div></a>'
+            );
+        }).join('');
+    } catch (e) {
+        console.error('[members] community feed', e);
+        container.innerHTML = '<p class="text-center text-red-400 py-8">Could not load activity.</p>';
+    }
 }
 
 async function likePost(postId, element) {
