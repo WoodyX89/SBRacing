@@ -203,6 +203,18 @@
                                 Save profile
                             </button>
                         </form>
+
+                        <!-- Account deletion (App Store Guideline 5.1.1v) -->
+                        <div class="mt-12 pt-8 border-t border-zinc-800 max-w-lg">
+                            <div class="text-xs font-semibold tracking-widest text-red-500 uppercase mb-2">Danger zone</div>
+                            <p class="text-sm text-zinc-400 mb-4">
+                                Permanently delete your SB Racing account and all associated data (profile, rides, tokens). This cannot be undone.
+                            </p>
+                            <button type="button" id="delete-account-btn" onclick="openDeleteAccountModal()"
+                                    class="px-6 py-3 rounded-2xl border border-red-700/60 text-red-400 hover:bg-red-950/40 hover:border-red-600 font-semibold text-sm transition-colors">
+                                <i class="fa-solid fa-trash-can mr-2"></i>Delete account
+                            </button>
+                        </div>
                     </div>
 
                     <div id="tab-3" class="member-tab-content hidden">
@@ -249,24 +261,13 @@
     </section>
 
 
-<footer class="bg-black border-t border-zinc-800 py-12">
-    <div class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 text-xs text-zinc-400">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-y-4">
-            <div>
-                © 2026 SB Racing • Medicine Hat, Alberta<br>
-                <span class="text-zinc-600">Proudly riding the traditional lands of the Blackfoot Confederacy.</span>
-            </div>
-            <div class="flex gap-x-6">
-                <a href="#" class="hover:text-white">Instagram</a>
-                <a href="#" class="hover:text-white">Discord</a>
-                <a href="#" class="hover:text-white">Trail Reports</a>
-                <a href="#" class="hover:text-white">Contact</a>
-            </div>
-        </div>
-    </div>
-</footer>
+
 
 </div><!-- /.page-body -->
+
+<!-- Shared footer + cart + toast (edit partials/footer.html only) -->
+<div id="site-footer"></div>
+
 
 <!-- Public member profile modal -->
 <div id="member-profile-modal" onclick="if(event.target.id==='member-profile-modal')closeMemberProfile()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[80] items-center justify-center p-4">
@@ -281,22 +282,33 @@
   </div>
 </div>
 
-<div id="cart-drawer" onclick="if (event.target.id === 'cart-drawer') hideCart()" class="hidden fixed inset-0 bg-black/60 z-[90] flex justify-end">
-    <div onclick="event.stopImmediatePropagation()" class="w-full max-w-md bg-zinc-900 border-l border-zinc-700 h-full flex flex-col">
-        <div class="p-6 flex justify-between items-center border-b border-zinc-700">
-            <div class="font-bold text-xl">Your Cart</div>
-            <button onclick="hideCart()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
-        </div>
-        <div id="cart-items" class="flex-1 overflow-auto p-6 space-y-4 text-sm"></div>
-        <div class="p-6 border-t border-zinc-700 bg-zinc-950">
-            <div class="flex justify-between font-bold text-lg mb-5"><span>Total</span><span id="cart-total" class="font-mono">$0</span></div>
-            <button onclick="checkout()" class="w-full py-4 rounded-2xl bg-white text-zinc-900 font-bold tracking-wider active:scale-[0.985]">CHECKOUT</button>
-        </div>
+<!-- Delete account confirmation modal -->
+<div id="delete-account-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[90] items-center justify-center p-4" style="display: none;">
+  <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-6 shadow-2xl" onclick="event.stopPropagation()">
+    <div class="flex items-start gap-3 mb-4">
+      <div class="w-10 h-10 rounded-2xl bg-red-950/60 border border-red-800 flex items-center justify-center shrink-0">
+        <i class="fa-solid fa-triangle-exclamation text-red-400"></i>
+      </div>
+      <div>
+        <div class="font-bold text-lg text-white">Delete account?</div>
+        <p class="text-sm text-zinc-400 mt-1">This permanently removes your membership, ride history, and profile. You cannot undo this.</p>
+      </div>
     </div>
-</div>
-
-<div id="success-toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-8 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm font-medium z-[100]">
-    <i class="fa-solid fa-check-circle"></i><span id="toast-message"></span>
+    <label class="block text-xs font-medium text-zinc-400 mb-1.5">Type <span class="text-red-400 font-mono">DELETE</span> to confirm</label>
+    <input type="text" id="delete-account-confirm-input" autocomplete="off" placeholder="DELETE"
+           class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-red-600 mb-5">
+    <p id="delete-account-error" class="hidden text-sm text-red-400 mb-3"></p>
+    <div class="flex gap-3">
+      <button type="button" onclick="closeDeleteAccountModal()"
+              class="flex-1 py-3 rounded-2xl border border-zinc-700 hover:bg-zinc-800 font-semibold text-sm">
+        Cancel
+      </button>
+      <button type="button" id="delete-account-confirm-btn" onclick="confirmDeleteAccount()"
+              class="flex-1 py-3 rounded-2xl bg-red-600 hover:bg-red-700 font-semibold text-sm text-white disabled:opacity-40 disabled:pointer-events-none">
+        Delete forever
+      </button>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
@@ -305,6 +317,7 @@
 <script src="js/native-notifications.js"></script>
 <script src="js/push-notifications.js"></script>
 <script src="js/members.js"></script>
+<script src="js/account-deletion.js"></script>
 
 <script>
 if ('serviceWorker' in navigator) {

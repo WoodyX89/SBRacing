@@ -16,19 +16,19 @@
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" misplaced="YES" image="Splash" translatesAutoresizingMaskIntoConstraints="NO" id="splashImage">
-                                <rect key="frame" x="0.0" y="227" width="393" height="399"/>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" preservesSuperviewLayoutMargins="YES" layoutMarginsFollowReadableWidth="YES" image="Splash" translatesAutoresizingMaskIntoConstraints="NO" id="splashImage">
+                                <rect key="frame" x="-316" y="-86" width="1025" height="1024"/>
                                 <constraints>
-                                    <constraint firstAttribute="height" secondItem="splashImage" secondAttribute="width" id="c4"/>
+                                    <constraint firstAttribute="width" constant="1025" id="Fck-zz-ZTi"/>
+                                    <constraint firstAttribute="width" secondItem="splashImage" secondAttribute="height" multiplier="1025:1024" id="SXO-fE-anZ"/>
                                 </constraints>
                             </imageView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
                         <color key="backgroundColor" red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
-                            <constraint firstItem="splashImage" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="c1"/>
-                            <constraint firstItem="splashImage" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" id="c2"/>
-                            <constraint firstItem="splashImage" firstAttribute="width" secondItem="Ze5-6b-2t3" secondAttribute="width" multiplier="0.72" id="c3"/>
+                            <constraint firstItem="splashImage" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="3kz-QS-K9x"/>
+                            <constraint firstItem="splashImage" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" id="61a-Er-6aq"/>
                         </constraints>
                     </view>
                 </viewController>
@@ -38,6 +38,6 @@
         </scene>
     </scenes>
     <resources>
-        <image name="Splash" width="2000" height="2000"/>
+        <image name="Splash" width="1024" height="1024"/>
     </resources>
 </document>

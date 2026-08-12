@@ -79,6 +79,29 @@ async function loadSiteNav() {
     mount.innerHTML = '<nav id="navbar" class="fixed top-0 left-0 right-0 z-[100] bg-black p-4 text-white border-b border-zinc-800"><a href="index.html" class="font-bold">SB Racing</a></nav>';
 }
 
+// Load shared footer + cart drawer + toast from partials/footer.html (one file for every page)
+async function loadSiteFooter() {
+    const mount = document.getElementById('site-footer');
+    if (!mount) return;
+    const candidates = [
+        'partials/footer.html',
+        './partials/footer.html',
+        '/partials/footer.html'
+    ];
+    let lastErr = null;
+    for (const url of candidates) {
+        try {
+            const res = await fetch(url, { cache: 'no-cache' });
+            if (!res.ok) throw new Error('footer ' + res.status + ' ' + url);
+            mount.innerHTML = await res.text();
+            return;
+        } catch (e) {
+            lastErr = e;
+        }
+    }
+    console.error('[footer] failed to load partials/footer.html', lastErr);
+}
+
 // Shared navigation + cart + toast helpers for multi-page SB Racing site
 
 function toggleMobileMenu() {
@@ -665,6 +688,7 @@ function startNavShellWatch() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSiteNav();
+    await loadSiteFooter();
     startNavShellWatch();
     ensureTrailsNavLink();
     updateNavCartVisibility();
