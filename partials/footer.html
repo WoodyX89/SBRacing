@@ -8,9 +8,9 @@
             </div>
             <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
                 <a href="https://www.instagram.com/soggybottomracing/" target="_blank" rel="noopener noreferrer" class="hover:text-white">Instagram</a>
-                <a href="https://albertaparks.ca/parks/south/cypress-hills-pp/information-facilities/trails/" target="_blank" rel="noopener noreferrer" class="hover:text-white">Cypress Trail Reports</a>
+                <a href="https://albertaparks.ca/parks/south/cypress-hills-pp/information-facilities/trails/" target="_blank" rel="noopener noreferrer" class="hover:text-white">Trail Reports</a>
                 <a href="privacy.html" class="hover:text-white">Privacy</a>
-                <a href="mailto:trevorwood_@hotmail.com" class="hover:text-white">Contact</a>
+                <a href="mailto:info@sbracing.ca" class="hover:text-white">Contact</a>
             </div>
         </div>
     </div>
@@ -29,13 +29,66 @@
                 <span>Total</span>
                 <span id="cart-total" class="font-mono">$0</span>
             </div>
-            <button onclick="checkout()"
+            <button type="button" onclick="checkout()"
                     class="w-full py-4 rounded-2xl bg-white text-zinc-900 font-bold tracking-wider active:scale-[0.985]">
                 CHECKOUT
             </button>
-            <p class="text-center text-xs text-zinc-500 mt-3">or 4 interest-free payments of $X with Shop Pay</p>
+            <p class="text-center text-xs text-zinc-500 mt-3">Payment arranged after you place the order</p>
         </div>
     </div>
+</div>
+
+<!-- Checkout form (site-wide; Stripe later) -->
+<div id="checkout-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[95] items-center justify-center p-4" style="display:none;"
+     onclick="if(event.target.id==='checkout-modal')closeCheckoutModal()">
+  <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-start mb-5">
+      <div>
+        <div class="font-bold text-xl text-white">Checkout</div>
+        <p class="text-sm text-zinc-400 mt-1">Total <span id="checkout-total-display" class="font-mono text-orange-500">$0</span></p>
+      </div>
+      <button type="button" onclick="closeCheckoutModal()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+    </div>
+    <form id="checkout-form" onsubmit="submitCheckout(event)" class="space-y-3">
+      <div>
+        <label class="text-xs font-medium text-zinc-400">Full name *</label>
+        <input id="co-name" required class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm text-zinc-200 outline-none focus:border-orange-600" placeholder="Your name">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-zinc-400">Email *</label>
+        <input id="co-email" type="email" required class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm text-zinc-200 outline-none focus:border-orange-600" placeholder="you@email.com">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-zinc-400">Phone</label>
+        <input id="co-phone" type="tel" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm text-zinc-200 outline-none focus:border-orange-600" placeholder="403-555-1234">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-zinc-400">Shipping address</label>
+        <input id="co-address" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm text-zinc-200 outline-none focus:border-orange-600" placeholder="Street address">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-zinc-400">City</label>
+          <input id="co-city" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm text-zinc-200 outline-none focus:border-orange-600" placeholder="Medicine Hat">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-zinc-400">Province</label>
+          <input id="co-province" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm text-zinc-200 outline-none focus:border-orange-600" value="AB">
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-zinc-400">Postal code</label>
+        <input id="co-postal" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm text-zinc-200 outline-none focus:border-orange-600" placeholder="T1A 0A0">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-zinc-400">Notes</label>
+        <textarea id="co-notes" rows="2" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm text-zinc-200 outline-none focus:border-orange-600" placeholder="Pickup preference, size notes…"></textarea>
+      </div>
+      <p id="checkout-error" class="hidden text-sm text-red-400"></p>
+      <p class="text-[11px] text-zinc-500">Order is saved as pending. We'll contact you for e-transfer or Stripe.</p>
+      <button type="submit" id="checkout-submit-btn" class="w-full py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-sm text-white">Place order</button>
+    </form>
+  </div>
 </div>
 
 <!-- Success Toast -->
