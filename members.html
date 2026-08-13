@@ -89,6 +89,9 @@
                         <button onclick="switchMemberTab(3)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="3">Community Feed</button>
                         <button onclick="switchMemberTab(4)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="4">Profile</button>
                         <button onclick="switchMemberTab(5)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="5">Members</button>
+                        <button id="admin-tab-btn" onclick="switchMemberTab(6)" class="member-tab hidden shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="6">
+                            <i class="fa-solid fa-shield-halved mr-1.5 text-orange-500"></i>Admin
+                        </button>
                     </div>
                 </div>
 
@@ -160,6 +163,50 @@
                         </div>
                         <div id="member-directory" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             <div class="col-span-full text-center text-zinc-500 py-8"><i class="fa-solid fa-spinner fa-spin"></i></div>
+                        </div>
+                    </div>
+
+                    <!-- Admin tab (visible only to is_admin) -->
+                    <div id="tab-6" class="member-tab-content hidden">
+                        <div class="flex items-center gap-x-2 mb-5">
+                            <i class="fa-solid fa-bullhorn text-orange-500"></i>
+                            <div>
+                                <div class="font-semibold">Send Push Notification</div>
+                                <p class="text-xs text-zinc-500 mt-0.5">Broadcast a custom message to member devices</p>
+                            </div>
+                        </div>
+                        <div class="max-w-lg space-y-4">
+                            <div>
+                                <label class="text-xs font-medium tracking-widest text-zinc-400">TITLE</label>
+                                <input type="text" id="admin-push-title" maxlength="80" value="Update"
+                                       placeholder="Notification title"
+                                       class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+                            </div>
+                            <div>
+                                <label class="text-xs font-medium tracking-widest text-zinc-400">MESSAGE</label>
+                                <textarea id="admin-push-body" rows="3" maxlength="200" placeholder="What do you want everyone to know?"
+                                          class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600 resize-none"></textarea>
+                                <p class="text-[11px] text-zinc-500 mt-1"><span id="admin-push-body-count">0</span>/200</p>
+                            </div>
+                            <div>
+                                <label class="text-xs font-medium tracking-widest text-zinc-400">AUDIENCE</label>
+                                <select id="admin-push-audience"
+                                        class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+                                    <option value="all">Everyone with the app</option>
+                                    <option value="leaders">Leaders + Admins</option>
+                                    <option value="admins">Admins only</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-medium tracking-widest text-zinc-400">OPEN URL (optional)</label>
+                                <input type="text" id="admin-push-url" value="events.html" placeholder="events.html"
+                                       class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+                            </div>
+                            <button type="button" id="admin-push-send-btn" onclick="sendAdminPush()"
+                                    class="w-full py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 active:bg-orange-800 font-semibold text-sm tracking-wider transition-all disabled:opacity-50 disabled:pointer-events-none">
+                                <i class="fa-solid fa-paper-plane mr-2"></i>SEND PUSH
+                            </button>
+                            <p id="admin-push-status" class="text-sm text-zinc-400 hidden"></p>
                         </div>
                     </div>
 

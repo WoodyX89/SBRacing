@@ -4033,35 +4033,6 @@
                 "type": "LineString",
                 "coordinates": [
                     [
-                        -110.688346,
-                        50.024102
-                    ],
-                    [
-                        -110.688245,
-                        50.024171
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "Ajax Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 413194623,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.688346,
-                50.024102,
-                -110.688245,
-                50.024171
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
                         -110.800271,
                         50.053263
                     ],
@@ -12958,71 +12929,6 @@
                 50.046234,
                 -110.775374,
                 50.047757
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.718126,
-                        50.042051
-                    ],
-                    [
-                        -110.718061,
-                        50.041981
-                    ],
-                    [
-                        -110.717895,
-                        50.041828
-                    ],
-                    [
-                        -110.717692,
-                        50.041695
-                    ],
-                    [
-                        -110.717342,
-                        50.041374
-                    ],
-                    [
-                        -110.716937,
-                        50.040906
-                    ],
-                    [
-                        -110.716476,
-                        50.040352
-                    ],
-                    [
-                        -110.716397,
-                        50.040221
-                    ],
-                    [
-                        -110.716362,
-                        50.040071
-                    ],
-                    [
-                        -110.71632,
-                        50.039771
-                    ],
-                    [
-                        -110.716335,
-                        50.039647
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "Harlow Berm Trails",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 741157178,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.718126,
-                50.039647,
-                -110.71632,
-                50.042051
             ]
         },
         {
@@ -36463,72 +36369,6 @@
                 "type": "LineString",
                 "coordinates": [
                     [
-                        -110.687325,
-                        50.059582
-                    ],
-                    [
-                        -110.687301,
-                        50.059606
-                    ],
-                    [
-                        -110.687265,
-                        50.059638
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "Brier Run Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1331104448,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.687325,
-                50.059582,
-                -110.687265,
-                50.059638
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.687211,
-                        50.059649
-                    ],
-                    [
-                        -110.687265,
-                        50.059652
-                    ],
-                    [
-                        -110.687265,
-                        50.059638
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "Brier Run Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1331104449,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.687265,
-                50.059638,
-                -110.687211,
-                50.059652
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
                         -110.72068,
                         50.040576
                     ],
@@ -36727,72 +36567,6 @@
                 50.035909,
                 -110.724787,
                 50.035947
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.637744,
-                        50.014836
-                    ],
-                    [
-                        -110.637769,
-                        50.014838
-                    ],
-                    [
-                        -110.637786,
-                        50.01484
-                    ],
-                    [
-                        -110.637907,
-                        50.014855
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "Southview Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1331540716,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.637907,
-                50.014836,
-                -110.637744,
-                50.014855
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.637403,
-                        50.019165
-                    ],
-                    [
-                        -110.63745,
-                        50.019143
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "Ross Creek Coulee Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1331540732,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.63745,
-                50.019143,
-                -110.637403,
-                50.019165
             ]
         },
         {
@@ -48690,399 +48464,6 @@
                 "type": "LineString",
                 "coordinates": [
                     [
-                        -110.687664,
-                        50.000848
-                    ],
-                    [
-                        -110.687559,
-                        50.000801
-                    ],
-                    [
-                        -110.687455,
-                        50.000748
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "Sierra Boulevard Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1332506185,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.687664,
-                50.000748,
-                -110.687455,
-                50.000848
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.625218,
-                        50.001325
-                    ],
-                    [
-                        -110.625344,
-                        50.001304
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "Ross Glen Town Center Loop",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1332742919,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.625344,
-                50.001304,
-                -110.625218,
-                50.001325
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.709724,
-                        49.989868
-                    ],
-                    [
-                        -110.709779,
-                        49.989857
-                    ],
-                    [
-                        -110.709859,
-                        49.989845
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "Rotary Centennial Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1459201358,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.709859,
-                49.989845,
-                -110.709724,
-                49.989868
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.72137,
-                        49.989716
-                    ],
-                    [
-                        -110.721368,
-                        49.989679
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "Rotary Centennial Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1459201359,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.72137,
-                49.989679,
-                -110.721368,
-                49.989716
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.670782,
-                        49.989863
-                    ],
-                    [
-                        -110.670736,
-                        49.989896
-                    ],
-                    [
-                        -110.670704,
-                        49.989923
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "South Boundary Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1459201373,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.670782,
-                49.989863,
-                -110.670704,
-                49.989923
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.670855,
-                        49.989863
-                    ],
-                    [
-                        -110.670782,
-                        49.989863
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "South Boundary Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1459201374,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.670855,
-                49.989863,
-                -110.670782,
-                49.989863
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.671066,
-                        49.989863
-                    ],
-                    [
-                        -110.671026,
-                        49.989863
-                    ],
-                    [
-                        -110.670915,
-                        49.989863
-                    ],
-                    [
-                        -110.670855,
-                        49.989863
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "South Boundary Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1459201375,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.671066,
-                49.989863,
-                -110.670855,
-                49.989863
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.671158,
-                        49.98988
-                    ],
-                    [
-                        -110.671131,
-                        49.989863
-                    ],
-                    [
-                        -110.671066,
-                        49.989863
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "South Boundary Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1459201376,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.671158,
-                49.989863,
-                -110.671066,
-                49.98988
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.686805,
-                        49.991756
-                    ],
-                    [
-                        -110.686777,
-                        49.991735
-                    ],
-                    [
-                        -110.686762,
-                        49.991724
-                    ],
-                    [
-                        -110.686725,
-                        49.991701
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "South Ridge Drive Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1459201386,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.686805,
-                49.991701,
-                -110.686725,
-                49.991756
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.686817,
-                        49.991808
-                    ],
-                    [
-                        -110.686816,
-                        49.991778
-                    ],
-                    [
-                        -110.686816,
-                        49.991763
-                    ],
-                    [
-                        -110.686805,
-                        49.991756
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "South Ridge Drive Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1459201387,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.686817,
-                49.991756,
-                -110.686805,
-                49.991808
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.686823,
-                        49.992003
-                    ],
-                    [
-                        -110.686822,
-                        49.991947
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "South Ridge Drive Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1459201389,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.686823,
-                49.991947,
-                -110.686822,
-                49.992003
-            ]
-        },
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
-                        -110.687033,
-                        49.997073
-                    ],
-                    [
-                        -110.687094,
-                        49.997079
-                    ]
-                ]
-            },
-            "properties": {
-                "name": "South Ridge PUL Trail",
-                "difficulty": "intermediate",
-                "area": "Medicine Hat",
-                "osm_id": 1459201391,
-                "highway": "cycleway"
-            },
-            "bbox": [
-                -110.687094,
-                49.997073,
-                -110.687033,
-                49.997079
-            ]
-        },
-        {
-            "type": "Feature",
-            "properties": {
-                "name": "Lump Gravy",
-                "difficulty": "easy",
-                "stroke": "#009e0b"
-            },
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [
-                    [
                         -110.78132,
                         50.055781
                     ],
@@ -49156,6 +48537,11 @@
                     ]
                 ]
             },
+            "properties": {
+                "name": "Lump Gravy",
+                "difficulty": "easy",
+                "stroke": "#009e0b"
+            },
             "bbox": [
                 -110.782922,
                 50.055558,
@@ -49165,11 +48551,6 @@
         },
         {
             "type": "Feature",
-            "properties": {
-                "name": "River Vally Trail",
-                "difficulty": "easy",
-                "stroke": "#009e0b"
-            },
             "geometry": {
                 "type": "LineString",
                 "coordinates": [
@@ -49335,6 +48716,11 @@
                     ]
                 ]
             },
+            "properties": {
+                "name": "River Vally Trail",
+                "difficulty": "easy",
+                "stroke": "#009e0b"
+            },
             "bbox": [
                 -110.793704,
                 50.060464,
@@ -49344,11 +48730,6 @@
         },
         {
             "type": "Feature",
-            "properties": {
-                "name": "River Valley Trail",
-                "difficulty": "easy",
-                "stroke": "#009e0b"
-            },
             "geometry": {
                 "type": "LineString",
                 "coordinates": [
@@ -49382,6 +48763,11 @@
                     ]
                 ]
             },
+            "properties": {
+                "name": "River Valley Trail",
+                "difficulty": "easy",
+                "stroke": "#009e0b"
+            },
             "bbox": [
                 -110.795003,
                 50.060923,
@@ -49391,11 +48777,6 @@
         },
         {
             "type": "Feature",
-            "properties": {
-                "name": "River Valley Trail",
-                "difficulty": "easy",
-                "stroke": "#009e0b"
-            },
             "geometry": {
                 "type": "LineString",
                 "coordinates": [
@@ -49525,6 +48906,11 @@
                     ]
                 ]
             },
+            "properties": {
+                "name": "River Valley Trail",
+                "difficulty": "easy",
+                "stroke": "#009e0b"
+            },
             "bbox": [
                 -110.798207,
                 50.061354,
@@ -49534,11 +48920,6 @@
         },
         {
             "type": "Feature",
-            "properties": {
-                "name": "Tombstone",
-                "difficulty": "easy",
-                "stroke": "#009e0b"
-            },
             "geometry": {
                 "type": "LineString",
                 "coordinates": [
@@ -50168,6 +49549,11 @@
                     ]
                 ]
             },
+            "properties": {
+                "name": "Tombstone",
+                "difficulty": "easy",
+                "stroke": "#009e0b"
+            },
             "bbox": [
                 -110.801209,
                 50.062863,
@@ -50177,11 +49563,6 @@
         },
         {
             "type": "Feature",
-            "properties": {
-                "name": "Powder Monkey",
-                "stroke": "#009e0b",
-                "difficulty": "easy"
-            },
             "geometry": {
                 "type": "LineString",
                 "coordinates": [
@@ -50199,6 +49580,11 @@
                     ]
                 ]
             },
+            "properties": {
+                "name": "Powder Monkey",
+                "stroke": "#009e0b",
+                "difficulty": "easy"
+            },
             "bbox": [
                 -110.78475,
                 50.050108,
@@ -50208,11 +49594,6 @@
         },
         {
             "type": "Feature",
-            "properties": {
-                "name": "Coal Burner",
-                "difficulty": "easy",
-                "area": "Echodale"
-            },
             "geometry": {
                 "type": "LineString",
                 "coordinates": [
@@ -50262,11 +49643,444 @@
                     ]
                 ]
             },
+            "properties": {
+                "name": "Coal Burner",
+                "difficulty": "easy",
+                "area": "Echodale"
+            },
             "bbox": [
                 -110.782121,
                 50.047487,
                 -110.780213,
                 50.04839
+            ]
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "@circle": {
+                    "type": "Mercator",
+                    "center": [
+                        -110.2789619,
+                        49.6620593
+                    ]
+                },
+                "name": "Soggy Bottom Clubhouse",
+                "fill-opacity": 0.3,
+                "difficulty": "SB "
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            -110.278861,
+                            49.662059
+                        ],
+                        [
+                            -110.278861,
+                            49.662063
+                        ],
+                        [
+                            -110.278862,
+                            49.662068
+                        ],
+                        [
+                            -110.278863,
+                            49.662072
+                        ],
+                        [
+                            -110.278864,
+                            49.662076
+                        ],
+                        [
+                            -110.278866,
+                            49.66208
+                        ],
+                        [
+                            -110.278868,
+                            49.662083
+                        ],
+                        [
+                            -110.27887,
+                            49.662087
+                        ],
+                        [
+                            -110.278873,
+                            49.662091
+                        ],
+                        [
+                            -110.278877,
+                            49.662094
+                        ],
+                        [
+                            -110.27888,
+                            49.662098
+                        ],
+                        [
+                            -110.278884,
+                            49.662101
+                        ],
+                        [
+                            -110.278888,
+                            49.662104
+                        ],
+                        [
+                            -110.278893,
+                            49.662107
+                        ],
+                        [
+                            -110.278897,
+                            49.66211
+                        ],
+                        [
+                            -110.278902,
+                            49.662112
+                        ],
+                        [
+                            -110.278908,
+                            49.662115
+                        ],
+                        [
+                            -110.278913,
+                            49.662117
+                        ],
+                        [
+                            -110.278919,
+                            49.662119
+                        ],
+                        [
+                            -110.278925,
+                            49.66212
+                        ],
+                        [
+                            -110.278931,
+                            49.662122
+                        ],
+                        [
+                            -110.278937,
+                            49.662123
+                        ],
+                        [
+                            -110.278943,
+                            49.662124
+                        ],
+                        [
+                            -110.278949,
+                            49.662124
+                        ],
+                        [
+                            -110.278956,
+                            49.662125
+                        ],
+                        [
+                            -110.278962,
+                            49.662125
+                        ],
+                        [
+                            -110.278968,
+                            49.662125
+                        ],
+                        [
+                            -110.278975,
+                            49.662124
+                        ],
+                        [
+                            -110.278981,
+                            49.662124
+                        ],
+                        [
+                            -110.278987,
+                            49.662123
+                        ],
+                        [
+                            -110.278993,
+                            49.662122
+                        ],
+                        [
+                            -110.278999,
+                            49.66212
+                        ],
+                        [
+                            -110.279005,
+                            49.662119
+                        ],
+                        [
+                            -110.279011,
+                            49.662117
+                        ],
+                        [
+                            -110.279016,
+                            49.662115
+                        ],
+                        [
+                            -110.279021,
+                            49.662112
+                        ],
+                        [
+                            -110.279026,
+                            49.66211
+                        ],
+                        [
+                            -110.279031,
+                            49.662107
+                        ],
+                        [
+                            -110.279036,
+                            49.662104
+                        ],
+                        [
+                            -110.27904,
+                            49.662101
+                        ],
+                        [
+                            -110.279044,
+                            49.662098
+                        ],
+                        [
+                            -110.279047,
+                            49.662094
+                        ],
+                        [
+                            -110.27905,
+                            49.662091
+                        ],
+                        [
+                            -110.279053,
+                            49.662087
+                        ],
+                        [
+                            -110.279056,
+                            49.662083
+                        ],
+                        [
+                            -110.279058,
+                            49.66208
+                        ],
+                        [
+                            -110.27906,
+                            49.662076
+                        ],
+                        [
+                            -110.279061,
+                            49.662072
+                        ],
+                        [
+                            -110.279062,
+                            49.662068
+                        ],
+                        [
+                            -110.279063,
+                            49.662063
+                        ],
+                        [
+                            -110.279063,
+                            49.662059
+                        ],
+                        [
+                            -110.279063,
+                            49.662055
+                        ],
+                        [
+                            -110.279062,
+                            49.662051
+                        ],
+                        [
+                            -110.279061,
+                            49.662047
+                        ],
+                        [
+                            -110.27906,
+                            49.662043
+                        ],
+                        [
+                            -110.279058,
+                            49.662039
+                        ],
+                        [
+                            -110.279056,
+                            49.662035
+                        ],
+                        [
+                            -110.279053,
+                            49.662031
+                        ],
+                        [
+                            -110.27905,
+                            49.662028
+                        ],
+                        [
+                            -110.279047,
+                            49.662024
+                        ],
+                        [
+                            -110.279044,
+                            49.662021
+                        ],
+                        [
+                            -110.27904,
+                            49.662018
+                        ],
+                        [
+                            -110.279036,
+                            49.662015
+                        ],
+                        [
+                            -110.279031,
+                            49.662012
+                        ],
+                        [
+                            -110.279026,
+                            49.662009
+                        ],
+                        [
+                            -110.279021,
+                            49.662006
+                        ],
+                        [
+                            -110.279016,
+                            49.662004
+                        ],
+                        [
+                            -110.279011,
+                            49.662002
+                        ],
+                        [
+                            -110.279005,
+                            49.662
+                        ],
+                        [
+                            -110.278999,
+                            49.661998
+                        ],
+                        [
+                            -110.278993,
+                            49.661997
+                        ],
+                        [
+                            -110.278987,
+                            49.661996
+                        ],
+                        [
+                            -110.278981,
+                            49.661995
+                        ],
+                        [
+                            -110.278975,
+                            49.661994
+                        ],
+                        [
+                            -110.278968,
+                            49.661994
+                        ],
+                        [
+                            -110.278962,
+                            49.661994
+                        ],
+                        [
+                            -110.278956,
+                            49.661994
+                        ],
+                        [
+                            -110.278949,
+                            49.661994
+                        ],
+                        [
+                            -110.278943,
+                            49.661995
+                        ],
+                        [
+                            -110.278937,
+                            49.661996
+                        ],
+                        [
+                            -110.278931,
+                            49.661997
+                        ],
+                        [
+                            -110.278925,
+                            49.661998
+                        ],
+                        [
+                            -110.278919,
+                            49.662
+                        ],
+                        [
+                            -110.278913,
+                            49.662002
+                        ],
+                        [
+                            -110.278908,
+                            49.662004
+                        ],
+                        [
+                            -110.278902,
+                            49.662006
+                        ],
+                        [
+                            -110.278897,
+                            49.662009
+                        ],
+                        [
+                            -110.278893,
+                            49.662012
+                        ],
+                        [
+                            -110.278888,
+                            49.662015
+                        ],
+                        [
+                            -110.278884,
+                            49.662018
+                        ],
+                        [
+                            -110.27888,
+                            49.662021
+                        ],
+                        [
+                            -110.278877,
+                            49.662024
+                        ],
+                        [
+                            -110.278873,
+                            49.662028
+                        ],
+                        [
+                            -110.27887,
+                            49.662031
+                        ],
+                        [
+                            -110.278868,
+                            49.662035
+                        ],
+                        [
+                            -110.278866,
+                            49.662039
+                        ],
+                        [
+                            -110.278864,
+                            49.662043
+                        ],
+                        [
+                            -110.278863,
+                            49.662047
+                        ],
+                        [
+                            -110.278862,
+                            49.662051
+                        ],
+                        [
+                            -110.278861,
+                            49.662059
+                        ]
+                    ]
+                ]
+            },
+            "bbox": [
+                -110.279063,
+                49.661994,
+                -110.278861,
+                49.662125
             ]
         }
     ]

@@ -92,8 +92,41 @@ function productGroupKey(p) {
   return (p.name || '').trim().toLowerCase() || ('id-' + p.id);
 }
 
+/** Units of this product (id) currently in the local cart */
+function cartQtyForProductId(productId) {
+  if (productId == null || typeof cart === 'undefined' || !cart || !cart.length) return 0;
+  var n = 0;
+  for (var i = 0; i < cart.length; i++) {
+    if (String(cart[i].productId) === String(productId)) n += Number(cart[i].qty) || 0;
+  }
+  return n;
+}
+
+/** Stock remaining after subtracting items already in the cart */
+function availableStock(p) {
+  if (!p) return 0;
+  return Math.max(0, (Number(p.stock_qty) || 0) - cartQtyForProductId(p.id));
+}
+
 function isOutOfStock(p) {
-  return (Number(p.stock_qty) || 0) <= 0;
+  return availableStock(p) <= 0;
+}
+
+/** Refresh product cards / detail after cart changes */
+function refreshMerchStockUi() {
+  try {
+    if (typeof renderProducts === 'function' && document.getElementById('products-grid')) {
+      renderProducts();
+    }
+  } catch (e) {}
+  try {
+    if (_detailGroupKey && typeof renderProductDetail === 'function') {
+      var variants = (allProducts || []).filter(function (p) {
+        return p.is_active !== false && productGroupKey(p) === _detailGroupKey;
+      });
+      if (variants.length) renderProductDetail(variants, _detailSelectedId);
+    }
+  } catch (e2) {}
 }
 
 function groupIsSoldOut(variants) {
@@ -367,7 +400,7 @@ function renderProductDetail(variants, selectedId) {
   if (stockEl) {
     var stockMsg = soldOut
       ? 'Sold out'
-      : ((Number(selected.stock_qty) || 0) + ' in stock' + (sizeLabel ? ' · ' + sizeLabel : '') + (selected.color ? ' · ' + selected.color : ''));
+      : (availableStock(selected) + ' in stock' + (sizeLabel ? ' · ' + sizeLabel : '') + (selected.color ? ' · ' + selected.color : ''));
     stockEl.textContent = stockMsg;
     stockEl.className = 'text-xs ' + (soldOut ? 'text-red-400' : 'text-emerald-400');
   }
@@ -443,7 +476,7 @@ function renderProductDetail(variants, selectedId) {
         var row = bySize[sk];
         var oos = isOutOfStock(row);
         var active = Number(row.id) === Number(selected.id);
-        var qty = Number(row.stock_qty) || 0;
+        var qty = availableStock(row);
         return (
           '<button type="button" onclick="selectDetailSizeById(' + row.id + ')" ' +
           'class="detail-size-btn px-4 py-2 rounded-xl border text-sm transition-colors ' +

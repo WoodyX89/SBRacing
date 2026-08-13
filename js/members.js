@@ -78,6 +78,16 @@ async function showDashboard(user) {
 
     fillProfileForm(profile, user);
 
+    // Admin tab — only for is_admin
+    var adminBtn = document.getElementById('admin-tab-btn');
+    if (adminBtn) {
+        if (profile && profile.is_admin) {
+            adminBtn.classList.remove('hidden');
+        } else {
+            adminBtn.classList.add('hidden');
+        }
+    }
+
     // Load rides
     await loadRides(user.id);
 
@@ -630,6 +640,101 @@ function formatTimeAgo(iso) {
     return d.toLocaleDateString();
 }
 
+
+
+/** Admin-only: send custom remote push via notify-event edge function */
+async function sendAdminPush() {
+    var titleEl = document.getElementById('admin-push-title');
+    var bodyEl = document.getElementById('admin-push-body');
+    var audienceEl = document.getElementById('admin-push-audience');
+    var urlEl = document.getElementById('admin-push-url');
+    var btn = document.getElementById('admin-push-send-btn');
+    var statusEl = document.getElementById('admin-push-status');
+
+    var title = (titleEl && titleEl.value || 'Update').trim().slice(0, 80);
+    var body = (bodyEl && bodyEl.value || '').trim().slice(0, 200);
+    var audience = (audienceEl && audienceEl.value) || 'all';
+    var url = (urlEl && urlEl.value || 'events.html').trim() || 'events.html';
+
+    if (!body) {
+        if (typeof showToast === 'function') showToast('Enter a message', true);
+        if (bodyEl) bodyEl.focus();
+        return;
+    }
+
+    // Confirm before broadcasting
+    var audienceLabel = audience === 'all' ? 'everyone' : (audience === 'leaders' ? 'leaders & admins' : 'admins only');
+    if (!confirm('Send this push to ' + audienceLabel + '?\n\n"' + title + '"\n' + body)) return;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>SENDING…';
+    }
+    if (statusEl) {
+        statusEl.classList.remove('hidden');
+        statusEl.className = 'text-sm text-zinc-400';
+        statusEl.textContent = 'Sending…';
+    }
+
+    try {
+        if (!window.sb) throw new Error('Supabase not ready');
+
+        // Prefer existing broadcastPush helper if available
+        if (typeof broadcastPush === 'function') {
+            await broadcastPush({
+                title: title,
+                body: body,
+                url: url,
+                type: 'admin',
+                audience: audience
+            });
+        } else {
+            var res = await window.sb.functions.invoke('notify-event', {
+                body: {
+                    title: title,
+                    body: body,
+                    audience: audience,
+                    data: { url: url, type: 'admin', audience: audience }
+                }
+            });
+            if (res.error) throw res.error;
+            console.log('[admin push]', res.data);
+        }
+
+        if (typeof showToast === 'function') showToast('Push sent');
+        if (statusEl) {
+            statusEl.className = 'text-sm text-emerald-400';
+            statusEl.textContent = 'Push sent to ' + audienceLabel + '.';
+        }
+        if (bodyEl) bodyEl.value = '';
+        var countEl = document.getElementById('admin-push-body-count');
+        if (countEl) countEl.textContent = '0';
+    } catch (e) {
+        console.warn('[admin push]', e);
+        var msg = (e && (e.message || e.error_description)) || String(e);
+        if (typeof showToast === 'function') showToast(msg || 'Push failed', true);
+        if (statusEl) {
+            statusEl.className = 'text-sm text-red-400';
+            statusEl.textContent = 'Failed: ' + msg;
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-paper-plane mr-2"></i>SEND PUSH';
+        }
+    }
+}
+
+// Live character count for admin push body
+document.addEventListener('DOMContentLoaded', function () {
+    var bodyEl = document.getElementById('admin-push-body');
+    var countEl = document.getElementById('admin-push-body-count');
+    if (bodyEl && countEl) {
+        bodyEl.addEventListener('input', function () {
+            countEl.textContent = String((bodyEl.value || '').length);
+        });
+    }
+});
 
 function bootMembers() {
   if (!window.sb) {

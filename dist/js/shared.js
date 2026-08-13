@@ -364,6 +364,23 @@ function addToCart(name, price, opts) {
   var size = (opts.size || '').trim();
   var qty = Math.max(1, Number(opts.qty) || 1);
 
+  // Cap by remaining stock (DB stock minus what's already in cart)
+  if (productId != null && typeof allProducts !== 'undefined' && allProducts && allProducts.length) {
+    var prod = allProducts.find(function (p) { return String(p.id) === String(productId); });
+    if (prod) {
+      var already = 0;
+      for (var i = 0; i < cart.length; i++) {
+        if (String(cart[i].productId) === String(productId)) already += Number(cart[i].qty) || 0;
+      }
+      var left = Math.max(0, (Number(prod.stock_qty) || 0) - already);
+      if (left <= 0) {
+        showToast('Sold out', true);
+        return;
+      }
+      if (qty > left) qty = left;
+    }
+  }
+
   var existing = cart.findIndex(function (item) {
     if (productId != null && item.productId != null) {
       return String(item.productId) === String(productId) && (item.size || '') === size;
@@ -386,6 +403,10 @@ function addToCart(name, price, opts) {
   haptic('medium');
   var label = size ? name + ' (' + size + ')' : name;
   showToast(label + ' added to cart');
+  // Update remaining stock numbers on merch page
+  if (typeof refreshMerchStockUi === 'function') {
+    try { refreshMerchStockUi(); } catch (e) {}
+  }
 }
 
 function showCart() {
@@ -511,11 +532,38 @@ function showCart() {
 
 function changeCartQty(index, delta) {
   if (!cart[index]) return;
-  cart[index].qty = Math.max(1, (cart[index].qty || 1) + delta);
-  if (cart[index].qty <= 0) cart.splice(index, 1);
+  var item = cart[index];
+  var next = (item.qty || 1) + delta;
+  if (next <= 0) {
+    cart.splice(index, 1);
+  } else {
+    // Cap increase by remaining stock
+    if (delta > 0 && item.productId != null && typeof allProducts !== 'undefined' && allProducts) {
+      var prod = allProducts.find(function (p) { return String(p.id) === String(item.productId); });
+      if (prod) {
+        var others = 0;
+        for (var i = 0; i < cart.length; i++) {
+          if (i !== index && String(cart[i].productId) === String(item.productId)) {
+            others += Number(cart[i].qty) || 0;
+          }
+        }
+        var max = Math.max(0, (Number(prod.stock_qty) || 0) - others);
+        if (next > max) {
+          next = max;
+          if (next <= (item.qty || 1)) {
+            showToast('No more in stock', true);
+          }
+        }
+      }
+    }
+    item.qty = next;
+  }
   saveCart();
   hapticSelection();
   showCart();
+  if (typeof refreshMerchStockUi === 'function') {
+    try { refreshMerchStockUi(); } catch (e) {}
+  }
 }
 
 function removeFromCart(index) {
@@ -523,6 +571,9 @@ function removeFromCart(index) {
   saveCart();
   haptic('warning');
   showCart();
+  if (typeof refreshMerchStockUi === 'function') {
+    try { refreshMerchStockUi(); } catch (e) {}
+  }
 }
 
 function hideCart() {
@@ -667,10 +718,34 @@ async function submitCheckout(e) {
     var result = await window.sb.from('orders').insert(payload);
     if (result.error) throw new Error(result.error.message);
 
+    // Decrement product stock for ordered items
+    try {
+      for (var oi = 0; oi < items.length; oi++) {
+        var it = items[oi];
+        if (it.productId == null) continue;
+        var q = Number(it.qty) || 1;
+        // Read current then update (best-effort; concurrent orders may race)
+        var cur = await window.sb.from('products').select('stock_qty').eq('id', it.productId).maybeSingle();
+        if (cur.data) {
+          var left = Math.max(0, (Number(cur.data.stock_qty) || 0) - q);
+          await window.sb.from('products').update({ stock_qty: left }).eq('id', it.productId);
+          if (typeof allProducts !== 'undefined' && allProducts) {
+            var lp = allProducts.find(function (p) { return String(p.id) === String(it.productId); });
+            if (lp) lp.stock_qty = left;
+          }
+        }
+      }
+    } catch (stockErr) {
+      console.warn('[checkout] stock decrement', stockErr);
+    }
+
     cart = [];
     saveCart();
     closeCheckoutModal();
     showToast('Order placed — $' + total.toFixed(2) + '. We\'ll email you about payment.');
+    if (typeof refreshMerchStockUi === 'function') {
+      try { refreshMerchStockUi(); } catch (e) {}
+    }
 
     // Admin-only push: new merch order
     try {
@@ -680,7 +755,7 @@ async function submitCheckout(e) {
       if (itemNames.length > 100) itemNames = itemNames.slice(0, 97) + '…';
       if (typeof broadcastPush === 'function') {
         await broadcastPush({
-          title: 'SB Racing · New order',
+          title: 'New order',
           body: name + ' · $' + total.toFixed(2) + (itemNames ? ' — ' + itemNames : ''),
           url: 'merch.html',
           type: 'order',

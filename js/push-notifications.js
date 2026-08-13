@@ -74,7 +74,7 @@ async function initPushNotifications() {
   Push.addListener('pushNotificationReceived', function (notification) {
     console.log('[push] foreground', notification);
     if (typeof showToast === 'function') {
-      showToast(((notification && notification.title) || 'SB Racing') + (notification.body ? ': ' + notification.body : ''));
+      showToast(((notification && notification.title) || 'Update') + (notification.body ? ': ' + notification.body : ''));
     }
   });
 
@@ -102,7 +102,7 @@ async function broadcastPush(opts) {
   opts = opts || {};
   if (!window.sb) return;
   try {
-    var title = opts.title || 'SB Racing';
+    var title = opts.title || 'Update';
     var body = opts.body || '';
     if (body.length > 180) body = body.slice(0, 177) + '…';
     var audience = opts.audience || 'all'; // all | admins | leaders
@@ -135,12 +135,12 @@ async function sendEventPushToAll(eventPayload, opts) {
     var url = 'events.html';
     var type = 'event';
     if (opts.isDelete) {
-      title = 'SB Racing · Event cancelled';
+      title = 'Event cancelled';
       body = (name || 'An event') + ' was removed';
       if (eventPayload && eventPayload.event_date) body += ' · ' + eventPayload.event_date;
       type = 'event_delete';
     } else if (opts.isEdit) {
-      title = 'SB Racing · Event updated';
+      title = 'Event updated';
       if (opts.changeSummary) {
         body = (name ? name + ' — ' : '') + opts.changeSummary;
       } else {
@@ -149,7 +149,7 @@ async function sendEventPushToAll(eventPayload, opts) {
       }
       type = 'event_edit';
     } else {
-      title = 'SB Racing · New event';
+      title = 'New event';
       body = name || 'A new ride was posted';
       if (eventPayload && eventPayload.event_date) body += ' · ' + eventPayload.event_date;
     }

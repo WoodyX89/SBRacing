@@ -62,7 +62,7 @@ async function notifyLocal(opts) {
     return false;
   }
   var id = opts.id != null ? Number(opts.id) : (Math.floor(Date.now() % 1000000000) + (_notifySeq++));
-  var title = opts.title || 'SB Racing';
+  var title = opts.title || 'Update';
   var body = opts.body || '';
   var when = opts.scheduleAt ? new Date(opts.scheduleAt) : new Date(Date.now() + 1500);
   if (isNaN(when.getTime())) when = new Date(Date.now() + 1500);
@@ -93,7 +93,7 @@ async function notifyEventDeleted(eventRow) {
   var body = when ? (name + ' · ' + when) : name;
   if (body.length > 180) body = body.slice(0, 177) + '…';
   await notifyLocal({
-    title: 'SB Racing · Event cancelled',
+    title: 'Event cancelled',
     body: (body + ' — cancelled'),
     extra: { type: 'event_delete', id: eventRow && eventRow.id }
   });
@@ -114,7 +114,7 @@ async function notifyEventAdded(eventRow, opts) {
   // iOS truncates long bodies — keep reasonable length
   if (body.length > 180) body = body.slice(0, 177) + '…';
   await notifyLocal({
-    title: opts.isEdit ? 'SB Racing · Event updated' : 'SB Racing · New event',
+    title: opts.isEdit ? 'Event updated' : 'New event',
     body: body,
     extra: {
       type: opts.isEdit ? 'event_edit' : 'event',
@@ -130,7 +130,7 @@ async function notifyEventAdded(eventRow, opts) {
  */
 async function notifyActivity(opts) {
   opts = opts || {};
-  var title = opts.title || 'SB Racing';
+  var title = opts.title || 'Update';
   var body = opts.body || '';
   if (body.length > 180) body = body.slice(0, 177) + '…';
   await notifyLocal({
@@ -154,7 +154,7 @@ async function notifyActivityAll(opts) {
       // fallback shape for older push helper
       await window.sb?.functions?.invoke('notify-event', {
         body: {
-          title: opts.title || 'SB Racing',
+          title: opts.title || 'Update',
           body: opts.body || '',
           data: { url: opts.url || 'forum.html', type: opts.type || 'activity' }
         }
@@ -202,7 +202,7 @@ async function pollCommunityActivityOnce() {
   await pollStamp('events', 'id, title, name, event_date, created_at', 'event', function (row) {
     var name = row.title || row.name || 'Event';
     return {
-      title: 'SB Racing · New event',
+      title: 'New event',
       body: name,
       url: 'events.html',
       type: 'event'
@@ -211,7 +211,7 @@ async function pollCommunityActivityOnce() {
   await pollStamp('forum_posts', 'id, body, post_type, created_at', 'forum_post', function (row) {
     var preview = (row.body || (row.post_type === 'poll' ? 'New poll' : 'New post')).slice(0, 100);
     return {
-      title: 'SB Racing · Forum',
+      title: 'Forum',
       body: preview,
       url: 'forum.html',
       type: 'forum_post'
@@ -219,7 +219,7 @@ async function pollCommunityActivityOnce() {
   });
   await pollStamp('forum_comments', 'id, body, post_id, created_at', 'forum_comment', function (row) {
     return {
-      title: 'SB Racing · Forum comment',
+      title: 'Forum comment',
       body: (row.body || 'New comment').slice(0, 120),
       url: 'forum.html',
       type: 'forum_comment'
@@ -227,7 +227,7 @@ async function pollCommunityActivityOnce() {
   });
   await pollStamp('event_comments', 'id, body, event_id, created_at', 'event_comment', function (row) {
     return {
-      title: 'SB Racing · Event comment',
+      title: 'Event comment',
       body: (row.body || 'New comment').slice(0, 120),
       url: 'events.html',
       type: 'event_comment'
@@ -252,7 +252,7 @@ async function testLocalNotification() {
     if (typeof showToast === 'function') showToast('Notifications blocked — check Settings', true);
     return;
   }
-  await notifyLocal({ title: 'SB Racing', body: 'Test notification — local alerts work.' });
+  await notifyLocal({ title: 'Test', body: 'Test notification — local alerts work.' });
   if (typeof showToast === 'function') showToast('Test notification sent');
 }
 
@@ -331,7 +331,7 @@ async function scheduleEventReminders(eventsList, rsvpMap) {
     if (ev.event_time) whenStr += ' · ' + String(ev.event_time).slice(0, 5);
     await notifyLocal({
       id: eventReminderNotifyId(ev.id),
-      title: 'SB Racing · Tomorrow',
+      title: 'Tomorrow',
       body: name + (whenStr ? ' · ' + whenStr : ''),
       scheduleAt: new Date(remindAt).toISOString(),
       extra: { type: 'event_reminder', id: ev.id, url: 'events.html' }

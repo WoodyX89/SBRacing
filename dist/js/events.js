@@ -702,7 +702,7 @@ async function submitEventComment(eventId) {
       var evTitle = (ev && ev.title) ? ev.title : 'Event';
       if (typeof notifyActivityAll === 'function') {
         await notifyActivityAll({
-          title: 'SB Racing · Event comment',
+          title: 'Event comment',
           body: evTitle + ' — ' + body.slice(0, 100),
           url: 'events.html',
           type: 'event_comment'
@@ -1111,11 +1111,20 @@ async function submitRSVP(e) {
     }
     if (error) throw error;
 
-    // Keep spots_taken roughly in sync on events row (best effort)
+    // Update local counts immediately so UI reflects remaining spots
+    var newTaken = taken;
+    if (status === 'confirmed' && !existingId) {
+      newTaken = taken + 1;
+    } else if (status === 'confirmed' && existingId) {
+      // was already counted or upgrading from waitlist — prefer +1 only if previous wasn't confirmed
+      var prev = myRsvpByEvent[eventId];
+      if (!prev || prev.status !== 'confirmed') newTaken = taken + 1;
+    }
+    rsvpCountByEvent[eventId] = newTaken;
+    if (ev) ev.spots_taken = newTaken;
+    // Keep spots_taken in sync on events row (best effort)
     if (status === 'confirmed') {
       try {
-        var newTaken = (rsvpCountByEvent[eventId] || taken) + (existingId ? 0 : 1);
-        // recount would be better
         await window.sb.from('events').update({ spots_taken: newTaken }).eq('id', eventId);
       } catch (e2) {}
     }
@@ -1127,7 +1136,7 @@ async function submitRSVP(e) {
       var msg = fullName + ' RSVP\'d to ' + evName + (status === 'waitlist' ? ' (waitlist)' : '');
       if (typeof broadcastPush === 'function') {
         await broadcastPush({
-          title: 'SB Racing · New RSVP',
+          title: 'New RSVP',
           body: msg,
           url: 'events.html',
           type: 'rsvp',
@@ -1180,7 +1189,18 @@ async function cancelRsvp(eventId) {
   try {
     var res = await window.sb.from('rsvps').update({ status: 'cancelled' }).eq('id', row.id);
     if (res.error) throw res.error;
+    var wasConfirmed = row.status === 'confirmed';
     delete myRsvpByEvent[eventId];
+    // Update remaining spots immediately
+    if (wasConfirmed) {
+      var next = Math.max(0, (rsvpCountByEvent[eventId] || 1) - 1);
+      rsvpCountByEvent[eventId] = next;
+      var evRow = allEvents.find(function (e) { return Number(e.id) === eventId; });
+      if (evRow) evRow.spots_taken = next;
+      try {
+        await window.sb.from('events').update({ spots_taken: next }).eq('id', eventId);
+      } catch (e2) {}
+    }
     showToast('RSVP cancelled');
     try {
       if (typeof cancelEventReminder === 'function') await cancelEventReminder(eventId);
@@ -1189,13 +1209,6 @@ async function cancelRsvp(eventId) {
 
     try { if (typeof haptic === 'function') haptic('light'); } catch (h) {}
     await loadMyRsvps();
-    // best-effort spots
-    try {
-      var c = rsvpCountByEvent[eventId] || 0;
-      if (c > 0) {
-        await window.sb.from('events').update({ spots_taken: c }).eq('id', eventId);
-      }
-    } catch (e2) {}
     renderEvents();
   } catch (e) {
     showToast(e.message || 'Could not cancel', true);
