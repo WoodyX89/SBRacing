@@ -1,8 +1,5 @@
 // SB Racing — notify-event Edge Function
-// Sends remote push to all registered iOS (APNs) devices.
-// Secrets required (set via `supabase secrets set`):
-//   APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID, APNS_P8, APNS_PRODUCTION
-
+// audience: "all" (default) | "admins" | "leaders" (admins + leaders)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { SignJWT, importPKCS8 } from "https://deno.land/x/jose@v5.9.6/index.ts";
 
@@ -21,17 +18,42 @@ Deno.serve(async (req) => {
     const title = (body.title || "SB Racing").toString().slice(0, 80);
     const message = (body.body || body.message || "").toString().slice(0, 200);
     const data = body.data || {};
+    const audience = (body.audience || body.data?.audience || "all").toString().toLowerCase();
 
-    // Service-role client so we can read every token
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const { data: tokens, error: tokErr } = await supabase
-      .from("push_tokens")
-      .select("token, platform")
-      .eq("platform", "ios");
+    let tokenQuery = supabase.from("push_tokens").select("token, platform, user_id").eq("platform", "ios");
+
+    // Filter by role when audience is restricted
+    if (audience === "admins" || audience === "leaders") {
+      let profileQuery = supabase.from("profiles").select("id");
+      if (audience === "admins") {
+        profileQuery = profileQuery.eq("is_admin", true);
+      } else {
+        // leaders includes full admins
+        profileQuery = profileQuery.or("is_leader.eq.true,is_admin.eq.true");
+      }
+      const { data: profiles, error: pErr } = await profileQuery;
+      if (pErr) {
+        return new Response(JSON.stringify({ error: pErr.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const ids = (profiles || []).map((p: { id: string }) => p.id);
+      if (!ids.length) {
+        return new Response(
+          JSON.stringify({ sent: 0, message: "No users match audience " + audience }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      tokenQuery = tokenQuery.in("user_id", ids);
+    }
+
+    const { data: tokens, error: tokErr } = await tokenQuery;
 
     if (tokErr) {
       console.error("token fetch error", tokErr);
@@ -43,7 +65,7 @@ Deno.serve(async (req) => {
 
     if (!tokens || tokens.length === 0) {
       return new Response(
-        JSON.stringify({ sent: 0, message: "No iOS tokens registered yet" }),
+        JSON.stringify({ sent: 0, message: "No iOS tokens for audience " + audience }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -63,7 +85,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Build APNs JWT (valid ~1 hour)
     const privateKey = await importPKCS8(p8.replace(/\\n/g, "\n"), "ES256");
     const jwt = await new SignJWT({})
       .setProtectedHeader({ alg: "ES256", kid: keyId })
@@ -79,7 +100,6 @@ Deno.serve(async (req) => {
     const results: { token: string; status: number; reason?: string }[] = [];
     let sent = 0;
 
-    // Send sequentially to keep it simple (small club size is fine)
     for (const row of tokens) {
       const deviceToken = row.token;
       try {
@@ -89,7 +109,6 @@ Deno.serve(async (req) => {
             sound: "default",
             badge: 1,
           },
-          // custom data the app can read
           ...data,
         };
 
@@ -119,8 +138,6 @@ Deno.serve(async (req) => {
             status: res.status,
             reason,
           });
-
-          // Clean up dead tokens
           if (res.status === 410 || reason === "Unregistered" || reason === "BadDeviceToken") {
             await supabase.from("push_tokens").delete().eq("token", deviceToken);
           }
@@ -135,7 +152,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ sent, total: tokens.length, results }),
+      JSON.stringify({ sent, total: tokens.length, audience, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {

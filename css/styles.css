@@ -16,15 +16,29 @@ html {
 
 html, body {
     background-color: #000000 !important;
-    overscroll-behavior: none;
+    /* Allow vertical rubber-banding / scroll on iOS; only block sideways bounce */
+    overscroll-behavior-x: none;
+    overscroll-behavior-y: auto;
+}
+
+html {
+    height: auto;
+    min-height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 body {
     font-family: 'Inter', system-ui, sans-serif;
     color: #e4e4e7;
     overflow-x: hidden;
+    overflow-y: auto;
     max-width: 100vw;
     margin: 0;
+    min-height: 100%;
+    height: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y pinch-zoom;
 }
 
 img, video { max-width: 100%; height: auto; }
@@ -418,6 +432,27 @@ html.is-native-app #bottom-tabs, body.is-native-app #bottom-tabs {
 html.is-native-app body, body.is-native-app {
   /* Keep top header (logo/cart/avatar) + bottom tabs safe area */
   padding-bottom: var(--bottom-tabs-total) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  height: auto !important;
+  min-height: 100% !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y pinch-zoom;
+}
+
+html.is-native-app {
+  height: auto !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Scrollable admin / list panels inside pages */
+html.is-native-app .overflow-y-auto,
+body.is-native-app .overflow-y-auto,
+html.is-native-app #admin-orders-list,
+body.is-native-app #admin-orders-list {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* Hero still needs full top offset under the slim header */
@@ -671,7 +706,12 @@ html.is-native-app #nav-cart-btn-mobile {
 }
 
 
-/* ===== Native cart sheet (Capacitor) ===== */
+/* ===== Native cart sheet (Capacitor) — above navbar + tabs ===== */
+html.is-native-app #cart-drawer,
+body.is-native-app #cart-drawer {
+  z-index: 99999 !important;
+}
+
 html.is-native-app #cart-drawer.native-cart-overlay,
 body.is-native-app #cart-drawer.native-cart-overlay,
 #cart-drawer.native-cart-overlay {
@@ -681,11 +721,12 @@ body.is-native-app #cart-drawer.native-cart-overlay,
   display: flex !important;
   align-items: flex-end !important;
   justify-content: stretch !important;
-  background: rgba(0, 0, 0, 0.5) !important;
+  background: rgba(0, 0, 0, 0.55) !important;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   padding: 0 !important;
   margin: 0 !important;
+  padding-top: env(safe-area-inset-top, 0px) !important;
 }
 
 #cart-drawer.native-cart-overlay > div.native-cart-sheet,
@@ -694,12 +735,12 @@ body.is-native-app #cart-drawer.native-cart-overlay,
   width: 100% !important;
   max-width: 100% !important;
   height: auto !important;
-  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 24px) !important;
-  max-height: calc(100vh - env(safe-area-inset-top, 0px) - 24px) !important;
+  /* Leave room under status bar; sheet is bottom-aligned so tabs are covered by sheet itself */
+  max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 12px)) !important;
   display: flex !important;
   flex-direction: column !important;
   border-left: none !important;
-  border-radius: 16px 16px 0 0 !important;
+  border-radius: 20px 20px 0 0 !important;
   background: #1c1c1e !important;
   border-top: 1px solid #3a3a3c !important;
   margin: 0 !important;
@@ -707,6 +748,22 @@ body.is-native-app #cart-drawer.native-cart-overlay,
   overflow: hidden !important;
   box-sizing: border-box !important;
   transform: translateY(0) !important;
+}
+
+html.is-native-app #checkout-modal,
+body.is-native-app #checkout-modal {
+  z-index: 100000 !important;
+  padding-top: env(safe-area-inset-top, 0px) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  align-items: flex-end !important;
+}
+
+html.is-native-app #checkout-modal > div,
+body.is-native-app #checkout-modal > div {
+  max-height: min(90dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 8px)) !important;
+  border-radius: 20px 20px 0 0 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
 }
 
 #cart-drawer.native-cart-overlay > div > div:first-child {
@@ -812,4 +869,59 @@ body.is-native-app #cart-drawer.native-cart-overlay,
   background: #3a3a3c !important;
   color: #8e8e93 !important;
   width: 100% !important;
+}
+
+
+/* ===== Native product detail sheet (colour / size) ===== */
+html.is-native-app #product-detail-modal,
+body.is-native-app #product-detail-modal,
+#product-detail-modal.native-detail-overlay {
+  z-index: 99999 !important;
+}
+
+#product-detail-modal.native-detail-overlay {
+  align-items: flex-end !important;
+  justify-content: stretch !important;
+  padding: 0 !important;
+  padding-top: env(safe-area-inset-top, 0px) !important;
+}
+
+#product-detail-modal.native-detail-overlay #product-detail-sheet,
+#product-detail-modal.native-detail-overlay > div {
+  max-width: 100% !important;
+  width: 100% !important;
+  max-height: min(90dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 8px)) !important;
+  border-radius: 20px 20px 0 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+#product-detail-modal.native-detail-overlay #detail-image-wrap {
+  flex-shrink: 0 !important;
+  max-height: 36vh !important;
+}
+
+#product-detail-modal.native-detail-overlay #detail-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+#product-detail-modal.native-detail-overlay #detail-footer {
+  flex-shrink: 0 !important;
+  background: #18181b !important;
+  border-top: 1px solid #3f3f46 !important;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+html.is-native-app #size-picker-modal,
+html.is-native-app #product-modal,
+body.is-native-app #size-picker-modal,
+body.is-native-app #product-modal {
+  z-index: 99999 !important;
+  padding-top: env(safe-area-inset-top, 0px) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
 }

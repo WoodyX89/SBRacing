@@ -42,35 +42,92 @@
                 </div>
             </div>
 
-            <!-- Dynamic product grid -->
-            <div id="products-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            <!-- One card per product group (colour variants open in detail modal) -->
+            <div id="products-grid" class="grid grid-cols-1 max-w-lg mx-auto gap-6">
                 <!-- filled by merch.js -->
             </div>
 
             <p class="text-center text-xs text-zinc-500 mt-8">Members get <span class="font-semibold text-orange-500">15-20% off</span> all merchandise. Free shipping on orders over $75.</p>
 
             <!-- Admin panel (visible only to admins) -->
-            <div id="admin-panel" class="hidden mt-14 border-t border-zinc-800 pt-10">
-                <div class="flex items-center justify-between mb-4">
-                    <div>
-                        <div class="text-xs uppercase tracking-widest text-orange-600 font-semibold">Admin</div>
-                        <h3 class="text-xl font-semibold">Manage merchandise</h3>
+            <div id="admin-panel" class="hidden mt-14 border-t border-zinc-800 pt-10 space-y-10">
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <div class="text-xs uppercase tracking-widest text-orange-600 font-semibold">Dashboard</div>
+                            <h3 class="text-xl font-semibold">Sales overview</h3>
+                        </div>
+                        <button type="button" onclick="loadSalesDashboard(); loadAdminOrders();" class="text-xs text-zinc-400 hover:text-white">
+                            <i class="fa-solid fa-rotate-right mr-1"></i> Refresh
+                        </button>
                     </div>
-                    <button onclick="openProductModal()" class="px-5 py-2.5 rounded-2xl border border-orange-600 text-orange-500 hover:bg-orange-950 text-sm font-semibold">
-                        <i class="fa-solid fa-plus mr-1.5"></i> New item
-                    </button>
+                    <div id="sales-stats" class="max-w-4xl">
+                        <p class="text-sm text-zinc-500">Loading…</p>
+                    </div>
+                    <div id="sales-chart-wrap" class="mt-6 max-w-4xl">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                            <div class="text-xs uppercase tracking-widest text-zinc-500">Sales over time</div>
+                            <div class="flex gap-2">
+                                <button type="button" data-sales-range="day" onclick="setSalesChartRange('day')"
+                                        class="px-3 py-1.5 rounded-xl border border-zinc-700 text-xs text-zinc-400">Day</button>
+                                <button type="button" data-sales-range="month" onclick="setSalesChartRange('month')"
+                                        class="px-3 py-1.5 rounded-xl bg-orange-600 text-white text-xs">Month</button>
+                                <button type="button" data-sales-range="year" onclick="setSalesChartRange('year')"
+                                        class="px-3 py-1.5 rounded-xl border border-zinc-700 text-xs text-zinc-400">Year</button>
+                            </div>
+                        </div>
+                        <div class="bg-zinc-950 border border-zinc-800 rounded-3xl p-4" style="height: 280px; position: relative;">
+                            <canvas id="sales-chart" aria-label="Sales chart"></canvas>
+                            <p id="sales-chart-msg" class="absolute inset-0 flex items-center justify-center text-sm text-zinc-500 pointer-events-none"></p>
+                        </div>
+                        <p class="text-[11px] text-zinc-500 mt-2">Bars = revenue &amp; pending · Line = paid/shipped order count. Touch-friendly on iOS.</p>
+                    </div>
                 </div>
-                <p class="text-sm text-zinc-400 max-w-2xl">
-                    Add product name, price, optional image URL (or upload if Storage is set up), badge, and sort order.
-                    Uncheck <strong>Active</strong> to hide an item from the public shop without deleting it.
-                </p>
+                <div>
+                    <div class="mb-4">
+                        <div class="text-xs uppercase tracking-widest text-orange-600 font-semibold">Inventory</div>
+                        <h3 class="text-xl font-semibold">Stock by colour &amp; size</h3>
+                        <p class="text-sm text-zinc-400 mt-1">Select a size to load its quantity, edit the number, then press Save. 0 = sold out.</p>
+                    </div>
+                    <div id="stock-table" class="max-w-3xl"></div>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <div class="text-xs uppercase tracking-widest text-orange-600 font-semibold">Admin</div>
+                            <h3 class="text-xl font-semibold">Manage merchandise</h3>
+                        </div>
+                        <button type="button" onclick="openProductModal()" class="px-5 py-2.5 rounded-2xl border border-orange-600 text-orange-500 hover:bg-orange-950 text-sm font-semibold">
+                            <i class="fa-solid fa-plus mr-1.5"></i> New item
+                        </button>
+                    </div>
+                    <p class="text-sm text-zinc-400 max-w-2xl">
+                        Same <strong>Name</strong> = one shop product. Add a row per <strong>colour + size</strong> with its own stock and image.
+                    </p>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <div class="text-xs uppercase tracking-widest text-orange-600 font-semibold">Orders</div>
+                            <h3 class="text-xl font-semibold">Recent orders</h3>
+                        </div>
+                        <button type="button" onclick="loadAdminOrders()" class="text-xs text-zinc-400 hover:text-white">
+                            <i class="fa-solid fa-rotate-right mr-1"></i> Refresh
+                        </button>
+                    </div>
+                    <div id="admin-orders-list"
+                         class="max-w-3xl max-h-[28rem] overflow-y-auto overscroll-contain rounded-3xl border border-zinc-800 bg-zinc-950/40"
+                         style="-webkit-overflow-scrolling: touch;">
+                        <p class="text-sm text-zinc-500 p-3">Loading…</p>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
 
     <!-- Product add/edit modal -->
     <div id="product-modal" onclick="if (event.target.id === 'product-modal') closeProductModal()"
-         class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[80] flex items-center justify-center p-6">
+         class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[99999] flex items-center justify-center p-6">
         <div onclick="event.stopPropagation()" class="modal bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-lg p-8 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-start mb-6">
                 <div class="font-bold text-xl" id="product-modal-title">Add Product</div>
@@ -110,6 +167,34 @@
                            placeholder="NEW, BESTSELLER, 3-PACK…">
                 </div>
                 <div>
+                    <label class="text-xs font-medium text-zinc-400">COLOUR NAME</label>
+                    <input type="text" id="prod-color"
+                           class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600"
+                           placeholder="Black">
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-zinc-400">SIZE (this row)</label>
+                    <select id="prod-size"
+                            class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+                        <option value="">— Select —</option>
+                        <option value="S">S</option>
+                        <option value="M">M</option>
+                        <option value="L">L</option>
+                        <option value="XL">XL</option>
+                        <option value="XXL">XXL</option>
+                        <option value="One Size">One Size</option>
+                        <option value="N/A">N/A</option>
+                    </select>
+                    <p class="text-[11px] text-zinc-500 mt-1">One size per row. Add another product row for each extra size (same Name + Colour).</p>
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-zinc-400">STOCK QTY (this colour + size)</label>
+                    <input type="number" id="prod-stock" min="0" step="1" value="0"
+                           class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600"
+                           placeholder="0">
+                    <p class="text-[11px] text-zinc-500 mt-1">0 = sold out for this colour/size only.</p>
+                </div>
+                <div>
                     <label class="text-xs font-medium text-zinc-400">IMAGE URL</label>
                     <input type="url" id="prod-image" oninput="previewImageUrl()"
                            class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600"
@@ -138,13 +223,115 @@
         </div>
     </div>
 
-
-
 </div><!-- /.page-body -->
 
-<!-- Shared footer + cart + toast (edit partials/footer.html only) -->
 <div id="site-footer"></div>
 
+<!-- Product detail: colour + size (native = bottom sheet above nav/tabs) -->
+<div id="product-detail-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] items-center justify-center p-4" style="display:none;"
+     onclick="if(event.target.id==='product-detail-modal')closeProductDetail()">
+  <div id="product-detail-sheet" class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-lg max-h-[92vh] overflow-hidden flex flex-col" onclick="event.stopPropagation()">
+    <div class="relative aspect-[4/3] bg-zinc-800 shrink-0" id="detail-image-wrap">
+      <div id="detail-image" class="absolute inset-0"></div>
+      <button type="button" onclick="closeProductDetail()" class="absolute top-3 right-3 w-10 h-10 rounded-full bg-black/60 text-white hover:bg-black/80 z-10">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    </div>
+    <div class="p-6 space-y-5 overflow-y-auto flex-1 min-h-0" id="detail-body" style="-webkit-overflow-scrolling:touch;">
+      <div class="flex justify-between items-start gap-3">
+        <div>
+          <div class="font-bold text-xl" id="detail-name">Product</div>
+          <p class="text-sm text-zinc-400 mt-1" id="detail-desc"></p>
+          <p class="mt-2" id="detail-stock"></p>
+        </div>
+        <div class="font-mono text-xl text-orange-500" id="detail-price">$0</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-widest text-zinc-500 mb-2">Colour</div>
+        <div id="detail-colors" class="flex flex-wrap gap-2"></div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-widest text-zinc-500 mb-2">Size</div>
+        <div id="detail-sizes" class="flex flex-wrap gap-2" data-selected-size=""></div>
+      </div>
+    </div>
+    <div class="p-4 pt-2 border-t border-zinc-800 shrink-0" id="detail-footer" style="padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));">
+      <button type="button" id="detail-add-btn" class="w-full py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-semibold text-sm">
+        Add to cart
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Size picker (legacy fallback) -->
+<div id="size-picker-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[99999] items-center justify-center p-4" style="display:none;"
+     onclick="if(event.target.id==='size-picker-modal')closeSizePicker()">
+  <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-sm p-6" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-start mb-4">
+      <div>
+        <div class="text-xs uppercase tracking-widest text-zinc-500">Select size</div>
+        <div class="font-bold text-lg" id="size-picker-title">Product</div>
+      </div>
+      <button type="button" onclick="closeSizePicker()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+    </div>
+    <div id="size-picker-list" class="space-y-2"></div>
+  </div>
+</div>
+
+<!-- Checkout form (Stripe can plug in later) -->
+<div id="checkout-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[95] items-center justify-center p-4" style="display:none;"
+     onclick="if(event.target.id==='checkout-modal')closeCheckoutModal()">
+  <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-start mb-5">
+      <div>
+        <div class="font-bold text-xl">Checkout</div>
+        <p class="text-sm text-zinc-400 mt-1">Total <span id="checkout-total-display" class="font-mono text-orange-500">$0</span> · Payment arranged after order</p>
+      </div>
+      <button type="button" onclick="closeCheckoutModal()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+    </div>
+    <form id="checkout-form" onsubmit="submitCheckout(event)" class="space-y-3">
+      <div>
+        <label class="text-xs font-medium text-zinc-400">Full name *</label>
+        <input id="co-name" required class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-orange-600" placeholder="Your name">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-zinc-400">Email *</label>
+        <input id="co-email" type="email" required class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-orange-600" placeholder="you@email.com">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-zinc-400">Phone</label>
+        <input id="co-phone" type="tel" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-orange-600" placeholder="403-555-1234">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-zinc-400">Shipping address</label>
+        <input id="co-address" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-orange-600" placeholder="Street address">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-zinc-400">City</label>
+          <input id="co-city" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-orange-600" placeholder="Medicine Hat">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-zinc-400">Province</label>
+          <input id="co-province" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-orange-600" placeholder="AB" value="AB">
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-zinc-400">Postal code</label>
+        <input id="co-postal" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-orange-600" placeholder="T1A 0A0">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-zinc-400">Notes</label>
+        <textarea id="co-notes" rows="2" class="mt-1 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-orange-600" placeholder="Pickup preference, size notes…"></textarea>
+      </div>
+      <p id="checkout-error" class="hidden text-sm text-red-400"></p>
+      <p class="text-[11px] text-zinc-500">Orders are saved as <strong class="text-zinc-400">pending</strong>. We'll contact you to arrange e-transfer or Stripe payment.</p>
+      <button type="submit" id="checkout-submit-btn" class="w-full py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-sm text-white">Place order</button>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/shared.js"></script>

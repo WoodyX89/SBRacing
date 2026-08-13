@@ -233,6 +233,16 @@ function productSizeLabel(p) {
   return legacy.split(',')[0].trim();
 }
 
+function isNativeShell() {
+  try {
+    if (typeof isNativeAppShell === 'function') return isNativeAppShell();
+  } catch (e) {}
+  try {
+    return !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+  } catch (e2) {}
+  return false;
+}
+
 function openProductDetail(groupKey) {
   var variants = allProducts.filter(function (p) {
     return p.is_active !== false && productGroupKey(p) === groupKey;
@@ -247,18 +257,56 @@ function openProductDetail(groupKey) {
   _detailSelectedColor = productColorKey(first);
   renderProductDetail(variants, first.id);
   var modal = document.getElementById('product-detail-modal');
+  var sheet = document.getElementById('product-detail-sheet');
   if (modal) {
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
+    modal.style.zIndex = '99999';
+    if (isNativeShell()) {
+      modal.classList.add('native-detail-overlay');
+      modal.style.alignItems = 'flex-end';
+      modal.style.justifyContent = 'stretch';
+      modal.style.padding = '0';
+      modal.style.paddingTop = 'env(safe-area-inset-top, 0px)';
+      document.body.style.overflow = 'hidden';
+      if (sheet) {
+        sheet.classList.add('native-detail-sheet');
+        sheet.style.maxWidth = '100%';
+        sheet.style.width = '100%';
+        sheet.style.maxHeight = 'min(90dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 8px))';
+        sheet.style.borderRadius = '20px 20px 0 0';
+        sheet.style.borderLeft = 'none';
+        sheet.style.borderRight = 'none';
+        sheet.style.borderBottom = 'none';
+      }
+    } else {
+      modal.classList.remove('native-detail-overlay');
+      modal.style.alignItems = '';
+      modal.style.justifyContent = '';
+      modal.style.padding = '';
+      if (sheet) {
+        sheet.classList.remove('native-detail-sheet');
+        sheet.style.maxWidth = '';
+        sheet.style.width = '';
+        sheet.style.maxHeight = '';
+        sheet.style.borderRadius = '';
+      }
+    }
   }
+  try { if (typeof haptic === 'function') haptic('light'); } catch (e) {}
 }
 
 function closeProductDetail() {
   var modal = document.getElementById('product-detail-modal');
   if (modal) {
     modal.classList.add('hidden');
+    modal.classList.remove('native-detail-overlay');
     modal.style.display = 'none';
+    modal.style.alignItems = '';
+    modal.style.justifyContent = '';
+    modal.style.padding = '';
   }
+  document.body.style.overflow = '';
   _detailGroupKey = null;
   _detailSelectedId = null;
   _detailSelectedColor = null;

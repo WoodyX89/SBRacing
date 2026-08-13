@@ -16,8 +16,8 @@
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" preservesSuperviewLayoutMargins="YES" layoutMarginsFollowReadableWidth="YES" image="Splash" translatesAutoresizingMaskIntoConstraints="NO" id="splashImage">
-                                <rect key="frame" x="-316" y="-86" width="1025" height="1024"/>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" misplaced="YES" preservesSuperviewLayoutMargins="YES" layoutMarginsFollowReadableWidth="YES" image="Splash" translatesAutoresizingMaskIntoConstraints="NO" id="splashImage">
+                                <rect key="frame" x="-316" y="-86" width="1024" height="1024"/>
                                 <constraints>
                                     <constraint firstAttribute="width" constant="1025" id="Fck-zz-ZTi"/>
                                     <constraint firstAttribute="width" secondItem="splashImage" secondAttribute="height" multiplier="1025:1024" id="SXO-fE-anZ"/>

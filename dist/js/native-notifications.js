@@ -61,16 +61,20 @@ async function notifyLocal(opts) {
     console.warn('[notify] no permission');
     return false;
   }
-  var id = Math.floor(Date.now() % 1000000000) + (_notifySeq++);
+  var id = opts.id != null ? Number(opts.id) : (Math.floor(Date.now() % 1000000000) + (_notifySeq++));
   var title = opts.title || 'SB Racing';
   var body = opts.body || '';
+  var when = opts.scheduleAt ? new Date(opts.scheduleAt) : new Date(Date.now() + 1500);
+  if (isNaN(when.getTime())) when = new Date(Date.now() + 1500);
+  // iOS requires future date
+  if (when.getTime() <= Date.now() + 500) when = new Date(Date.now() + 1500);
   try {
     await LN.schedule({
       notifications: [{
         id: id,
         title: title,
         body: body,
-        schedule: { at: new Date(Date.now() + 1500) },
+        schedule: { at: when },
         sound: 'default',
         extra: opts.extra || {}
       }]
@@ -268,3 +272,70 @@ document.addEventListener('DOMContentLoaded', function () {
   setTimeout(bootNativeNotifications, 500);
   setTimeout(bootNativeNotifications, 1500);
 });
+
+
+/** Stable local id for an event reminder (cancel/reschedule). */
+function eventReminderNotifyId(eventId) {
+  return 700000000 + (Number(eventId) % 100000000);
+}
+
+async function cancelEventReminder(eventId) {
+  var LN = getLocalNotificationsPlugin();
+  if (!LN) return;
+  try {
+    await LN.cancel({ notifications: [{ id: eventReminderNotifyId(eventId) }] });
+  } catch (e) {
+    console.warn('[notify] cancel reminder', e);
+  }
+}
+
+/**
+ * Schedule "event tomorrow" style local alerts for RSVPs the current user holds.
+ * Remind 24h before event start (or 1h before if already inside the 24h window).
+ * eventsList: array of event rows; rsvpMap: event_id -> rsvp row
+ */
+async function scheduleEventReminders(eventsList, rsvpMap) {
+  if (!isNativeApp()) return;
+  if (!(await ensureNotifyPermission())) return;
+  eventsList = eventsList || [];
+  rsvpMap = rsvpMap || {};
+  var now = Date.now();
+  for (var i = 0; i < eventsList.length; i++) {
+    var ev = eventsList[i];
+    var rsvp = rsvpMap[ev.id];
+    if (!rsvp || rsvp.status === 'cancelled') {
+      await cancelEventReminder(ev.id);
+      continue;
+    }
+    var startMs = null;
+    if (typeof eventStartMs === 'function') {
+      startMs = eventStartMs(ev);
+    } else {
+      var d = String(ev.event_date || '');
+      var t = ev.event_time ? String(ev.event_time).slice(0, 5) : '12:00';
+      startMs = new Date(d + 'T' + t + ':00').getTime();
+    }
+    if (!startMs || isNaN(startMs) || startMs <= now) {
+      await cancelEventReminder(ev.id);
+      continue;
+    }
+    var remindAt = startMs - 24 * 60 * 60 * 1000;
+    if (remindAt <= now) {
+      // Already inside 24h window — remind 1 hour before if still future
+      remindAt = startMs - 60 * 60 * 1000;
+    }
+    if (remindAt <= now) continue;
+
+    var name = ev.title || ev.name || 'Event';
+    var whenStr = ev.event_date || '';
+    if (ev.event_time) whenStr += ' · ' + String(ev.event_time).slice(0, 5);
+    await notifyLocal({
+      id: eventReminderNotifyId(ev.id),
+      title: 'SB Racing · Tomorrow',
+      body: name + (whenStr ? ' · ' + whenStr : ''),
+      scheduleAt: new Date(remindAt).toISOString(),
+      extra: { type: 'event_reminder', id: ev.id, url: 'events.html' }
+    });
+  }
+  console.log('[notify] event reminders scheduled');
+}

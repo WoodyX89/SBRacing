@@ -105,13 +105,16 @@ async function broadcastPush(opts) {
     var title = opts.title || 'SB Racing';
     var body = opts.body || '';
     if (body.length > 180) body = body.slice(0, 177) + '…';
+    var audience = opts.audience || 'all'; // all | admins | leaders
     var res = await window.sb.functions.invoke('notify-event', {
       body: {
         title: title,
         body: body,
+        audience: audience,
         data: {
           url: opts.url || 'index.html',
-          type: opts.type || 'activity'
+          type: opts.type || 'activity',
+          audience: audience
         }
       }
     });

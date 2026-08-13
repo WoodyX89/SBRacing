@@ -2,6 +2,9 @@
 
 var forumUser = null;
 var forumProfiles = {};
+var forumMetaByPost = {}; // postId -> { likes, comments, options, votes }
+var forumPostsById = {};
+var forumRealtimeChannel = null;
 var composerMode = 'post';
 var pendingImageFile = null;
 var pollOptionCount = 0;
@@ -199,25 +202,141 @@ async function submitForumPost() {
   }
 }
 
+function likesLabel(likes) {
+  likes = likes || [];
+  if (!likes.length) return '';
+  var names = likes.map(function (l) { return displayName(l.user_id); });
+  // unique preserve order
+  var seen = {};
+  names = names.filter(function (n) {
+    if (seen[n]) return false;
+    seen[n] = true;
+    return true;
+  });
+  if (names.length === 1) return names[0] + ' liked this';
+  if (names.length === 2) return names[0] + ' and ' + names[1] + ' liked this';
+  if (names.length === 3) return names[0] + ', ' + names[1] + ' and ' + names[2] + ' liked this';
+  return names[0] + ', ' + names[1] + ' and ' + (names.length - 2) + ' others liked this';
+}
+
+/** Update heart + names on one card only (no full feed refresh) */
+function updatePostLikeUi(postId) {
+  var meta = forumMetaByPost[postId] || { likes: [] };
+  var likes = meta.likes || [];
+  var liked = forumUser && likes.some(function (l) { return String(l.user_id) === String(forumUser.id); });
+  var root = document.querySelector('[data-post-id="' + postId + '"]');
+  if (!root) return;
+  var btn = root.querySelector('[data-like-btn]');
+  if (btn) {
+    btn.className = liked
+      ? 'text-orange-500 inline-flex items-center gap-1'
+      : 'text-zinc-400 hover:text-orange-400 inline-flex items-center gap-1';
+    btn.innerHTML =
+      '<i class="fa-' + (liked ? 'solid' : 'regular') + ' fa-heart"></i>' +
+      '<span data-like-count>' + likes.length + '</span>';
+  }
+  var namesEl = root.querySelector('[data-like-names]');
+  if (namesEl) {
+    namesEl.textContent = likesLabel(likes);
+    namesEl.classList.toggle('hidden', !likes.length);
+  }
+}
+
 async function toggleForumLike(postId) {
   if (!forumUser) {
     showToast('Log in to like', true);
     return;
   }
-  try {
-    var existing = await window.sb.from('forum_likes')
-      .select('id')
-      .eq('post_id', postId)
-      .eq('user_id', forumUser.id)
-      .maybeSingle();
-    if (existing.data) {
-      await window.sb.from('forum_likes').delete().eq('id', existing.data.id);
-    } else {
-      await window.sb.from('forum_likes').insert({ post_id: postId, user_id: forumUser.id });
+  postId = Number(postId);
+  if (!forumMetaByPost[postId]) {
+    forumMetaByPost[postId] = { likes: [], comments: [], options: [], votes: [] };
+  }
+  var likes = forumMetaByPost[postId].likes || [];
+  var mine = likes.find(function (l) { return String(l.user_id) === String(forumUser.id); });
+
+  // Optimistic UI
+  if (mine) {
+    forumMetaByPost[postId].likes = likes.filter(function (l) { return String(l.user_id) !== String(forumUser.id); });
+  } else {
+    forumMetaByPost[postId].likes = likes.concat([{ post_id: postId, user_id: forumUser.id }]);
+    if (!forumProfiles[forumUser.id]) {
+      forumProfiles[forumUser.id] = { id: forumUser.id, full_name: 'You' };
+      try {
+        var pr = await getProfile(forumUser.id);
+        if (pr) forumProfiles[forumUser.id] = pr;
+      } catch (e0) {}
     }
-    await loadForumFeed();
+  }
+  updatePostLikeUi(postId);
+  try { if (typeof hapticSelection === 'function') hapticSelection(); } catch (eH) {}
+
+  try {
+    if (mine) {
+      var del = await window.sb.from('forum_likes').delete()
+        .eq('post_id', postId)
+        .eq('user_id', forumUser.id);
+      if (del.error) throw del.error;
+    } else {
+      var ins = await window.sb.from('forum_likes').insert({ post_id: postId, user_id: forumUser.id }).select('*').maybeSingle();
+      if (ins.error) throw ins.error;
+      if (ins.data) {
+        // replace optimistic row with real row if ids matter
+        forumMetaByPost[postId].likes = (forumMetaByPost[postId].likes || []).filter(function (l) {
+          return String(l.user_id) !== String(forumUser.id);
+        }).concat([ins.data]);
+        updatePostLikeUi(postId);
+      }
+    }
   } catch (e) {
+    // rollback
+    if (mine) {
+      forumMetaByPost[postId].likes = likes;
+    } else {
+      forumMetaByPost[postId].likes = likes.filter(function (l) { return String(l.user_id) !== String(forumUser.id); });
+    }
+    updatePostLikeUi(postId);
     showToast(e.message || 'Like failed', true);
+  }
+}
+
+async function refreshLikesForPost(postId) {
+  postId = Number(postId);
+  try {
+    var res = await window.sb.from('forum_likes').select('*').eq('post_id', postId);
+    if (res.error) throw res.error;
+    var likes = res.data || [];
+    if (!forumMetaByPost[postId]) forumMetaByPost[postId] = { likes: [], comments: [], options: [], votes: [] };
+    forumMetaByPost[postId].likes = likes;
+    var uids = likes.map(function (l) { return l.user_id; });
+    await loadProfiles(uids);
+    updatePostLikeUi(postId);
+  } catch (e) {
+    console.warn('[forum] refresh likes', e);
+  }
+}
+
+function subscribeForumRealtime() {
+  if (!window.sb || forumRealtimeChannel) return;
+  try {
+    forumRealtimeChannel = window.sb
+      .channel('forum-likes-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_likes' }, function (payload) {
+        var row = payload.new || payload.old;
+        if (!row || row.post_id == null) return;
+        var postId = Number(row.post_id);
+        // Ignore if we don't have this post on screen
+        if (!document.querySelector('[data-post-id="' + postId + '"]')) return;
+        // Debounce rapid events per post
+        clearTimeout(subscribeForumRealtime['_t' + postId]);
+        subscribeForumRealtime['_t' + postId] = setTimeout(function () {
+          refreshLikesForPost(postId);
+        }, 80);
+      })
+      .subscribe(function (status) {
+        console.log('[forum] realtime', status);
+      });
+  } catch (e) {
+    console.warn('[forum] realtime setup failed', e);
   }
 }
 
@@ -385,11 +504,15 @@ function renderPostCard(post, meta) {
       ? '<div class="mt-4">' + renderPoll(post, options, votes, myVote) + '</div>'
       : '') +
     '<div class="flex items-center gap-4 mt-4 text-sm">' +
-    '<button type="button" onclick="toggleForumLike(' + post.id + ')" class="' +
-    (liked ? 'text-orange-500' : 'text-zinc-400 hover:text-orange-400') + '">' +
-    '<i class="fa-' + (liked ? 'solid' : 'regular') + ' fa-heart mr-1"></i>' + likes.length +
+    '<button type="button" data-like-btn onclick="toggleForumLike(' + post.id + ')" class="' +
+    (liked ? 'text-orange-500' : 'text-zinc-400 hover:text-orange-400') + ' inline-flex items-center gap-1">' +
+    '<i class="fa-' + (liked ? 'solid' : 'regular') + ' fa-heart"></i>' +
+    '<span data-like-count>' + likes.length + '</span>' +
     '</button>' +
     '<span class="text-zinc-500"><i class="fa-regular fa-comment mr-1"></i>' + comments.length + '</span>' +
+    '</div>' +
+    '<div data-like-names class="text-xs text-zinc-500 mt-1.5 ' + (likes.length ? '' : 'hidden') + '">' +
+    esc(likesLabel(likes)) +
     '</div>' +
     '<div class="mt-3 space-y-0">' + commentsHtml + '</div>' +
     '<div class="mt-3 flex gap-2">' +
@@ -401,12 +524,12 @@ function renderPostCard(post, meta) {
     '</div></div>';
 
   if (!canDelete) {
-    return '<article class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">' + cardInner + '</article>';
+    return '<article data-post-id="' + post.id + '" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">' + cardInner + '</article>';
   }
 
   // Swipeable card — reveal Delete action on swipe left
   return (
-    '<div class="relative overflow-hidden rounded-3xl" data-swipe-post="' + post.id + '">' +
+    '<div class="relative overflow-hidden rounded-3xl" data-swipe-post="' + post.id + '" data-post-id="' + post.id + '">' +
     '<div class="absolute inset-y-0 right-0 w-24 flex items-stretch">' +
     '<button type="button" onclick="deleteForumPost(' + post.id + ')" class="flex-1 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex flex-col items-center justify-center gap-1">' +
     '<i class="fa-solid fa-trash text-base"></i>Delete' +
@@ -453,15 +576,22 @@ async function loadForumFeed() {
     comments.forEach(function (c) { userIds.push(c.user_id); });
     await loadProfiles(userIds);
 
+    likes.forEach(function (l) { userIds.push(l.user_id); });
+    await loadProfiles(userIds);
+
     feed.innerHTML = posts.map(function (post) {
-      return renderPostCard(post, {
+      var meta = {
         likes: likes.filter(function (l) { return l.post_id === post.id; }),
         comments: comments.filter(function (c) { return c.post_id === post.id; }),
         options: options.filter(function (o) { return o.post_id === post.id; }),
         votes: votes.filter(function (v) { return v.post_id === post.id; })
-      });
+      };
+      forumMetaByPost[post.id] = meta;
+      forumPostsById[post.id] = post;
+      return renderPostCard(post, meta);
     }).join('');
     initSwipeToDelete(feed);
+    subscribeForumRealtime();
   } catch (e) {
     console.error(e);
     feed.innerHTML = '<p class="text-center text-red-400 py-10">' + esc(e.message || 'Could not load feed') +
@@ -573,6 +703,7 @@ async function initForum() {
     if (pr) forumProfiles[forumUser.id] = pr;
   } catch (e) {}
   await loadForumFeed();
+  subscribeForumRealtime();
 }
 
 document.addEventListener('DOMContentLoaded', function () {

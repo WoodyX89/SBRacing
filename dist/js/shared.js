@@ -79,28 +79,62 @@ async function loadSiteNav() {
     mount.innerHTML = '<nav id="navbar" class="fixed top-0 left-0 right-0 z-[100] bg-black p-4 text-white border-b border-zinc-800"><a href="index.html" class="font-bold">SB Racing</a></nav>';
 }
 
-// Load shared footer + cart drawer + toast from partials/footer.html (one file for every page)
 async function loadSiteFooter() {
-    const mount = document.getElementById('site-footer');
-    if (!mount) return;
-    const candidates = [
+    var mount = document.getElementById('site-footer');
+    var candidates = [
         'partials/footer.html',
         './partials/footer.html',
-        '/partials/footer.html'
+        '/partials/footer.html',
+        'footer.html'
     ];
-    let lastErr = null;
-    for (const url of candidates) {
+    var html = null;
+    var lastErr = null;
+    for (var i = 0; i < candidates.length; i++) {
         try {
-            const res = await fetch(url, { cache: 'no-cache' });
-            if (!res.ok) throw new Error('footer ' + res.status + ' ' + url);
-            mount.innerHTML = await res.text();
-            return;
+            var res = await fetch(candidates[i], { cache: 'no-cache' });
+            if (!res.ok) throw new Error('footer ' + res.status + ' ' + candidates[i]);
+            html = await res.text();
+            console.log('[footer] loaded', candidates[i]);
+            break;
         } catch (e) {
             lastErr = e;
         }
     }
-    console.error('[footer] failed to load partials/footer.html', lastErr);
+    if (html && mount) {
+        mount.innerHTML = html;
+    } else if (!html) {
+        console.error('[footer] failed to load partials/footer.html', lastErr);
+    }
+    ensureCartUi();
 }
+
+/** Inject cart drawer if footer partial failed */
+function ensureCartUi() {
+    if (document.getElementById('cart-drawer')) return;
+    var wrap = document.createElement('div');
+    wrap.id = 'site-footer-fallback';
+    wrap.innerHTML =
+      '<div id="cart-drawer" class="hidden fixed inset-0 bg-black/60 z-[90] flex justify-end">' +
+      '<div class="w-full max-w-md bg-zinc-900 h-full overflow-y-auto p-6 flex flex-col">' +
+      '<div class="flex justify-between items-center mb-6">' +
+      '<div class="font-bold text-xl">Your Cart</div>' +
+      '<button type="button" onclick="hideCart()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button></div>' +
+      '<div id="cart-items" class="flex-1 space-y-4"></div>' +
+      '<div class="border-t border-zinc-800 pt-4 mt-4">' +
+      '<div class="flex justify-between text-lg font-semibold mb-4"><span>Total</span><span id="cart-total">$0.00</span></div>' +
+      '<button type="button" onclick="openCheckoutModal()" class="w-full py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold">Checkout</button>' +
+      '</div></div></div>' +
+      '<div id="success-toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-8 py-3 rounded-2xl shadow-xl z-[110] text-sm font-medium">Done</div>';
+    document.body.appendChild(wrap);
+    var drawer = document.getElementById('cart-drawer');
+    if (drawer) {
+      drawer.addEventListener('click', function (e) {
+        if (e.target && e.target.id === 'cart-drawer') hideCart();
+      });
+    }
+    console.log('[footer] injected fallback cart UI');
+}
+
 
 // Shared navigation + cart + toast helpers for multi-page SB Racing site
 
@@ -179,103 +213,495 @@ function showToast(message, isError = false) {
 }
 
 // ---------- Cart (localStorage + optional order save) ----------
-let cart = JSON.parse(localStorage.getItem('sb_cart') || '[]');
+// Cart: [{ productId, name, price, qty, size }]
+let cart = (function () {
+  try {
+    var raw = JSON.parse(localStorage.getItem('sb_cart') || '[]');
+    if (!Array.isArray(raw)) return [];
+    // Migrate legacy {id,name,price} rows
+    return raw.map(function (item) {
+      return {
+        productId: item.productId != null ? item.productId : null,
+        name: item.name || 'Item',
+        price: Number(item.price) || 0,
+        qty: Math.max(1, Number(item.qty) || 1),
+        size: item.size || ''
+      };
+    });
+  } catch (e) {
+    return [];
+  }
+})();
+
+function cartItemCount() {
+  return cart.reduce(function (n, item) { return n + (item.qty || 1); }, 0);
+}
+
+function cartTotal() {
+  return cart.reduce(function (sum, item) {
+    return sum + (Number(item.price) || 0) * (item.qty || 1);
+  }, 0);
+}
+
+function saveCart() {
+  localStorage.setItem('sb_cart', JSON.stringify(cart));
+  updateCartCount();
+}
+
+var _hapticsPlugin = null;
+var _hapticsTried = false;
+
+function getHapticsPlugin() {
+  if (_hapticsPlugin) return _hapticsPlugin;
+  try {
+    if (!window.Capacitor) return null;
+    var H = null;
+    var plugs = Capacitor.Plugins || {};
+    H = plugs.Haptics || plugs.haptics || null;
+    if (!H && typeof Capacitor.registerPlugin === 'function') {
+      try { H = Capacitor.registerPlugin('Haptics'); } catch (e1) {}
+    }
+    if (!H && typeof Capacitor.getPlugin === 'function') {
+      try { H = Capacitor.getPlugin('Haptics'); } catch (e2) {}
+    }
+    if (H) {
+      _hapticsPlugin = H;
+      console.log('[haptics] plugin ready', Object.keys(H));
+    } else if (!_hapticsTried && isNativeAppShell()) {
+      _hapticsTried = true;
+      console.warn('[haptics] not registered. plugins=', Object.keys(plugs));
+      console.warn('[haptics] run: npm i @capacitor/haptics && npx cap sync ios && clean Xcode build');
+    }
+    return H;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Call from Safari console on device: testHaptics() */
+window.testHaptics = function () {
+  console.log('Capacitor?', !!window.Capacitor);
+  console.log('native?', isNativeAppShell());
+  console.log('plugins', window.Capacitor && Capacitor.Plugins && Object.keys(Capacitor.Plugins));
+  var H = getHapticsPlugin();
+  console.log('Haptics plugin', H);
+  haptic('medium');
+  setTimeout(function () { hapticSelection(); }, 300);
+  setTimeout(function () { haptic('warning'); }, 600);
+  return !!H;
+};
+
+function haptic(style) {
+  try {
+    var H = getHapticsPlugin();
+    if (!H) return;
+    var s = (style || 'light').toLowerCase();
+    var p;
+    if (s === 'success' || s === 'warning' || s === 'error') {
+      if (typeof H.notification === 'function') {
+        var map = { success: 'SUCCESS', warning: 'WARNING', error: 'ERROR' };
+        p = H.notification({ type: map[s] });
+      }
+    } else if (typeof H.impact === 'function') {
+      var impact = 'LIGHT';
+      if (s === 'medium') impact = 'MEDIUM';
+      if (s === 'heavy') impact = 'HEAVY';
+      // Cap 5+ accepts string style; also try ImpactStyle-like object
+      p = H.impact({ style: impact });
+    }
+    if (p && typeof p.catch === 'function') p.catch(function (err) { console.warn('[haptics] fail', err); });
+  } catch (e) {
+    console.warn('[haptics]', e);
+  }
+}
+
+function hapticSelection() {
+  try {
+    var H = getHapticsPlugin();
+    if (!H) return;
+    if (typeof H.selectionStart === 'function') {
+      Promise.resolve(H.selectionStart())
+        .then(function () { return H.selectionChanged && H.selectionChanged(); })
+        .then(function () { return H.selectionEnd && H.selectionEnd(); })
+        .catch(function () { haptic('light'); });
+    } else if (typeof H.selectionChanged === 'function') {
+      Promise.resolve(H.selectionChanged()).catch(function () { haptic('light'); });
+    } else {
+      haptic('light');
+    }
+  } catch (e) {
+    haptic('light');
+  }
+}
+
+/** Retry plugin lookup after native bridge finishes loading */
+function armHapticsRetry() {
+  var n = 0;
+  var t = setInterval(function () {
+    n += 1;
+    _hapticsPlugin = null;
+    if (getHapticsPlugin() || n >= 20) clearInterval(t);
+  }, 200);
+}
 
 function updateCartCount() {
-  var n = (typeof cart !== 'undefined' && cart) ? cart.length : 0;
+  var n = cartItemCount();
   ['cart-count', 'cart-count-mobile', 'cart-count-native'].forEach(function (id) {
     var el = document.getElementById(id);
     if (el) el.textContent = n;
   });
 }
 
-function addToCart(name, price) {
-    cart.push({ id: Date.now(), name, price: Number(price) });
-    localStorage.setItem('sb_cart', JSON.stringify(cart));
-    updateCartCount();
-    showToast(`${name} added to cart`);
+/**
+ * Add to cart. size optional. Merges same productId+size (or name+size).
+ * @param {string} name
+ * @param {number} price
+ * @param {{productId?:number|string, size?:string, qty?:number}} [opts]
+ */
+function addToCart(name, price, opts) {
+  opts = opts || {};
+  var productId = opts.productId != null ? opts.productId : null;
+  var size = (opts.size || '').trim();
+  var qty = Math.max(1, Number(opts.qty) || 1);
+
+  var existing = cart.findIndex(function (item) {
+    if (productId != null && item.productId != null) {
+      return String(item.productId) === String(productId) && (item.size || '') === size;
+    }
+    return item.name === name && (item.size || '') === size;
+  });
+
+  if (existing >= 0) {
+    cart[existing].qty += qty;
+  } else {
+    cart.push({
+      productId: productId,
+      name: name,
+      price: Number(price) || 0,
+      qty: qty,
+      size: size
+    });
+  }
+  saveCart();
+  haptic('medium');
+  var label = size ? name + ' (' + size + ')' : name;
+  showToast(label + ' added to cart');
 }
 
 function showCart() {
-    const drawer = document.getElementById('cart-drawer');
-    if (!drawer) {
-        window.location.href = 'merch.html';
-        return;
-    }
-    const itemsContainer = document.getElementById('cart-items');
-    itemsContainer.innerHTML = '';
+  ensureCartUi();
+  haptic('light');
+  var drawer = document.getElementById('cart-drawer');
+  if (!drawer) {
+    window.location.href = 'merch.html';
+    return;
+  }
+  var itemsContainer = document.getElementById('cart-items');
+  if (!itemsContainer) return;
 
-    if (cart.length === 0) {
-        itemsContainer.innerHTML = `
-            <div class="flex flex-col items-center justify-center h-full text-center py-12">
-                <i class="fa-solid fa-shopping-cart text-5xl text-zinc-700 mb-4"></i>
-                <p class="text-zinc-400">Your cart is empty</p>
-            </div>`;
-        document.getElementById('cart-total').textContent = '$0';
+  var native = isNativeAppShell();
+  // Raise above top navbar (z-200) and bottom tabs (z-100)
+  drawer.style.zIndex = '99999';
+  drawer.classList.toggle('native-cart-overlay', native);
+
+  // Mark sheet panel for native layout
+  var sheet = drawer.firstElementChild;
+  if (sheet) {
+    sheet.classList.toggle('native-cart-sheet', native);
+    if (native) {
+      sheet.style.maxHeight = 'min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 3.5rem))';
+      sheet.style.height = 'auto';
+      sheet.style.width = '100%';
+      sheet.style.maxWidth = '100%';
+      sheet.style.borderRadius = '20px 20px 0 0';
+      sheet.style.display = 'flex';
+      sheet.style.flexDirection = 'column';
+      sheet.style.overflow = 'hidden';
+      sheet.style.background = '#1c1c1e';
+      sheet.style.paddingBottom = '0';
     } else {
-        let total = 0;
-        cart.forEach((item, index) => {
-            total += item.price;
-            itemsContainer.innerHTML += `
-                <div class="flex justify-between items-start bg-zinc-950 border border-zinc-700 rounded-2xl p-4">
-                    <div>
-                        <div class="font-medium">${item.name}</div>
-                        <div class="font-mono text-xs text-orange-500 mt-px">$${item.price}</div>
-                    </div>
-                    <button onclick="removeFromCart(${index})" class="text-xs px-3 py-1 text-red-400 hover:text-red-500">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
-                </div>`;
-        });
-        document.getElementById('cart-total').textContent = '$' + total.toFixed(2);
+      sheet.style.maxHeight = '';
+      sheet.style.height = '';
+      sheet.style.width = '';
+      sheet.style.maxWidth = '';
+      sheet.style.borderRadius = '';
+      sheet.style.paddingBottom = '';
     }
-    drawer.classList.remove('hidden');
-    drawer.classList.add('flex');
+  }
+
+  itemsContainer.innerHTML = '';
+  itemsContainer.style.webkitOverflowScrolling = 'touch';
+  itemsContainer.style.overflowY = 'auto';
+  itemsContainer.style.minHeight = '0';
+  itemsContainer.style.flex = '1 1 auto';
+
+  if (cart.length === 0) {
+    itemsContainer.innerHTML =
+      '<div class="native-cart-empty flex flex-col items-center justify-center text-center py-12">' +
+      '<i class="fa-solid fa-shopping-cart text-5xl text-zinc-600 mb-4"></i>' +
+      '<p class="text-zinc-400">Your cart is empty</p></div>';
+    var totEl = document.getElementById('cart-total');
+    if (totEl) totEl.textContent = '$0.00';
+  } else {
+    cart.forEach(function (item, index) {
+      var line = (Number(item.price) || 0) * (item.qty || 1);
+      var sizeHtml = item.size
+        ? '<div class="text-[11px] text-zinc-500 mt-0.5">Size: ' + escapeCartHtml(item.size) + '</div>'
+        : '';
+      itemsContainer.innerHTML +=
+        '<div class="flex gap-3 items-start bg-zinc-950 border border-zinc-700 rounded-2xl p-4">' +
+        '<div class="flex-1 min-w-0">' +
+        '<div class="font-medium truncate">' + escapeCartHtml(item.name) + '</div>' +
+        sizeHtml +
+        '<div class="font-mono text-xs text-orange-500 mt-1">$' + Number(item.price).toFixed(2) + ' each</div>' +
+        '<div class="flex items-center gap-2 mt-3">' +
+        '<button type="button" onclick="changeCartQty(' + index + ', -1)" class="w-10 h-10 rounded-xl border border-zinc-700 hover:bg-zinc-800 text-base">−</button>' +
+        '<span class="w-8 text-center text-sm font-mono">' + item.qty + '</span>' +
+        '<button type="button" onclick="changeCartQty(' + index + ', 1)" class="w-10 h-10 rounded-xl border border-zinc-700 hover:bg-zinc-800 text-base">+</button>' +
+        '</div></div>' +
+        '<div class="text-right shrink-0">' +
+        '<div class="font-mono text-sm">$' + line.toFixed(2) + '</div>' +
+        '<button type="button" onclick="removeFromCart(' + index + ')" class="mt-2 text-xs text-red-400 hover:text-red-300 px-2 py-1">' +
+        '<i class="fa-solid fa-trash"></i></button></div></div>';
+    });
+    var totEl2 = document.getElementById('cart-total');
+    if (totEl2) totEl2.textContent = '$' + cartTotal().toFixed(2);
+  }
+
+  // Header: add grab + Done on native
+  var header = sheet && sheet.children[0];
+  if (native && header && !header.querySelector('.native-cart-grab')) {
+    var grab = document.createElement('div');
+    grab.className = 'native-cart-grab';
+    header.insertBefore(grab, header.firstChild);
+    header.style.flexDirection = 'column';
+    header.style.alignItems = 'stretch';
+    header.style.paddingTop = '10px';
+    var row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.justifyContent = 'space-between';
+    row.style.alignItems = 'center';
+    row.style.width = '100%';
+    while (header.childNodes.length > 1) {
+      row.appendChild(header.childNodes[1]);
+    }
+    header.appendChild(row);
+  }
+
+  // Footer checkout area: pad above home indicator; sit above bottom tabs area
+  var footer = sheet && sheet.lastElementChild;
+  if (footer) {
+    if (native) {
+      footer.style.paddingBottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
+      footer.style.flexShrink = '0';
+    } else {
+      footer.style.paddingBottom = '';
+    }
+  }
+
+  drawer.classList.remove('hidden');
+  drawer.classList.add('flex');
+  if (native) {
+    drawer.style.display = 'flex';
+    drawer.style.alignItems = 'flex-end';
+    drawer.style.justifyContent = 'stretch';
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function changeCartQty(index, delta) {
+  if (!cart[index]) return;
+  cart[index].qty = Math.max(1, (cart[index].qty || 1) + delta);
+  if (cart[index].qty <= 0) cart.splice(index, 1);
+  saveCart();
+  hapticSelection();
+  showCart();
 }
 
 function removeFromCart(index) {
-    cart.splice(index, 1);
-    localStorage.setItem('sb_cart', JSON.stringify(cart));
-    updateCartCount();
-    showCart();
+  cart.splice(index, 1);
+  saveCart();
+  haptic('warning');
+  showCart();
 }
 
 function hideCart() {
-    const drawer = document.getElementById('cart-drawer');
-    if (drawer) {
-        drawer.classList.remove('flex');
-        drawer.classList.add('hidden');
-    }
+  haptic('light');
+  var drawer = document.getElementById('cart-drawer');
+  if (drawer) {
+    drawer.classList.remove('flex', 'native-cart-overlay');
+    drawer.classList.add('hidden');
+    drawer.style.display = '';
+    drawer.style.alignItems = '';
+    drawer.style.justifyContent = '';
+  }
+  document.body.style.overflow = '';
 }
 
-async function checkout() {
-    if (cart.length === 0) return;
-    const total = cart.reduce((sum, item) => sum + item.price, 0);
+function escapeCartHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
-    // Save order to Supabase if available
-    try {
-        if (window.sb) {
-            const session = await getSession();
-            const { error } = await sb.from('orders').insert({
-                user_id: session?.user?.id || null,
-                customer_email: session?.user?.email || null,
-                items: cart,
-                total: total,
-                status: 'pending'
-            });
-            if (error) console.warn('Order save failed (still completing demo checkout):', error.message);
-        }
-    } catch (e) {
-        console.warn('Supabase order error:', e);
+/** Opens checkout form modal (collect shipping). Stripe later. */
+function checkout() {
+  if (cart.length === 0) return;
+  hideCart();
+  openCheckoutModal();
+}
+
+function openCheckoutModal() {
+  var modal = document.getElementById('checkout-modal');
+  if (!modal) {
+    // Fallback if partial not loaded yet
+    alert('Checkout form not ready. Refresh and try again.');
+    return;
+  }
+  var totalEl = document.getElementById('checkout-total-display');
+  if (totalEl) totalEl.textContent = '$' + cartTotal().toFixed(2);
+  var err = document.getElementById('checkout-error');
+  if (err) { err.textContent = ''; err.classList.add('hidden'); }
+
+  // Prefill from session if available
+  try {
+    if (window.sb && window.sb.auth) {
+      window.sb.auth.getSession().then(function (res) {
+        var user = res.data && res.data.session && res.data.session.user;
+        if (!user) return;
+        var email = document.getElementById('co-email');
+        var name = document.getElementById('co-name');
+        if (email && !email.value) email.value = user.email || '';
+        var meta = user.user_metadata || {};
+        if (name && !name.value) name.value = meta.full_name || meta.name || '';
+      }).catch(function () {});
     }
+  } catch (e) {}
 
-    hideCart();
-    setTimeout(() => {
-        showToast(`Thank you! $${total.toFixed(2)} order placed. We'll be in touch.`);
-        cart = [];
-        localStorage.setItem('sb_cart', JSON.stringify(cart));
-        updateCartCount();
-    }, 300);
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+}
+
+function closeCheckoutModal() {
+  var modal = document.getElementById('checkout-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.style.display = 'none';
+}
+
+async function submitCheckout(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  if (cart.length === 0) {
+    closeCheckoutModal();
+    return;
+  }
+
+  var name = (document.getElementById('co-name') || {}).value || '';
+  var email = (document.getElementById('co-email') || {}).value || '';
+  var phone = (document.getElementById('co-phone') || {}).value || '';
+  var address = (document.getElementById('co-address') || {}).value || '';
+  var city = (document.getElementById('co-city') || {}).value || '';
+  var province = (document.getElementById('co-province') || {}).value || '';
+  var postal = (document.getElementById('co-postal') || {}).value || '';
+  var notes = (document.getElementById('co-notes') || {}).value || '';
+  var errEl = document.getElementById('checkout-error');
+  var btn = document.getElementById('checkout-submit-btn');
+
+  name = name.trim();
+  email = email.trim();
+  if (!name || !email) {
+    if (errEl) {
+      errEl.textContent = 'Name and email are required.';
+      errEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  var total = cartTotal();
+  var items = cart.map(function (item) {
+    return {
+      productId: item.productId,
+      name: item.name,
+      price: Number(item.price),
+      qty: item.qty || 1,
+      size: item.size || ''
+    };
+  });
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Placing order…';
+  }
+  if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
+
+  var userId = null;
+  try {
+    if (window.sb && window.sb.auth) {
+      var sess = await window.sb.auth.getSession();
+      userId = sess.data && sess.data.session && sess.data.session.user
+        ? sess.data.session.user.id
+        : null;
+    }
+  } catch (e) {}
+
+  try {
+    if (!window.sb) throw new Error('Store is offline. Try again later.');
+
+    var payload = {
+      user_id: userId,
+      customer_name: name,
+      customer_email: email,
+      customer_phone: phone || null,
+      shipping_address: address || null,
+      shipping_city: city || null,
+      shipping_province: province || null,
+      shipping_postal: postal || null,
+      notes: notes || null,
+      items: items,
+      total: total,
+      status: 'pending'
+    };
+
+    var result = await window.sb.from('orders').insert(payload);
+    if (result.error) throw new Error(result.error.message);
+
+    cart = [];
+    saveCart();
+    closeCheckoutModal();
+    showToast('Order placed — $' + total.toFixed(2) + '. We\'ll email you about payment.');
+
+    // Admin-only push: new merch order
+    try {
+      var itemNames = items.map(function (it) {
+        return (it.qty || 1) + '× ' + it.name + (it.size ? ' (' + it.size + ')' : '');
+      }).join(', ');
+      if (itemNames.length > 100) itemNames = itemNames.slice(0, 97) + '…';
+      if (typeof broadcastPush === 'function') {
+        await broadcastPush({
+          title: 'SB Racing · New order',
+          body: name + ' · $' + total.toFixed(2) + (itemNames ? ' — ' + itemNames : ''),
+          url: 'merch.html',
+          type: 'order',
+          audience: 'admins'
+        });
+      }
+    } catch (nerr) {
+      console.warn('[checkout] admin notify', nerr);
+    }
+  } catch (err) {
+    console.error('[checkout]', err);
+    if (errEl) {
+      errEl.textContent = err.message || 'Could not place order.';
+      errEl.classList.remove('hidden');
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Place order';
+    }
+  }
 }
 
 // Escape closes modals
@@ -520,6 +946,10 @@ function applyNavShell() {
             var active = href === pathName;
             tab.classList.toggle('bottom-tab-active', active);
             tab.style.color = active ? '#f97316' : '#71717a';
+            if (!tab.dataset.hapticBound) {
+                tab.dataset.hapticBound = '1';
+                tab.addEventListener('click', function () { hapticSelection(); }, { passive: true });
+            }
         });
     } catch (e) {}
 
@@ -689,6 +1119,8 @@ function startNavShellWatch() {
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSiteNav();
     await loadSiteFooter();
+    ensureCartUi();
+    armHapticsRetry();
     startNavShellWatch();
     ensureTrailsNavLink();
     updateNavCartVisibility();

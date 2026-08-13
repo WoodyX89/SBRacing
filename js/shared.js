@@ -79,28 +79,62 @@ async function loadSiteNav() {
     mount.innerHTML = '<nav id="navbar" class="fixed top-0 left-0 right-0 z-[100] bg-black p-4 text-white border-b border-zinc-800"><a href="index.html" class="font-bold">SB Racing</a></nav>';
 }
 
-// Load shared footer + cart drawer + toast from partials/footer.html
 async function loadSiteFooter() {
-    const mount = document.getElementById('site-footer');
-    if (!mount) return;
-    const candidates = [
+    var mount = document.getElementById('site-footer');
+    var candidates = [
         'partials/footer.html',
         './partials/footer.html',
-        '/partials/footer.html'
+        '/partials/footer.html',
+        'footer.html'
     ];
-    let lastErr = null;
-    for (const url of candidates) {
+    var html = null;
+    var lastErr = null;
+    for (var i = 0; i < candidates.length; i++) {
         try {
-            const res = await fetch(url, { cache: 'no-cache' });
-            if (!res.ok) throw new Error('footer ' + res.status + ' ' + url);
-            mount.innerHTML = await res.text();
-            return;
+            var res = await fetch(candidates[i], { cache: 'no-cache' });
+            if (!res.ok) throw new Error('footer ' + res.status + ' ' + candidates[i]);
+            html = await res.text();
+            console.log('[footer] loaded', candidates[i]);
+            break;
         } catch (e) {
             lastErr = e;
         }
     }
-    console.error('[footer] failed to load partials/footer.html', lastErr);
+    if (html && mount) {
+        mount.innerHTML = html;
+    } else if (!html) {
+        console.error('[footer] failed to load partials/footer.html', lastErr);
+    }
+    ensureCartUi();
 }
+
+/** Inject cart drawer if footer partial failed */
+function ensureCartUi() {
+    if (document.getElementById('cart-drawer')) return;
+    var wrap = document.createElement('div');
+    wrap.id = 'site-footer-fallback';
+    wrap.innerHTML =
+      '<div id="cart-drawer" class="hidden fixed inset-0 bg-black/60 z-[90] flex justify-end">' +
+      '<div class="w-full max-w-md bg-zinc-900 h-full overflow-y-auto p-6 flex flex-col">' +
+      '<div class="flex justify-between items-center mb-6">' +
+      '<div class="font-bold text-xl">Your Cart</div>' +
+      '<button type="button" onclick="hideCart()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button></div>' +
+      '<div id="cart-items" class="flex-1 space-y-4"></div>' +
+      '<div class="border-t border-zinc-800 pt-4 mt-4">' +
+      '<div class="flex justify-between text-lg font-semibold mb-4"><span>Total</span><span id="cart-total">$0.00</span></div>' +
+      '<button type="button" onclick="openCheckoutModal()" class="w-full py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold">Checkout</button>' +
+      '</div></div></div>' +
+      '<div id="success-toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-8 py-3 rounded-2xl shadow-xl z-[110] text-sm font-medium">Done</div>';
+    document.body.appendChild(wrap);
+    var drawer = document.getElementById('cart-drawer');
+    if (drawer) {
+      drawer.addEventListener('click', function (e) {
+        if (e.target && e.target.id === 'cart-drawer') hideCart();
+      });
+    }
+    console.log('[footer] injected fallback cart UI');
+}
+
 
 // Shared navigation + cart + toast helpers for multi-page SB Racing site
 
@@ -214,6 +248,102 @@ function saveCart() {
   updateCartCount();
 }
 
+var _hapticsPlugin = null;
+var _hapticsTried = false;
+
+function getHapticsPlugin() {
+  if (_hapticsPlugin) return _hapticsPlugin;
+  try {
+    if (!window.Capacitor) return null;
+    var H = null;
+    var plugs = Capacitor.Plugins || {};
+    H = plugs.Haptics || plugs.haptics || null;
+    if (!H && typeof Capacitor.registerPlugin === 'function') {
+      try { H = Capacitor.registerPlugin('Haptics'); } catch (e1) {}
+    }
+    if (!H && typeof Capacitor.getPlugin === 'function') {
+      try { H = Capacitor.getPlugin('Haptics'); } catch (e2) {}
+    }
+    if (H) {
+      _hapticsPlugin = H;
+      console.log('[haptics] plugin ready', Object.keys(H));
+    } else if (!_hapticsTried && isNativeAppShell()) {
+      _hapticsTried = true;
+      console.warn('[haptics] not registered. plugins=', Object.keys(plugs));
+      console.warn('[haptics] run: npm i @capacitor/haptics && npx cap sync ios && clean Xcode build');
+    }
+    return H;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Call from Safari console on device: testHaptics() */
+window.testHaptics = function () {
+  console.log('Capacitor?', !!window.Capacitor);
+  console.log('native?', isNativeAppShell());
+  console.log('plugins', window.Capacitor && Capacitor.Plugins && Object.keys(Capacitor.Plugins));
+  var H = getHapticsPlugin();
+  console.log('Haptics plugin', H);
+  haptic('medium');
+  setTimeout(function () { hapticSelection(); }, 300);
+  setTimeout(function () { haptic('warning'); }, 600);
+  return !!H;
+};
+
+function haptic(style) {
+  try {
+    var H = getHapticsPlugin();
+    if (!H) return;
+    var s = (style || 'light').toLowerCase();
+    var p;
+    if (s === 'success' || s === 'warning' || s === 'error') {
+      if (typeof H.notification === 'function') {
+        var map = { success: 'SUCCESS', warning: 'WARNING', error: 'ERROR' };
+        p = H.notification({ type: map[s] });
+      }
+    } else if (typeof H.impact === 'function') {
+      var impact = 'LIGHT';
+      if (s === 'medium') impact = 'MEDIUM';
+      if (s === 'heavy') impact = 'HEAVY';
+      // Cap 5+ accepts string style; also try ImpactStyle-like object
+      p = H.impact({ style: impact });
+    }
+    if (p && typeof p.catch === 'function') p.catch(function (err) { console.warn('[haptics] fail', err); });
+  } catch (e) {
+    console.warn('[haptics]', e);
+  }
+}
+
+function hapticSelection() {
+  try {
+    var H = getHapticsPlugin();
+    if (!H) return;
+    if (typeof H.selectionStart === 'function') {
+      Promise.resolve(H.selectionStart())
+        .then(function () { return H.selectionChanged && H.selectionChanged(); })
+        .then(function () { return H.selectionEnd && H.selectionEnd(); })
+        .catch(function () { haptic('light'); });
+    } else if (typeof H.selectionChanged === 'function') {
+      Promise.resolve(H.selectionChanged()).catch(function () { haptic('light'); });
+    } else {
+      haptic('light');
+    }
+  } catch (e) {
+    haptic('light');
+  }
+}
+
+/** Retry plugin lookup after native bridge finishes loading */
+function armHapticsRetry() {
+  var n = 0;
+  var t = setInterval(function () {
+    n += 1;
+    _hapticsPlugin = null;
+    if (getHapticsPlugin() || n >= 20) clearInterval(t);
+  }, 200);
+}
+
 function updateCartCount() {
   var n = cartItemCount();
   ['cart-count', 'cart-count-mobile', 'cart-count-native'].forEach(function (id) {
@@ -249,20 +379,18 @@ function addToCart(name, price, opts) {
       name: name,
       price: Number(price) || 0,
       qty: qty,
-      size: size,
-      color: (opts.color || '').trim()
+      size: size
     });
   }
   saveCart();
-  var color = (opts.color || '').trim();
-  var bits = [];
-  if (color) bits.push(color);
-  if (size) bits.push(size);
-  var label = bits.length ? name + ' (' + bits.join(' · ') + ')' : name;
+  haptic('medium');
+  var label = size ? name + ' (' + size + ')' : name;
   showToast(label + ' added to cart');
 }
 
 function showCart() {
+  ensureCartUi();
+  haptic('light');
   var drawer = document.getElementById('cart-drawer');
   if (!drawer) {
     window.location.href = 'merch.html';
@@ -270,23 +398,55 @@ function showCart() {
   }
   var itemsContainer = document.getElementById('cart-items');
   if (!itemsContainer) return;
+
+  var native = isNativeAppShell();
+  // Raise above top navbar (z-200) and bottom tabs (z-100)
+  drawer.style.zIndex = '99999';
+  drawer.classList.toggle('native-cart-overlay', native);
+
+  // Mark sheet panel for native layout
+  var sheet = drawer.firstElementChild;
+  if (sheet) {
+    sheet.classList.toggle('native-cart-sheet', native);
+    if (native) {
+      sheet.style.maxHeight = 'min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 3.5rem))';
+      sheet.style.height = 'auto';
+      sheet.style.width = '100%';
+      sheet.style.maxWidth = '100%';
+      sheet.style.borderRadius = '20px 20px 0 0';
+      sheet.style.display = 'flex';
+      sheet.style.flexDirection = 'column';
+      sheet.style.overflow = 'hidden';
+      sheet.style.background = '#1c1c1e';
+      sheet.style.paddingBottom = '0';
+    } else {
+      sheet.style.maxHeight = '';
+      sheet.style.height = '';
+      sheet.style.width = '';
+      sheet.style.maxWidth = '';
+      sheet.style.borderRadius = '';
+      sheet.style.paddingBottom = '';
+    }
+  }
+
   itemsContainer.innerHTML = '';
+  itemsContainer.style.webkitOverflowScrolling = 'touch';
+  itemsContainer.style.overflowY = 'auto';
+  itemsContainer.style.minHeight = '0';
+  itemsContainer.style.flex = '1 1 auto';
 
   if (cart.length === 0) {
     itemsContainer.innerHTML =
-      '<div class="flex flex-col items-center justify-center h-full text-center py-12">' +
-      '<i class="fa-solid fa-shopping-cart text-5xl text-zinc-700 mb-4"></i>' +
+      '<div class="native-cart-empty flex flex-col items-center justify-center text-center py-12">' +
+      '<i class="fa-solid fa-shopping-cart text-5xl text-zinc-600 mb-4"></i>' +
       '<p class="text-zinc-400">Your cart is empty</p></div>';
     var totEl = document.getElementById('cart-total');
     if (totEl) totEl.textContent = '$0.00';
   } else {
     cart.forEach(function (item, index) {
       var line = (Number(item.price) || 0) * (item.qty || 1);
-      var metaBits = [];
-      if (item.color) metaBits.push(escapeCartHtml(item.color));
-      if (item.size) metaBits.push('Size ' + escapeCartHtml(item.size));
-      var sizeHtml = metaBits.length
-        ? '<div class="text-[11px] text-zinc-500 mt-0.5">' + metaBits.join(' · ') + '</div>'
+      var sizeHtml = item.size
+        ? '<div class="text-[11px] text-zinc-500 mt-0.5">Size: ' + escapeCartHtml(item.size) + '</div>'
         : '';
       itemsContainer.innerHTML +=
         '<div class="flex gap-3 items-start bg-zinc-950 border border-zinc-700 rounded-2xl p-4">' +
@@ -295,20 +455,58 @@ function showCart() {
         sizeHtml +
         '<div class="font-mono text-xs text-orange-500 mt-1">$' + Number(item.price).toFixed(2) + ' each</div>' +
         '<div class="flex items-center gap-2 mt-3">' +
-        '<button type="button" onclick="changeCartQty(' + index + ', -1)" class="w-8 h-8 rounded-xl border border-zinc-700 hover:bg-zinc-800 text-sm">−</button>' +
+        '<button type="button" onclick="changeCartQty(' + index + ', -1)" class="w-10 h-10 rounded-xl border border-zinc-700 hover:bg-zinc-800 text-base">−</button>' +
         '<span class="w-8 text-center text-sm font-mono">' + item.qty + '</span>' +
-        '<button type="button" onclick="changeCartQty(' + index + ', 1)" class="w-8 h-8 rounded-xl border border-zinc-700 hover:bg-zinc-800 text-sm">+</button>' +
+        '<button type="button" onclick="changeCartQty(' + index + ', 1)" class="w-10 h-10 rounded-xl border border-zinc-700 hover:bg-zinc-800 text-base">+</button>' +
         '</div></div>' +
         '<div class="text-right shrink-0">' +
         '<div class="font-mono text-sm">$' + line.toFixed(2) + '</div>' +
-        '<button type="button" onclick="removeFromCart(' + index + ')" class="mt-2 text-xs text-red-400 hover:text-red-300">' +
+        '<button type="button" onclick="removeFromCart(' + index + ')" class="mt-2 text-xs text-red-400 hover:text-red-300 px-2 py-1">' +
         '<i class="fa-solid fa-trash"></i></button></div></div>';
     });
     var totEl2 = document.getElementById('cart-total');
     if (totEl2) totEl2.textContent = '$' + cartTotal().toFixed(2);
   }
+
+  // Header: add grab + Done on native
+  var header = sheet && sheet.children[0];
+  if (native && header && !header.querySelector('.native-cart-grab')) {
+    var grab = document.createElement('div');
+    grab.className = 'native-cart-grab';
+    header.insertBefore(grab, header.firstChild);
+    header.style.flexDirection = 'column';
+    header.style.alignItems = 'stretch';
+    header.style.paddingTop = '10px';
+    var row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.justifyContent = 'space-between';
+    row.style.alignItems = 'center';
+    row.style.width = '100%';
+    while (header.childNodes.length > 1) {
+      row.appendChild(header.childNodes[1]);
+    }
+    header.appendChild(row);
+  }
+
+  // Footer checkout area: pad above home indicator; sit above bottom tabs area
+  var footer = sheet && sheet.lastElementChild;
+  if (footer) {
+    if (native) {
+      footer.style.paddingBottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
+      footer.style.flexShrink = '0';
+    } else {
+      footer.style.paddingBottom = '';
+    }
+  }
+
   drawer.classList.remove('hidden');
   drawer.classList.add('flex');
+  if (native) {
+    drawer.style.display = 'flex';
+    drawer.style.alignItems = 'flex-end';
+    drawer.style.justifyContent = 'stretch';
+    document.body.style.overflow = 'hidden';
+  }
 }
 
 function changeCartQty(index, delta) {
@@ -316,21 +514,28 @@ function changeCartQty(index, delta) {
   cart[index].qty = Math.max(1, (cart[index].qty || 1) + delta);
   if (cart[index].qty <= 0) cart.splice(index, 1);
   saveCart();
+  hapticSelection();
   showCart();
 }
 
 function removeFromCart(index) {
   cart.splice(index, 1);
   saveCart();
+  haptic('warning');
   showCart();
 }
 
 function hideCart() {
+  haptic('light');
   var drawer = document.getElementById('cart-drawer');
   if (drawer) {
-    drawer.classList.remove('flex');
+    drawer.classList.remove('flex', 'native-cart-overlay');
     drawer.classList.add('hidden');
+    drawer.style.display = '';
+    drawer.style.alignItems = '';
+    drawer.style.justifyContent = '';
   }
+  document.body.style.overflow = '';
 }
 
 function escapeCartHtml(str) {
@@ -466,6 +671,25 @@ async function submitCheckout(e) {
     saveCart();
     closeCheckoutModal();
     showToast('Order placed — $' + total.toFixed(2) + '. We\'ll email you about payment.');
+
+    // Admin-only push: new merch order
+    try {
+      var itemNames = items.map(function (it) {
+        return (it.qty || 1) + '× ' + it.name + (it.size ? ' (' + it.size + ')' : '');
+      }).join(', ');
+      if (itemNames.length > 100) itemNames = itemNames.slice(0, 97) + '…';
+      if (typeof broadcastPush === 'function') {
+        await broadcastPush({
+          title: 'SB Racing · New order',
+          body: name + ' · $' + total.toFixed(2) + (itemNames ? ' — ' + itemNames : ''),
+          url: 'merch.html',
+          type: 'order',
+          audience: 'admins'
+        });
+      }
+    } catch (nerr) {
+      console.warn('[checkout] admin notify', nerr);
+    }
   } catch (err) {
     console.error('[checkout]', err);
     if (errEl) {
@@ -722,6 +946,10 @@ function applyNavShell() {
             var active = href === pathName;
             tab.classList.toggle('bottom-tab-active', active);
             tab.style.color = active ? '#f97316' : '#71717a';
+            if (!tab.dataset.hapticBound) {
+                tab.dataset.hapticBound = '1';
+                tab.addEventListener('click', function () { hapticSelection(); }, { passive: true });
+            }
         });
     } catch (e) {}
 
@@ -891,6 +1119,8 @@ function startNavShellWatch() {
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSiteNav();
     await loadSiteFooter();
+    ensureCartUi();
+    armHapticsRetry();
     startNavShellWatch();
     ensureTrailsNavLink();
     updateNavCartVisibility();
