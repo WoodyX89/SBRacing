@@ -12,6 +12,7 @@ let eventSocial = {};
 let eventsCurrentUserId = null;
 let eventProfiles = {}; // user_id -> { full_name }
 let eventRealtimeChannel = null;
+let eventsSpotsChannel = null;
 /** @type {Record<number, object>} event_id -> my rsvp row */
 let myRsvpByEvent = {};
 /** @type {Record<number, number>} confirmed rsvp counts */
@@ -192,6 +193,7 @@ async function loadEvents() {
     await loadMyRsvps();
     renderEvents();
     subscribeEventLikesRealtime();
+    subscribeEventSpotsRealtime();
     try {
       if (typeof scheduleEventReminders === 'function') {
         await scheduleEventReminders(allEvents, myRsvpByEvent);
@@ -624,6 +626,64 @@ function subscribeEventLikesRealtime() {
     console.warn('[events] realtime setup failed', e);
   }
 }
+
+/** Live RSVP / spots_taken updates (no full page refresh) */
+function subscribeEventSpotsRealtime() {
+  if (!window.sb || eventsSpotsChannel) return;
+  try {
+    eventsSpotsChannel = window.sb
+      .channel('event-spots-live')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'events' }, function (payload) {
+        var row = payload.new;
+        if (!row || row.id == null) return;
+        var eventId = Number(row.id);
+        var taken = Number(row.spots_taken) || 0;
+        rsvpCountByEvent[eventId] = taken;
+        var ev = allEvents.find(function (e) { return Number(e.id) === eventId; });
+        if (ev) {
+          ev.spots_taken = taken;
+          if (row.capacity != null) ev.capacity = row.capacity;
+        }
+        clearTimeout(subscribeEventSpotsRealtime['_t']);
+        subscribeEventSpotsRealtime['_t'] = setTimeout(function () {
+          if (typeof renderEvents === 'function') renderEvents();
+        }, 80);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rsvps' }, function (payload) {
+        // Debounced full refresh of my RSVPs + counts so buttons flip without reload
+        clearTimeout(subscribeEventSpotsRealtime['_r']);
+        subscribeEventSpotsRealtime['_r'] = setTimeout(async function () {
+          try {
+            if (typeof loadMyRsvps === 'function') await loadMyRsvps();
+          } catch (e) {}
+          // Prefer server spots_taken on events when possible
+          try {
+            if (window.sb && allEvents.length) {
+              var ids = allEvents.map(function (e) { return e.id; });
+              var res = await window.sb.from('events').select('id, spots_taken, capacity').in('id', ids);
+              if (res.data) {
+                res.data.forEach(function (row) {
+                  rsvpCountByEvent[row.id] = Number(row.spots_taken) || 0;
+                  var ev = allEvents.find(function (e) { return Number(e.id) === Number(row.id); });
+                  if (ev) {
+                    ev.spots_taken = Number(row.spots_taken) || 0;
+                    if (row.capacity != null) ev.capacity = row.capacity;
+                  }
+                });
+              }
+            }
+          } catch (e2) {}
+          if (typeof renderEvents === 'function') renderEvents();
+        }, 150);
+      })
+      .subscribe(function (status) {
+        console.log('[events] spots realtime', status);
+      });
+  } catch (e) {
+    console.warn('[events] spots realtime failed', e);
+  }
+}
+
 
 async function toggleEventLike(eventId) {
   var user = null;

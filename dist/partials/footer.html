@@ -38,6 +38,20 @@
     </div>
 </div>
 
+<!-- Notifications Drawer (shared) -->
+<div id="notif-drawer" onclick="if (event.target.id === 'notif-drawer') hideNotifications()" class="hidden fixed inset-0 bg-black/60 z-[99999] flex justify-end">
+    <div onclick="event.stopImmediatePropagation()" class="w-full max-w-md bg-zinc-900 border-l border-zinc-700 h-full flex flex-col">
+        <div class="p-6 flex justify-between items-center border-b border-zinc-700">
+            <div class="font-bold text-xl">Notifications</div>
+            <div class="flex items-center gap-3">
+                <button type="button" onclick="clearAllNotifications()" class="text-xs text-zinc-400 hover:text-orange-400 font-medium">Clear all</button>
+                <button type="button" onclick="hideNotifications()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
+            </div>
+        </div>
+        <div id="notif-items" class="flex-1 overflow-auto p-4 space-y-3 text-sm"></div>
+    </div>
+</div>
+
 <!-- Checkout form (site-wide; Stripe later) -->
 <div id="checkout-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[100000] items-center justify-center p-4" style="display:none;"
      onclick="if(event.target.id==='checkout-modal')closeCheckoutModal()">

@@ -32,8 +32,7 @@ function isMerchPage() {
 }
 
 function updateNavCartVisibility() {
-  // Cart lives in desktop nav links + mobile hamburger menu on ALL pages.
-  // Header action-row cart is intentionally not used.
+  // Cart + notifications live in desktop header + mobile hamburger on ALL pages.
   var btn = document.getElementById('nav-cart-btn');
   if (btn) {
     btn.classList.add('hidden');
@@ -49,6 +48,17 @@ function updateNavCartVisibility() {
     mobileBtn.classList.remove('hidden');
     mobileBtn.style.display = 'flex';
   }
+  var notifDesk = document.getElementById('nav-notif-desktop');
+  if (notifDesk) {
+    notifDesk.classList.remove('hidden');
+    notifDesk.style.display = '';
+  }
+  var notifMobile = document.getElementById('nav-notif-btn-mobile');
+  if (notifMobile) {
+    notifMobile.classList.remove('hidden');
+    notifMobile.style.display = 'flex';
+  }
+  try { if (typeof updateNotifCount === 'function') updateNotifCount(); } catch (e) {}
 }
 
 
@@ -106,6 +116,7 @@ async function loadSiteFooter() {
         console.error('[footer] failed to load partials/footer.html', lastErr);
     }
     ensureCartUi();
+    try { updateNotifCount(); } catch (e) {}
 }
 
 /** Inject cart drawer if footer partial failed */
@@ -351,6 +362,348 @@ function updateCartCount() {
     if (el) el.textContent = n;
   });
 }
+
+
+// ─── In-app notification inbox (localStorage) ───────────────────────────────
+var NOTIF_STORAGE_KEY = 'sb_notifications';
+var NOTIF_MAX = 50;
+
+function loadNotifications() {
+  try {
+    var raw = localStorage.getItem(NOTIF_STORAGE_KEY);
+    var list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveNotifications(list) {
+  try {
+    localStorage.setItem(NOTIF_STORAGE_KEY, JSON.stringify(list.slice(0, NOTIF_MAX)));
+  } catch (e) {}
+}
+
+function notifUnreadCount() {
+  // Badge stays until Clear all — count every item in the inbox
+  return loadNotifications().length;
+}
+
+function updateNotifCount() {
+  var n = notifUnreadCount();
+  ['notif-count', 'notif-count-mobile', 'notif-count-native'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = n > 99 ? '99+' : String(n);
+    if (n > 0) {
+      el.classList.remove('hidden');
+      el.style.display = '';
+    } else {
+      el.classList.add('hidden');
+    }
+  });
+  // Keep iOS home-screen badge in sync when possible
+  try {
+    if (typeof syncNativeBadge === 'function') syncNativeBadge(n);
+  } catch (e) {}
+}
+
+/**
+ * Add a notification to the in-app inbox.
+ * opts: { title, body, url, type, id }
+ * Returns the new item id.
+ */
+function addNotification(opts) {
+  opts = opts || {};
+  var list = loadNotifications();
+  var id = opts.id != null ? String(opts.id) : ('n' + Date.now() + '-' + Math.floor(Math.random() * 10000));
+  // de-dupe by id if provided
+  if (opts.id != null) {
+    var exists = list.some(function (n) { return String(n.id) === id; });
+    if (exists) {
+      updateNotifCount();
+      return id;
+    }
+  }
+  list.unshift({
+    id: id,
+    title: opts.title || 'Update',
+    body: opts.body || '',
+    url: opts.url || '',
+    type: opts.type || 'activity',
+    read: false,
+    ts: Date.now()
+  });
+  saveNotifications(list);
+  updateNotifCount();
+  return id;
+}
+
+function markNotificationRead(id) {
+  var list = loadNotifications();
+  var changed = false;
+  list.forEach(function (n) {
+    if (String(n.id) === String(id) && !n.read) {
+      n.read = true;
+      changed = true;
+    }
+  });
+  if (changed) {
+    saveNotifications(list);
+    updateNotifCount();
+  }
+}
+
+function removeNotification(id) {
+  var list = loadNotifications().filter(function (n) { return String(n.id) !== String(id); });
+  saveNotifications(list);
+  updateNotifCount();
+  if (document.getElementById('notif-drawer') && !document.getElementById('notif-drawer').classList.contains('hidden')) {
+    showNotifications();
+  }
+}
+
+function clearAllNotifications() {
+  saveNotifications([]);
+  updateNotifCount();
+  // Clear delivered OS notifications + native badge
+  try {
+    var Push = window.Capacitor && (Capacitor.Plugins && Capacitor.Plugins.PushNotifications
+      || (typeof Capacitor.registerPlugin === 'function' && Capacitor.registerPlugin('PushNotifications')));
+    if (Push && typeof Push.removeAllDeliveredNotifications === 'function') {
+      Push.removeAllDeliveredNotifications();
+    }
+  } catch (e) {}
+  // Reset server-side badge_count so the next push starts from 1 again
+  try {
+    if (typeof resetServerBadge === 'function') resetServerBadge();
+  } catch (e) {}
+  showNotifications();
+  if (typeof haptic === 'function') haptic('light');
+}
+
+/** Tell the edge function to zero this user's device badge_count */
+async function resetServerBadge() {
+  try {
+    if (!window.sb || !window.sb.functions) return;
+    await window.sb.functions.invoke('notify-event', {
+      body: { action: 'clear-badge' }
+    });
+  } catch (e) {
+    console.warn('[badge] resetServerBadge', e);
+  }
+}
+
+/** Keep server badge_count aligned with the in-app inbox (optional) */
+async function syncServerBadge(count) {
+  try {
+    if (!window.sb || !window.sb.functions) return;
+    count = Math.max(0, Number(count) || 0);
+    await window.sb.functions.invoke('notify-event', {
+      body: { action: 'set-badge', badge: count }
+    });
+  } catch (e) {
+    console.warn('[badge] syncServerBadge', e);
+  }
+}
+
+function ensureNotifUi() {
+  if (document.getElementById('notif-drawer')) return;
+  var wrap = document.createElement('div');
+  wrap.id = 'notif-drawer-fallback';
+  wrap.innerHTML =
+    '<div id="notif-drawer" class="hidden fixed inset-0 bg-black/60 z-[99999] flex justify-end">' +
+    '<div class="w-full max-w-md bg-zinc-900 h-full overflow-hidden p-0 flex flex-col border-l border-zinc-700">' +
+    '<div class="p-6 flex justify-between items-center border-b border-zinc-700">' +
+    '<div class="font-bold text-xl">Notifications</div>' +
+    '<div class="flex items-center gap-3">' +
+    '<button type="button" onclick="clearAllNotifications()" class="text-xs text-zinc-400 hover:text-orange-400 font-medium">Clear all</button>' +
+    '<button type="button" onclick="hideNotifications()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>' +
+    '</div></div>' +
+    '<div id="notif-items" class="flex-1 overflow-auto p-4 space-y-3 text-sm"></div>' +
+    '</div></div>';
+  document.body.appendChild(wrap);
+  var drawer = document.getElementById('notif-drawer');
+  if (drawer) {
+    drawer.addEventListener('click', function (e) {
+      if (e.target && e.target.id === 'notif-drawer') hideNotifications();
+    });
+  }
+}
+
+function escapeNotifHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatNotifTime(ts) {
+  if (!ts) return '';
+  var d = new Date(ts);
+  var now = Date.now();
+  var diff = Math.floor((now - d.getTime()) / 1000);
+  if (diff < 60) return 'Just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+  return d.toLocaleDateString();
+}
+
+function showNotifications() {
+  ensureNotifUi();
+  if (typeof haptic === 'function') haptic('light');
+  var drawer = document.getElementById('notif-drawer');
+  if (!drawer) return;
+
+  var native = typeof isNativeAppShell === 'function' && isNativeAppShell();
+  drawer.style.zIndex = '99999';
+  drawer.classList.remove('hidden');
+  drawer.classList.add('flex');
+  drawer.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  var sheet = drawer.firstElementChild;
+  if (sheet && native) {
+    sheet.style.maxHeight = 'min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 3.5rem))';
+    sheet.style.height = 'auto';
+    sheet.style.width = '100%';
+    sheet.style.maxWidth = '100%';
+    sheet.style.borderRadius = '20px 20px 0 0';
+    sheet.style.alignSelf = 'flex-end';
+    drawer.style.alignItems = 'flex-end';
+    drawer.style.justifyContent = 'center';
+  }
+
+  var itemsContainer = document.getElementById('notif-items');
+  if (!itemsContainer) return;
+  itemsContainer.innerHTML = '';
+
+  var list = loadNotifications();
+  // Badge stays until user taps Clear all (or removes individual items)
+  if (list.length === 0) {
+    itemsContainer.innerHTML =
+      '<div class="flex flex-col items-center justify-center text-center py-16">' +
+      '<i class="fa-regular fa-bell text-5xl text-zinc-600 mb-4"></i>' +
+      '<p class="text-zinc-400">No notifications yet</p>' +
+      '<p class="text-xs text-zinc-600 mt-2">Club updates and event alerts will show up here</p></div>';
+  } else {
+    list.forEach(function (n) {
+      var unreadDot = n.read
+        ? ''
+        : '<span class="w-2 h-2 rounded-full bg-orange-500 shrink-0 mt-1.5"></span>';
+      var bg = n.read ? 'bg-zinc-950/60' : 'bg-zinc-950 border-orange-900/40';
+      itemsContainer.innerHTML +=
+        '<div class="flex gap-3 items-start ' + bg + ' border border-zinc-700 rounded-2xl p-4">' +
+        unreadDot +
+        '<button type="button" class="flex-1 min-w-0 text-left" onclick="openNotification(\'' + escapeNotifHtml(n.id).replace(/'/g, '') + '\')">' +
+        '<div class="font-medium text-sm leading-snug">' + escapeNotifHtml(n.title) + '</div>' +
+        (n.body ? '<div class="text-xs text-zinc-400 mt-1 line-clamp-2">' + escapeNotifHtml(n.body) + '</div>' : '') +
+        '<div class="text-[11px] text-zinc-600 mt-1.5">' + formatNotifTime(n.ts) + '</div>' +
+        '</button>' +
+        '<button type="button" onclick="removeNotification(\'' + escapeNotifHtml(n.id).replace(/'/g, '') + '\')" class="text-zinc-500 hover:text-red-400 p-1 shrink-0" aria-label="Remove">' +
+        '<i class="fa-solid fa-xmark"></i></button>' +
+        '</div>';
+    });
+  }
+}
+
+function hideNotifications() {
+  if (typeof haptic === 'function') haptic('light');
+  var drawer = document.getElementById('notif-drawer');
+  if (drawer) {
+    drawer.classList.remove('flex');
+    drawer.classList.add('hidden');
+    drawer.style.display = '';
+    drawer.style.alignItems = '';
+    drawer.style.justifyContent = '';
+  }
+  document.body.style.overflow = '';
+}
+
+function openNotification(id) {
+  var list = loadNotifications();
+  var item = null;
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].id) === String(id)) { item = list[i]; break; }
+  }
+  // Keep badge until Clear all — only mark visual state, do not remove from count
+  markNotificationRead(id);
+  hideNotifications();
+  if (item && item.url) {
+    try { window.location.href = item.url; } catch (e) {}
+  }
+}
+
+/**
+ * Sync the iOS/Android home-screen app icon badge with the in-app inbox count.
+ * Uses @capawesome/capacitor-badge when installed (recommended).
+ * Falls back to clearing via PushNotifications when count is 0.
+ *
+ * Install once on your Mac:
+ *   npm install @capawesome/capacitor-badge
+ *   npx cap sync ios
+ */
+function getBadgePlugin() {
+  try {
+    if (!window.Capacitor) return null;
+    if (Capacitor.Plugins && Capacitor.Plugins.Badge) return Capacitor.Plugins.Badge;
+    if (typeof Capacitor.registerPlugin === 'function') {
+      return Capacitor.registerPlugin('Badge');
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function syncNativeBadge(count) {
+  count = Math.max(0, Number(count) || 0);
+  try {
+    if (!window.Capacitor) return;
+    var native = false;
+    try {
+      if (typeof isNativeAppShell === 'function') native = isNativeAppShell();
+      else if (typeof Capacitor.isNativePlatform === 'function') native = Capacitor.isNativePlatform();
+    } catch (e) {}
+    if (!native) return;
+
+    var Badge = getBadgePlugin();
+    if (Badge) {
+      try {
+        // Request permission on iOS (no-op on Android / already granted)
+        if (typeof Badge.checkPermissions === 'function') {
+          var perms = await Badge.checkPermissions();
+          if (perms && perms.display === 'prompt' && typeof Badge.requestPermissions === 'function') {
+            await Badge.requestPermissions();
+          }
+        }
+        if (count <= 0) {
+          if (typeof Badge.clear === 'function') await Badge.clear();
+          else if (typeof Badge.set === 'function') await Badge.set({ count: 0 });
+        } else if (typeof Badge.set === 'function') {
+          await Badge.set({ count: count });
+        }
+        return;
+      } catch (e) {
+        console.warn('[badge] Badge plugin error', e);
+      }
+    }
+
+    // Fallback: clear only (Capacitor Push has no setBadge API)
+    if (count === 0) {
+      var Push = Capacitor.Plugins && Capacitor.Plugins.PushNotifications
+        || (typeof Capacitor.registerPlugin === 'function' && Capacitor.registerPlugin('PushNotifications'));
+      if (Push && typeof Push.removeAllDeliveredNotifications === 'function') {
+        await Push.removeAllDeliveredNotifications();
+      }
+    } else {
+      console.warn('[badge] Install @capawesome/capacitor-badge to set the home-screen badge count');
+    }
+  } catch (e) {
+    console.warn('[badge] syncNativeBadge', e);
+  }
+}
+
 
 /**
  * Add to cart. size optional. Merges same productId+size (or name+size).
@@ -718,25 +1071,20 @@ async function submitCheckout(e) {
     var result = await window.sb.from('orders').insert(payload);
     if (result.error) throw new Error(result.error.message);
 
-    // Decrement product stock for ordered items
+    // Stock is decremented by DB trigger (apply_order_stock) — clients cannot UPDATE products (RLS).
+    // Optimistically adjust local stock so UI updates immediately; realtime will confirm.
     try {
-      for (var oi = 0; oi < items.length; oi++) {
-        var it = items[oi];
-        if (it.productId == null) continue;
-        var q = Number(it.qty) || 1;
-        // Read current then update (best-effort; concurrent orders may race)
-        var cur = await window.sb.from('products').select('stock_qty').eq('id', it.productId).maybeSingle();
-        if (cur.data) {
-          var left = Math.max(0, (Number(cur.data.stock_qty) || 0) - q);
-          await window.sb.from('products').update({ stock_qty: left }).eq('id', it.productId);
-          if (typeof allProducts !== 'undefined' && allProducts) {
-            var lp = allProducts.find(function (p) { return String(p.id) === String(it.productId); });
-            if (lp) lp.stock_qty = left;
-          }
+      if (typeof allProducts !== 'undefined' && allProducts) {
+        for (var oi = 0; oi < items.length; oi++) {
+          var it = items[oi];
+          if (it.productId == null) continue;
+          var q = Number(it.qty) || 1;
+          var lp = allProducts.find(function (p) { return String(p.id) === String(it.productId); });
+          if (lp) lp.stock_qty = Math.max(0, (Number(lp.stock_qty) || 0) - q);
         }
       }
     } catch (stockErr) {
-      console.warn('[checkout] stock decrement', stockErr);
+      console.warn('[checkout] local stock', stockErr);
     }
 
     cart = [];
@@ -745,6 +1093,10 @@ async function submitCheckout(e) {
     showToast('Order placed — $' + total.toFixed(2) + '. We\'ll email you about payment.');
     if (typeof refreshMerchStockUi === 'function') {
       try { refreshMerchStockUi(); } catch (e) {}
+    }
+    // Pull confirmed stock from server shortly after (trigger may have run)
+    if (typeof loadProducts === 'function') {
+      setTimeout(function () { try { loadProducts(); } catch (e) {} }, 600);
     }
 
     // Admin-only push: new merch order
@@ -879,9 +1231,6 @@ async function updateNavAuth(forcedUser) {
                     </span>
                     <span class="text-sm font-medium max-w-[100px] truncate hidden md:inline pl-1">${escapeHtmlNav(display)}</span>
                 </a>
-                <button type="button" onclick="navLogout()" class="nav-logout-btn inline-flex items-center justify-center w-9 h-9 rounded-2xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all" title="Log out">
-                    <i class="fa-solid fa-right-from-bracket"></i>
-                </button>
             </div>`;
 
         if (desktopJoin) desktopJoin.style.display = 'none';
@@ -1110,6 +1459,27 @@ function hideWebsiteMenuForNative() {
         deskCart.classList.remove('hidden');
         deskCart.style.setProperty('display', 'inline-flex', 'important');
 
+        // Notification bell (same treatment as cart on native)
+        var deskNotif = document.getElementById('nav-notif-desktop');
+        if (!deskNotif) {
+            deskNotif = document.createElement('button');
+            deskNotif.type = 'button';
+            deskNotif.id = 'nav-notif-desktop';
+            deskNotif.setAttribute('aria-label', 'Notifications');
+            deskNotif.setAttribute('onclick', 'showNotifications()');
+            deskNotif.className = 'inline-flex items-center justify-center relative w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 active:scale-95 transition-all';
+            deskNotif.innerHTML =
+                '<i class="fa-solid fa-bell text-lg"></i>' +
+                '<span id="notif-count" class="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-mono bg-orange-600 text-white rounded-full px-1 hidden">0</span>';
+            if (deskCart && deskCart.parentElement === actions) {
+                actions.insertBefore(deskNotif, deskCart);
+            } else {
+                actions.insertBefore(deskNotif, actions.firstChild);
+            }
+        }
+        deskNotif.classList.remove('hidden');
+        deskNotif.style.setProperty('display', 'inline-flex', 'important');
+
         if (!document.getElementById('nav-auth')) {
             var auth = document.createElement('div');
             auth.id = 'nav-auth';
@@ -1141,21 +1511,8 @@ function hideWebsiteMenuForNative() {
         actions.style.setProperty('margin-left', 'auto', 'important');
     }
 
-    // Ensure logout icon is visible on native (not desktop-only)
-    setTimeout(function () {
-        navbar.querySelectorAll('.nav-logout-btn, button[onclick*="navLogout"]').forEach(function (btn) {
-            btn.classList.remove('hidden');
-            btn.style.setProperty('display', 'inline-flex', 'important');
-        });
-    }, 150);
-    setTimeout(function () {
-        navbar.querySelectorAll('.nav-logout-btn, button[onclick*="navLogout"]').forEach(function (btn) {
-            btn.classList.remove('hidden');
-            btn.style.setProperty('display', 'inline-flex', 'important');
-        });
-    }, 600);
-
     try { if (typeof updateCartCount === 'function') updateCartCount(); } catch (e) {}
+    try { if (typeof updateNotifCount === 'function') updateNotifCount(); } catch (e) {}
     setTimeout(function () { try { updateNavAuth(); } catch (e2) {} }, 100);
     setTimeout(function () { try { updateNavAuth(); } catch (e3) {} }, 500);
 }
@@ -1202,6 +1559,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     initNavbar();
     setActiveNav();
     updateCartCount();
+    try { updateNotifCount(); } catch (e) {}
+    ensureNotifUi();
+
+    // Re-sync home-screen badge when returning from background
+    try {
+      if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.App) {
+        Capacitor.Plugins.App.addListener('appStateChange', function (state) {
+          if (state && state.isActive) {
+            try { updateNotifCount(); } catch (e) {}
+          }
+        });
+      } else if (window.Capacitor && typeof Capacitor.registerPlugin === 'function') {
+        var App = Capacitor.registerPlugin('App');
+        if (App && App.addListener) {
+          App.addListener('appStateChange', function (state) {
+            if (state && state.isActive) {
+              try { updateNotifCount(); } catch (e) {}
+            }
+          });
+        }
+      }
+    } catch (e) {}
 
     const bootAuth = () => {
         const client = window.sb;

@@ -73,15 +73,40 @@ async function initPushNotifications() {
 
   Push.addListener('pushNotificationReceived', function (notification) {
     console.log('[push] foreground', notification);
+    var title = (notification && notification.title) || 'Update';
+    var body = (notification && notification.body) || '';
+    var data = (notification && notification.data) || {};
+    if (typeof addNotification === 'function') {
+      addNotification({
+        title: title,
+        body: body,
+        url: data.url || 'events.html',
+        type: data.type || 'push',
+        id: data.id || notification.id || undefined
+      });
+    }
     if (typeof showToast === 'function') {
-      showToast(((notification && notification.title) || 'Update') + (notification.body ? ': ' + notification.body : ''));
+      showToast(title + (body ? ': ' + body : ''));
     }
   });
 
   Push.addListener('pushNotificationActionPerformed', function (action) {
     try {
-      var data = action && action.notification && action.notification.data;
-      window.location.href = (data && data.url) || 'events.html';
+      var n = action && action.notification;
+      var data = (n && n.data) || {};
+      if (typeof addNotification === 'function') {
+        addNotification({
+          title: (n && n.title) || 'Update',
+          body: (n && n.body) || '',
+          url: data.url || 'events.html',
+          type: data.type || 'push',
+          id: data.id || (n && n.id) || undefined
+        });
+      }
+      if (typeof markNotificationRead === 'function' && (data.id || (n && n.id))) {
+        markNotificationRead(data.id || n.id);
+      }
+      window.location.href = data.url || 'events.html';
     } catch (e) {
       window.location.href = 'events.html';
     }

@@ -21,6 +21,10 @@
                 </a>
             </div>
             <div class="flex items-center gap-x-3 shrink-0 ml-auto" id="nav-actions">
+                <button type="button" id="nav-notif-desktop" onclick="showNotifications()" class="hidden md:inline-flex items-center justify-center relative w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 active:scale-95 transition-all" aria-label="Notifications">
+                    <i class="fa-solid fa-bell text-lg"></i>
+                    <span id="notif-count" class="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-mono bg-orange-600 text-white rounded-full px-1 hidden">0</span>
+                </button>
                 <button type="button" id="nav-cart-desktop" onclick="showCart()" class="hidden md:inline-flex items-center justify-center relative w-11 h-11 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 active:scale-95 transition-all" aria-label="Cart">
                     <i class="fa-solid fa-shopping-cart text-lg"></i>
                     <span id="cart-count" class="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-mono bg-orange-600 text-white rounded-full px-1">0</span>
@@ -42,6 +46,11 @@
             <a href="forum.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Soggy Bottom HQ</a>
             <a href="trails.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800">Trails</a>
             <a href="members.html" class="mobile-nav-link px-4 py-3 rounded-2xl hover:bg-zinc-800 flex items-center gap-x-2"><i class="fa-solid fa-lock"></i><span>Members Only Area</span></a>
+            <button type="button" id="nav-notif-btn-mobile" onclick="showNotifications(); toggleMobileMenu();" class="mobile-nav-link w-full text-left px-4 py-3 rounded-2xl hover:bg-zinc-800 flex items-center gap-x-3">
+                <i class="fa-solid fa-bell"></i>
+                <span class="flex-1">Notifications</span>
+                <span id="notif-count-mobile" class="min-w-[22px] h-[22px] flex items-center justify-center text-xs font-mono bg-orange-600 text-white rounded-full px-1.5 hidden">0</span>
+            </button>
             <button type="button" id="nav-cart-btn-mobile" onclick="showCart(); toggleMobileMenu();" class="mobile-nav-link w-full text-left px-4 py-3 rounded-2xl hover:bg-zinc-800 flex items-center gap-x-3">
                 <i class="fa-solid fa-shopping-cart"></i>
                 <span class="flex-1">Cart</span>

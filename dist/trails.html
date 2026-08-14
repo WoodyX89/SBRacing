@@ -31,7 +31,14 @@
   }
   .leaflet-control-layers-list label { color: #e4e4e7; }
 
-
+  /* Pulsing dot while GPS recording is active */
+  @keyframes ride-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55); }
+    50% { opacity: 0.85; transform: scale(1.15); box-shadow: 0 0 0 6px rgba(52, 211, 153, 0); }
+  }
+  .ride-pulse {
+    animation: ride-pulse 1.4s ease-in-out infinite;
+  }
 </style>
 </head>
 <body class="bg-zinc-950 text-zinc-200">
@@ -55,48 +62,22 @@
   <div class="grid lg:grid-cols-12 gap-6">
     <div class="lg:col-span-8 space-y-3">
       <div id="trail-map" class="border border-zinc-800 shadow-xl"></div>
-      <p class="text-xs text-zinc-500">Sample trail lines are illustrative. Replace <code class="text-zinc-400">assets/trails/region.geojson</code> with real GPX/GeoJSON when ready. Always check park rules and conditions.</p>
     </div>
 
     <div class="lg:col-span-4 space-y-4">
-      <!-- Build route -->
-      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
-        <div class="font-semibold flex items-center gap-2"><i class="fa-solid fa-route text-orange-500"></i> Build route</div>
-        <p class="text-xs text-zinc-400">Turn on <strong class="text-zinc-200">Build route</strong>. <strong class="text-zinc-200">First click = Start</strong> (green). More clicks = checkpoints (blue). Only the trail section between points is used — not the whole trail. Snap stays on so points stick to trails when you're close.</p>
-        <div class="flex flex-wrap gap-2">
-          <button type="button" id="btn-route-mode" onclick="toggleRouteMode()" class="px-4 py-2 rounded-2xl bg-orange-600 hover:bg-orange-700 text-sm font-semibold">Build route</button>
-          <button type="button" id="btn-snap-toggle" onclick="toggleSnap()" class="px-4 py-2 rounded-2xl border border-emerald-600 text-emerald-400 text-sm hover:bg-zinc-800">Snap: ON</button>
-          <button type="button" onclick="undoWaypoint()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Undo</button>
-          <button type="button" onclick="clearRoute()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Clear</button>
-        </div>
-
-        <div id="selected-trails-list" class="pt-2 border-t border-zinc-800 max-h-40 overflow-y-auto">
-          <p class="text-xs text-zinc-500">Click trails on the map to build a route.</p>
-        </div>
-        <div class="text-sm">
-          <span class="text-zinc-500">Distance</span>
-          <div class="text-2xl font-black tracking-tight" id="route-distance">0.0 km</div>
-          <div class="text-xs text-zinc-500" id="route-points">0 points</div>
-        </div>
-        <div id="save-route-panel" class="space-y-3 pt-2 border-t border-zinc-800">
-          <input id="route-name" type="text" placeholder="Route name" class="w-full px-4 py-2.5 rounded-2xl bg-zinc-950 border border-zinc-700 text-sm outline-none focus:border-orange-600">
-          <textarea id="route-desc" rows="2" placeholder="Notes (optional)" class="w-full px-4 py-2.5 rounded-2xl bg-zinc-950 border border-zinc-700 text-sm outline-none focus:border-orange-600"></textarea>
-          <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-            <input type="checkbox" id="route-public" class="accent-orange-600"> Share publicly with club
-          </label>
-          <button type="button" onclick="saveRoute()" class="w-full py-3 rounded-2xl bg-white text-zinc-900 font-semibold text-sm hover:bg-amber-50">
-            Save route
-          </button>
-          <p id="save-route-hint" class="text-xs text-zinc-500">Log in on Members to save routes to your account.</p>
-        </div>
-      </div>
-
-      <!-- Live ride tracking (background-capable on native) -->
+      <!-- Live ride tracking (background-capable on native) — placed first so active recording is always visible -->
       <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4" id="ride-panel">
         <div class="font-semibold flex items-center justify-between gap-2">
           <span class="flex items-center gap-2"><i class="fa-solid fa-location-crosshairs text-orange-500"></i> Track ride</span>
           <span id="ride-status-badge" class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">Idle</span>
         </div>
+
+        <!-- Persistent "location is on" banner — only visible while recording/paused so it can't be forgotten -->
+        <div id="ride-recording-banner" class="hidden items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold border">
+          <span id="ride-recording-dot" class="w-2.5 h-2.5 rounded-full shrink-0"></span>
+          <span id="ride-recording-label">Location recording is ON</span>
+        </div>
+
         <p class="text-xs text-zinc-400">Start a live GPS track of your actual ride. Works offline and continues in the background on the native app. Records distance, time, and elevation.</p>
 
         <!-- Live stats HUD -->
@@ -145,10 +126,38 @@
             Export GPX
           </button>
         </div>
+      </div>
 
-        <p class="text-[11px] text-zinc-500 leading-relaxed" id="ride-hint">
-          On the native app this continues while the screen is locked. Browser tracking only works while the page is open.
-        </p>
+      <!-- Build route -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
+        <div class="font-semibold flex items-center gap-2"><i class="fa-solid fa-route text-orange-500"></i> Build route</div>
+        <p class="text-xs text-zinc-400">Turn on <strong class="text-zinc-200">Build route</strong>. <strong class="text-zinc-200">First click = Start</strong> (green). More clicks = checkpoints (blue). Only the trail section between points is used — not the whole trail. Snap stays on so points stick to trails when you're close.</p>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" id="btn-route-mode" onclick="toggleRouteMode()" class="px-4 py-2 rounded-2xl bg-orange-600 hover:bg-orange-700 text-sm font-semibold">Build route</button>
+          <button type="button" id="btn-snap-toggle" onclick="toggleSnap()" class="px-4 py-2 rounded-2xl border border-emerald-600 text-emerald-400 text-sm hover:bg-zinc-800">Snap: ON</button>
+          <button type="button" onclick="undoWaypoint()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Undo</button>
+          <button type="button" onclick="clearRoute()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Clear</button>
+        </div>
+
+        <div id="selected-trails-list" class="pt-2 border-t border-zinc-800 max-h-40 overflow-y-auto">
+          <p class="text-xs text-zinc-500">Click trails on the map to build a route.</p>
+        </div>
+        <div class="text-sm">
+          <span class="text-zinc-500">Distance</span>
+          <div class="text-2xl font-black tracking-tight" id="route-distance">0.0 km</div>
+          <div class="text-xs text-zinc-500" id="route-points">0 points</div>
+        </div>
+        <div id="save-route-panel" class="space-y-3 pt-2 border-t border-zinc-800">
+          <input id="route-name" type="text" placeholder="Route name" class="w-full px-4 py-2.5 rounded-2xl bg-zinc-950 border border-zinc-700 text-sm outline-none focus:border-orange-600">
+          <textarea id="route-desc" rows="2" placeholder="Notes (optional)" class="w-full px-4 py-2.5 rounded-2xl bg-zinc-950 border border-zinc-700 text-sm outline-none focus:border-orange-600"></textarea>
+          <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+            <input type="checkbox" id="route-public" class="accent-orange-600"> Share publicly with club
+          </label>
+          <button type="button" onclick="saveRoute()" class="w-full py-3 rounded-2xl bg-white text-zinc-900 font-semibold text-sm hover:bg-amber-50">
+            Save route
+          </button>
+          <p id="save-route-hint" class="text-xs text-zinc-500">Log in on Members to save routes to your account.</p>
+        </div>
       </div>
 
       <!-- Jump areas -->

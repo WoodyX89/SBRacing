@@ -1,6 +1,5 @@
 import Foundation
 import CoreLocation
-import HealthKit
 import Combine
 
 @MainActor
@@ -17,9 +16,6 @@ final class RideSessionManager: NSObject, ObservableObject {
     @Published var lastMessage: String = ""
 
     private let locationManager = CLLocationManager()
-    private let healthStore = HKHealthStore()
-    private var workoutSession: HKWorkoutSession?
-    private var workoutBuilder: HKLiveWorkoutBuilder?
 
     private var points: [(lat: Double, lng: Double, alt: Double?, t: Date)] = []
     private var startDate: Date?
@@ -60,26 +56,20 @@ final class RideSessionManager: NSObject, ObservableObject {
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 5
         locationManager.activityType = .fitness
-        // Allows updates when wrist is down during a workout session
         locationManager.allowsBackgroundLocationUpdates = true
+        // Keep GPS running even when wrist is down / screen off
     }
 
     func requestPermissionsIfNeeded() {
-        locationManager.requestWhenInUseAuthorization()
-
-        let types: Set<HKSampleType> = [
-            HKObjectType.workoutType(),
-            HKQuantityType.quantityType(forIdentifier: .distanceCycling)!,
-            HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!
-        ]
-        healthStore.requestAuthorization(toShare: types, read: types) { [weak self] ok, error in
-            Task { @MainActor in
-                if let error {
-                    self?.lastMessage = "Health: \(error.localizedDescription)"
-                } else if !ok {
-                    self?.lastMessage = "Health access not granted"
-                }
-            }
+        // Prefer Always so background tracking continues with screen locked
+        switch locationManager.authorizationStatus {
+        case .notDetermined:
+            locationManager.requestAlwaysAuthorization()
+        case .authorizedWhenInUse:
+            // Upgrade to Always if possible
+            locationManager.requestAlwaysAuthorization()
+        default:
+            break
         }
 
         PhoneConnectivity.shared.activate()
@@ -92,8 +82,7 @@ final class RideSessionManager: NSObject, ObservableObject {
         status = .recording
         lastMessage = "Starting…"
 
-        startWorkoutSession()
-        locationManager.requestWhenInUseAuthorization()
+        locationManager.requestAlwaysAuthorization()
         locationManager.startUpdatingLocation()
         startTicker()
 
@@ -106,7 +95,6 @@ final class RideSessionManager: NSObject, ObservableObject {
         status = .paused
         pauseStarted = Date()
         locationManager.stopUpdatingLocation()
-        workoutSession?.pause()
         lastMessage = "Paused"
         PhoneConnectivity.shared.sendStatus("paused")
     }
@@ -119,7 +107,6 @@ final class RideSessionManager: NSObject, ObservableObject {
         pauseStarted = nil
         status = .recording
         locationManager.startUpdatingLocation()
-        workoutSession?.resume()
         lastMessage = "Tracking"
         PhoneConnectivity.shared.sendStatus("recording")
     }
@@ -129,7 +116,6 @@ final class RideSessionManager: NSObject, ObservableObject {
         status = .idle
         locationManager.stopUpdatingLocation()
         stopTicker()
-        endWorkoutSession()
 
         let summary = RideSummary(
             startTs: startDate?.timeIntervalSince1970 ?? Date().timeIntervalSince1970,
@@ -214,51 +200,6 @@ final class RideSessionManager: NSObject, ObservableObject {
         points.append((lat, lng, alt, t))
         pointCount = points.count
     }
-
-    private func startWorkoutSession() {
-        let config = HKWorkoutConfiguration()
-        // mountainBiking available watchOS 10+; fall back to cycling
-        if #available(watchOS 10.0, *) {
-            config.activityType = .mountainBiking
-        } else {
-            config.activityType = .cycling
-        }
-        config.locationType = .outdoor
-
-        do {
-            let session = try HKWorkoutSession(healthStore: healthStore, configuration: config)
-            let builder = session.associatedWorkoutBuilder()
-            builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: config)
-
-            session.delegate = self
-            builder.delegate = self
-
-            workoutSession = session
-            workoutBuilder = builder
-
-            session.startActivity(with: Date())
-            builder.beginCollection(withStart: Date()) { [weak self] ok, error in
-                Task { @MainActor in
-                    if let error {
-                        self?.lastMessage = "Workout: \(error.localizedDescription)"
-                    }
-                }
-            }
-        } catch {
-            lastMessage = "Could not start workout: \(error.localizedDescription)"
-            // Still track with Core Location only
-        }
-    }
-
-    private func endWorkoutSession() {
-        let end = Date()
-        workoutSession?.end()
-        workoutBuilder?.endCollection(withEnd: end) { [weak self] _, _ in
-            self?.workoutBuilder?.finishWorkout { _, _ in }
-        }
-        workoutSession = nil
-        workoutBuilder = nil
-    }
 }
 
 // MARK: - CLLocationManagerDelegate
@@ -281,30 +222,13 @@ extension RideSessionManager: CLLocationManagerDelegate {
             switch manager.authorizationStatus {
             case .denied, .restricted:
                 self.lastMessage = "Enable Location in Settings"
+            case .authorizedAlways, .authorizedWhenInUse:
+                break
             default:
                 break
             }
         }
     }
-}
-
-// MARK: - HKWorkoutSessionDelegate
-extension RideSessionManager: HKWorkoutSessionDelegate {
-    nonisolated func workoutSession(_ workoutSession: HKWorkoutSession,
-                                    didChangeTo toState: HKWorkoutSessionState,
-                                    from fromState: HKWorkoutSessionState,
-                                    date: Date) {}
-
-    nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
-        Task { @MainActor in
-            self.lastMessage = "Workout error: \(error.localizedDescription)"
-        }
-    }
-}
-
-extension RideSessionManager: HKLiveWorkoutBuilderDelegate {
-    nonisolated func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder, didCollectDataOf collectedTypes: Set<HKSampleType>) {}
-    nonisolated func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
 }
 
 // MARK: - Summary payload for iPhone

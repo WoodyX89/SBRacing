@@ -633,6 +633,39 @@ function updateRideUI(snap) {
           : 'bg-zinc-800 text-zinc-400 border-zinc-700');
   }
 
+  // Persistent "location is on" banner so recording can't be forgotten
+  var banner = document.getElementById('ride-recording-banner');
+  var bannerLabel = document.getElementById('ride-recording-label');
+  var bannerDot = document.getElementById('ride-recording-dot');
+  var panel = document.getElementById('ride-panel');
+  if (banner) {
+    if (snap.status === 'recording') {
+      banner.classList.remove('hidden');
+      banner.classList.add('flex');
+      banner.className = 'flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold border bg-emerald-950/80 text-emerald-300 border-emerald-700';
+      if (bannerLabel) bannerLabel.textContent = 'Location recording is ON';
+      if (bannerDot) bannerDot.className = 'w-2.5 h-2.5 rounded-full shrink-0 bg-emerald-400 ride-pulse';
+      if (panel) {
+        panel.classList.add('ring-2', 'ring-emerald-600/60');
+        panel.classList.remove('ring-amber-600/60');
+      }
+    } else if (snap.status === 'paused') {
+      banner.classList.remove('hidden');
+      banner.classList.add('flex');
+      banner.className = 'flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold border bg-amber-950/80 text-amber-300 border-amber-700';
+      if (bannerLabel) bannerLabel.textContent = 'Recording paused — location still held';
+      if (bannerDot) bannerDot.className = 'w-2.5 h-2.5 rounded-full shrink-0 bg-amber-400';
+      if (panel) {
+        panel.classList.add('ring-2', 'ring-amber-600/60');
+        panel.classList.remove('ring-emerald-600/60');
+      }
+    } else {
+      banner.classList.add('hidden');
+      banner.classList.remove('flex');
+      if (panel) panel.classList.remove('ring-2', 'ring-emerald-600/60', 'ring-amber-600/60');
+    }
+  }
+
   var elDist = document.getElementById('ride-distance');
   var elTime = document.getElementById('ride-time');
   var elElev = document.getElementById('ride-elev');

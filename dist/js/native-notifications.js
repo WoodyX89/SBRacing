@@ -69,6 +69,7 @@ async function notifyLocal(opts) {
   // iOS requires future date
   if (when.getTime() <= Date.now() + 500) when = new Date(Date.now() + 1500);
   try {
+    var unread = (typeof notifUnreadCount === 'function' ? notifUnreadCount() : 0) + 1;
     await LN.schedule({
       notifications: [{
         id: id,
@@ -76,10 +77,22 @@ async function notifyLocal(opts) {
         body: body,
         schedule: { at: when },
         sound: 'default',
+        badge: unread,
         extra: opts.extra || {}
       }]
     });
     console.log('[notify] scheduled', id, title, '|', body);
+    // Also store in the in-app notification inbox (bell drawer)
+    if (typeof addNotification === 'function') {
+      var extra = opts.extra || {};
+      addNotification({
+        title: title,
+        body: body,
+        url: extra.url || '',
+        type: extra.type || 'local',
+        id: 'local-' + id
+      });
+    }
     return true;
   } catch (e) {
     console.warn('[notify] schedule failed', e);

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SB Racing uses your location to record your mountain bike rides and calculate distance and elevation.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>SB Racing continues recording your ride in the background so your full track is saved even when the screen is locked.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+</dict>
+</plist>

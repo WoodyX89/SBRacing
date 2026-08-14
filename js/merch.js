@@ -3,6 +3,7 @@
 let allProducts = [];
 let isAdmin = false;
 let editingProductId = null;
+var productsRealtimeChannel = null;
 
 async function initMerch() {
   try {
@@ -16,7 +17,55 @@ async function initMerch() {
   }
   await loadProducts();
   if (isAdmin) showAdminUI();
+  subscribeProductsRealtime();
   console.log('[merch] loaded', allProducts.length, 'products, admin=', isAdmin);
+}
+
+/** Live stock updates when orders change stock_qty (no page refresh) */
+function subscribeProductsRealtime() {
+  if (!window.sb || productsRealtimeChannel) return;
+  try {
+    productsRealtimeChannel = window.sb
+      .channel('products-stock-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, function (payload) {
+        var row = payload.new || payload.old;
+        if (!row || row.id == null) return;
+        clearTimeout(subscribeProductsRealtime._t);
+        subscribeProductsRealtime._t = setTimeout(function () {
+          applyProductRealtime(payload);
+        }, 100);
+      })
+      .subscribe(function (status) {
+        console.log('[merch] products realtime', status);
+      });
+  } catch (e) {
+    console.warn('[merch] products realtime failed', e);
+  }
+}
+
+function applyProductRealtime(payload) {
+  var eventType = payload.eventType || payload.event;
+  if (eventType === 'DELETE' || (!payload.new && payload.old)) {
+    var oid = payload.old && payload.old.id;
+    if (oid != null) {
+      allProducts = allProducts.filter(function (p) { return String(p.id) !== String(oid); });
+      if (typeof renderProducts === 'function') renderProducts();
+      if (typeof loadSalesDashboard === 'function' && isAdmin) loadSalesDashboard();
+    }
+    return;
+  }
+  var row = payload.new;
+  if (!row) return;
+  var idx = allProducts.findIndex(function (p) { return String(p.id) === String(row.id); });
+  if (idx >= 0) {
+    // Merge so we keep any client-only fields
+    allProducts[idx] = Object.assign({}, allProducts[idx], row);
+  } else if (row.is_active !== false || isAdmin) {
+    allProducts.push(row);
+  }
+  if (typeof refreshMerchStockUi === 'function') refreshMerchStockUi();
+  else if (typeof renderProducts === 'function') renderProducts();
+  if (typeof loadSalesDashboard === 'function' && isAdmin) loadSalesDashboard();
 }
 
 async function checkAdmin() {
@@ -933,7 +982,11 @@ async function updateOrderStatus(id, status) {
     return;
   }
   showToast('Order #' + id + ' → ' + status);
-  loadSalesDashboard();
+  // Cancelled/refunded restores stock via DB trigger; realtime updates UI
+  setTimeout(function () {
+    if (typeof loadProducts === 'function') loadProducts();
+    loadSalesDashboard();
+  }, 400);
 }
 
 async function deleteOrder(id) {
@@ -952,7 +1005,11 @@ async function deleteOrder(id) {
   var row = document.getElementById('order-row-' + id);
   if (row) row.remove();
   else loadAdminOrders();
-  loadSalesDashboard();
+  // Delete restores stock via DB trigger
+  setTimeout(function () {
+    if (typeof loadProducts === 'function') loadProducts();
+    loadSalesDashboard();
+  }, 400);
 }
 
 var _salesChart = null;

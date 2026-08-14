@@ -33,6 +33,7 @@
     "@capacitor/local-notifications": "^8.2.1",
     "@capacitor/push-notifications": "^8.1.2",
     "@capacitor/splash-screen": "^8.0.2",
+    "@capawesome/capacitor-badge": "^7.0.0",
     "@capgo/background-geolocation": "^8.3.2"
   },
   "devDependencies": {
