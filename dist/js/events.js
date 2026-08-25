@@ -291,7 +291,7 @@ function renderEvents() {
     const isPoker = ev.category === 'poker_run';
     const pokerBtn = (canManageEvents && isPoker) ? `
         <a href="poker.html?e=${ev.id}" class="text-xs px-3 py-1.5 rounded-xl border border-orange-700 text-orange-400 hover:bg-orange-950/40">
-          <i class="fa-solid fa-spade mr-1"></i>Leaderboard
+          <i class="fa-solid fa-spade mr-1"></i>Poker / leaderboard
         </a>
         <button type="button" onclick="showPokerAdminFor(${ev.id})" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">
           Manage checkpoints
@@ -301,8 +301,11 @@ function renderEvents() {
         </a>` : '');
     const trackRideBtn = isPoker
       ? `<a href="trails.html?event=${ev.id}" class="inline-flex items-center justify-center gap-1.5 w-full mt-2 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold text-white">
-          <i class="fa-solid fa-play"></i> Track Ride
-        </a>`
+          <i class="fa-solid fa-play"></i> Track ride · checkpoints on map
+        </a>
+        <button type="button" onclick="openEventQrScanner(${ev.id})" class="inline-flex items-center justify-center gap-1.5 w-full mt-2 py-2.5 rounded-2xl border border-orange-600 text-orange-400 hover:bg-orange-950/40 text-sm font-semibold">
+          <i class="fa-solid fa-qrcode"></i> Scan QR code
+        </button>`
       : '';
     const eventMapHtml = isPoker
       ? `<div id="event-map-${ev.id}" class="event-cp-map" data-event-map="${ev.id}"></div>
@@ -1879,3 +1882,130 @@ function showPokerAdminFor(eventId) {
   if (typeof loadPokerAdmin === 'function') loadPokerAdmin(eventId);
   else showToast('Load js/poker.js for checkpoint admin', true);
 }
+
+/** ---- QR scanner (poker checkpoints) ---- */
+var eventQrScanner = null;
+var eventQrScanBusy = false;
+var eventQrExpectedEventId = null;
+
+function parsePokerQrPayload(raw) {
+  var text = String(raw || '').trim();
+  if (!text) return null;
+  var eventId = null;
+  var token = null;
+  try {
+    if (/^https?:\/\//i.test(text) || text.indexOf('poker.html') !== -1 || text.indexOf('?') !== -1) {
+      var u = null;
+      try {
+        u = new URL(text, location.href);
+      } catch (e1) {
+        u = new URL(text.replace(/^\//, ''), location.origin + '/');
+      }
+      eventId = u.searchParams.get('e') || u.searchParams.get('event') || u.searchParams.get('eventId');
+      token = u.searchParams.get('t') || u.searchParams.get('token');
+    }
+  } catch (e) {}
+  if (!token && text.indexOf('|') !== -1) {
+    var parts = text.split('|');
+    eventId = parts[0];
+    token = parts[1];
+  }
+  if (!token && /^[A-Za-z0-9_-]{8,}$/.test(text)) {
+    token = text;
+  }
+  if (!token) return null;
+  return {
+    eventId: eventId ? parseInt(eventId, 10) : null,
+    token: token
+  };
+}
+
+async function openEventQrScanner(eventId) {
+  eventQrExpectedEventId = eventId || null;
+  var modal = document.getElementById('qr-scan-modal');
+  if (!modal) {
+    showToast('Scanner UI missing', true);
+    return;
+  }
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  var hint = document.getElementById('qr-scan-hint');
+  if (hint) {
+    hint.textContent = eventId
+      ? ('Scanning for event #' + eventId)
+      : 'Point at a poker-run QR code';
+  }
+
+  if (typeof Html5Qrcode === 'undefined') {
+    showToast('QR library failed to load — check connection', true);
+    return;
+  }
+
+  await closeEventQrScanner(true);
+
+  try {
+    eventQrScanner = new Html5Qrcode('qr-reader');
+    eventQrScanBusy = false;
+    await eventQrScanner.start(
+      { facingMode: 'environment' },
+      { fps: 8, qrbox: { width: 220, height: 220 } },
+      function onScanSuccess(decoded) {
+        if (eventQrScanBusy) return;
+        eventQrScanBusy = true;
+        handleEventQrScan(decoded);
+      },
+      function onScanFailure() { /* ignore frame misses */ }
+    );
+  } catch (err) {
+    console.warn('[qr]', err);
+    showToast('Camera permission needed to scan QR codes', true);
+    closeEventQrScanner();
+  }
+}
+
+async function closeEventQrScanner(keepModal) {
+  try {
+    if (eventQrScanner) {
+      var s = eventQrScanner;
+      eventQrScanner = null;
+      if (s.isScanning) await s.stop();
+      try { s.clear(); } catch (e) {}
+    }
+  } catch (e) {
+    console.warn('[qr] stop', e);
+  }
+  if (!keepModal) {
+    var modal = document.getElementById('qr-scan-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+  }
+  eventQrScanBusy = false;
+}
+
+function handleEventQrScan(decoded) {
+  var parsed = parsePokerQrPayload(decoded);
+  if (!parsed || !parsed.token) {
+    eventQrScanBusy = false;
+    showToast('Not a poker checkpoint QR', true);
+    return;
+  }
+  var eid = parsed.eventId || eventQrExpectedEventId;
+  if (eventQrExpectedEventId && parsed.eventId && Number(parsed.eventId) !== Number(eventQrExpectedEventId)) {
+    eventQrScanBusy = false;
+    showToast('That QR is for a different event', true);
+    return;
+  }
+  if (!eid) {
+    eventQrScanBusy = false;
+    showToast('QR missing event id', true);
+    return;
+  }
+  closeEventQrScanner().then(function () {
+    location.href = 'poker.html?e=' + encodeURIComponent(eid) + '&t=' + encodeURIComponent(parsed.token);
+  });
+}
+
+window.openEventQrScanner = openEventQrScanner;
+window.closeEventQrScanner = closeEventQrScanner;
