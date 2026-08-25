@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
     <link rel="icon" type="image/png" href="/assets/favicon-32x32.png">   
 
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
 <title>Trails &amp; Routes • SB Racing</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -14,15 +14,42 @@
 
 <meta name="theme-color" content="#000000">
 <style>
-  #trail-map { height: min(70vh, 640px); width: 100%; border-radius: 1rem; z-index: 1; background: #18181b; }
+  #trail-map-wrap {
+    position: relative;
+    height: min(78vh, 720px);
+    width: 100%;
+    border-radius: 1rem;
+    overflow: hidden;
+    border: 1px solid #27272a;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+  }
+  @media (max-width: 768px) {
+    #trail-map-wrap {
+      height: min(70vh, 560px);
+      border-radius: 0.75rem;
+      margin-left: -0.5rem;
+      margin-right: -0.5rem;
+      width: calc(100% + 1rem);
+    }
+  }
+  #trail-map {
+    height: 100%;
+    width: 100%;
+    z-index: 1;
+    background: #18181b;
+  }
   .leaflet-container { font-family: inherit; background: #18181b; }
   .leaflet-control-zoom a { background: #18181b !important; color: #e4e4e7 !important; border-color: #3f3f46 !important; }
-  .leaflet-popup-content-wrapper { background: #18181b; color: #e4e4e7; border-radius: 12px; }
+  .leaflet-popup-content-wrapper {
+    background: #18181b;
+    color: #e4e4e7;
+    border-radius: 14px;
+    min-width: 220px;
+    max-width: min(320px, 92vw);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+  }
   .leaflet-popup-tip { background: #18181b; }
-  .diff-easy { stroke: #34d399; }
-  .diff-intermediate { stroke: #fbbf24; }
-  .diff-advanced { stroke: #f97316; }
-
+  .leaflet-popup-content { margin: 12px 14px; }
   .leaflet-control-layers {
     background: #18181b !important;
     color: #e4e4e7 !important;
@@ -31,13 +58,173 @@
   }
   .leaflet-control-layers-list label { color: #e4e4e7; }
 
-  /* Pulsing dot while GPS recording is active */
   @keyframes ride-pulse {
     0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55); }
     50% { opacity: 0.85; transform: scale(1.15); box-shadow: 0 0 0 6px rgba(52, 211, 153, 0); }
   }
-  .ride-pulse {
+  .ride-pulse { animation: ride-pulse 1.4s ease-in-out infinite; }
+
+  .map-fab {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    border: 1px solid #3f3f46;
+    background: #18181b;
+    color: #e4e4e7;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+    transition: transform 0.15s, background 0.15s, border-color 0.15s;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .map-fab:active { transform: scale(0.94); }
+  .map-fab:hover { background: #27272a; }
+  .map-fab.active-checkpoint {
+    background: #c2410f;
+    border-color: #f97316;
+    color: #fff;
+  }
+  .map-fab.active-ride {
+    background: #059669;
+    border-color: #34d399;
+    color: #fff;
+  }
+  .map-fab.recording {
+    background: #059669;
+    border-color: #34d399;
+    color: #fff;
     animation: ride-pulse 1.4s ease-in-out infinite;
+  }
+
+  #map-fabs {
+    position: absolute;
+    right: 12px;
+    bottom: 18px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: auto;
+  }
+
+  #map-checkpoint-hud {
+    position: absolute;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: rgba(24,24,27,0.94);
+    backdrop-filter: blur(10px);
+    border: 1px solid #3f3f46;
+    border-radius: 999px;
+    padding: 6px 8px 6px 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    pointer-events: auto;
+    max-width: calc(100% - 130px);
+  }
+  #map-checkpoint-hud.visible { display: flex; }
+
+  #map-ride-hud {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    z-index: 1000;
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    background: rgba(24,24,27,0.94);
+    backdrop-filter: blur(10px);
+    border: 1px solid #3f3f46;
+    border-radius: 14px;
+    padding: 10px 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    min-width: 140px;
+    pointer-events: auto;
+  }
+  #map-ride-hud.visible { display: flex; }
+
+  .trail-popup-photos {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    margin: 8px 0 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .trail-popup-photos img {
+    height: 72px;
+    width: auto;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .trail-popup-desc {
+    font-size: 12px;
+    line-height: 1.45;
+    color: #a1a1aa;
+    margin: 6px 0 8px;
+  }
+  .trail-popup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .trail-popup-btn {
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #3f3f46;
+    background: #27272a;
+    color: #e4e4e7;
+    cursor: pointer;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .trail-popup-btn:hover { background: #3f3f46; }
+  .trail-popup-btn.primary {
+    background: #c2410f;
+    border-color: #f97316;
+    color: #fff;
+  }
+  .trail-popup-btn.green {
+    background: #059669;
+    border-color: #34d399;
+    color: #fff;
+  }
+
+  .trail-browser-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .trail-browser-item:hover, .trail-browser-item:active {
+    background: #18181b;
+    border-color: #3f3f46;
+  }
+  .trail-browser-item.active {
+    background: #18181b;
+    border-color: #f97316;
+  }
+  .trail-highlight {
+    filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.85));
+  }
+
+  @media (max-width: 768px) {
+    .map-fab { width: 56px; height: 56px; font-size: 20px; }
+    main { padding-bottom: 2rem; }
   }
 </style>
 </head>
@@ -45,12 +232,11 @@
 <div id="site-nav"></div>
 <div class="page-top-spacer" aria-hidden="true"></div>
 
-<main class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 py-10">
-  <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+<main class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12 py-6 sm:py-10">
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-5">
     <div>
       <div class="uppercase tracking-[3px] text-xs font-semibold text-orange-600">RIDE LOCAL</div>
       <h1 class="section-header tracking-tighter">Trails &amp; Routes</h1>
-      <p class="text-zinc-400 text-sm mt-1 max-w-xl">Medicine Hat, Redcliff, Elkwater &amp; Cypress Hills. Tap the map to build a route. Log in to save it.</p>
     </div>
     <div class="flex flex-wrap gap-2 text-xs">
       <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700"><span class="w-2.5 h-2.5 rounded-full bg-green-500"></span> Easy</span>
@@ -61,26 +247,79 @@
 
   <div class="grid lg:grid-cols-12 gap-6">
     <div class="lg:col-span-8 space-y-3">
-      <div id="trail-map" class="border border-zinc-800 shadow-xl"></div>
+      <div id="trail-map-wrap">
+        <div id="trail-map"></div>
+
+        <div id="map-ride-hud">
+          <div class="flex items-center gap-2 text-[10px] uppercase tracking-wider text-emerald-400 font-semibold">
+            <span id="map-ride-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span id="map-ride-status-label">Recording</span>
+          </div>
+          <div class="text-lg font-black tracking-tight" id="map-ride-distance">0.00 km</div>
+          <div class="text-xs text-zinc-400" id="map-ride-time">0:00</div>
+        </div>
+
+        <div id="map-checkpoint-hud">
+          <div class="text-sm font-bold whitespace-nowrap" id="map-cp-distance">0.0 km</div>
+          <div class="text-[10px] text-zinc-400 whitespace-nowrap" id="map-cp-points">0 pts</div>
+          <button type="button" onclick="undoCheckpoint()" class="map-fab" style="width:36px;height:36px;font-size:13px;border-radius:12px" title="Undo last">
+            <i class="fa-solid fa-rotate-left"></i>
+          </button>
+          <button type="button" onclick="clearCheckpoints()" class="map-fab" style="width:36px;height:36px;font-size:13px;border-radius:12px" title="Clear all">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div id="map-fabs">
+          <button type="button" id="fab-locate" class="map-fab" onclick="locateMe()" title="My location">
+            <i class="fa-solid fa-location-crosshairs"></i>
+          </button>
+          <button type="button" id="fab-checkpoint" class="map-fab" onclick="toggleCheckpointMode()" title="Add checkpoints">
+            <i class="fa-solid fa-map-pin"></i>
+          </button>
+          <button type="button" id="fab-ride" class="map-fab" onclick="fabRideToggle()" title="Track ride">
+            <i class="fa-solid fa-play" id="fab-ride-icon"></i>
+          </button>
+        </div>
+      </div>
     </div>
 
     <div class="lg:col-span-4 space-y-4">
-      <!-- Live ride tracking (background-capable on native) — placed first so active recording is always visible -->
+
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-3">
+        <div class="font-semibold flex items-center gap-2">
+          <i class="fa-solid fa-magnifying-glass text-orange-500"></i> Browse trails
+        </div>
+        <input id="trail-search" type="search" placeholder="Search by name…" 
+               class="w-full px-4 py-2.5 rounded-2xl bg-zinc-950 border border-zinc-700 text-sm outline-none focus:border-orange-600"
+               oninput="filterTrailBrowser()">
+        <div class="flex flex-wrap gap-1.5">
+          <button type="button" data-diff="" class="trail-filter-btn text-[11px] px-2.5 py-1 rounded-lg border border-orange-600 bg-orange-600/20 text-orange-400" onclick="setDiffFilter('')">All</button>
+          <button type="button" data-diff="easy" class="trail-filter-btn text-[11px] px-2.5 py-1 rounded-lg border border-zinc-600 text-zinc-400" onclick="setDiffFilter('easy')">Easy</button>
+          <button type="button" data-diff="intermediate" class="trail-filter-btn text-[11px] px-2.5 py-1 rounded-lg border border-zinc-600 text-zinc-400" onclick="setDiffFilter('intermediate')">Intermediate</button>
+          <button type="button" data-diff="advanced" class="trail-filter-btn text-[11px] px-2.5 py-1 rounded-lg border border-zinc-600 text-zinc-400" onclick="setDiffFilter('advanced')">Advanced</button>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <button type="button" data-area="" class="trail-area-btn text-[11px] px-2.5 py-1 rounded-lg border border-orange-600 bg-orange-600/20 text-orange-400" onclick="setAreaFilter('')">All areas</button>
+          <button type="button" data-area="Medicine Hat" class="trail-area-btn text-[11px] px-2.5 py-1 rounded-lg border border-zinc-600 text-zinc-400" onclick="setAreaFilter('Medicine Hat')">Medicine Hat</button>
+          <button type="button" data-area="Redcliff" class="trail-area-btn text-[11px] px-2.5 py-1 rounded-lg border border-zinc-600 text-zinc-400" onclick="setAreaFilter('Redcliff')">Redcliff</button>
+          <button type="button" data-area="Cypress Hills / Elkwater" class="trail-area-btn text-[11px] px-2.5 py-1 rounded-lg border border-zinc-600 text-zinc-400" onclick="setAreaFilter('Cypress Hills / Elkwater')">Elkwater</button>
+        </div>
+        <div id="trail-browser-list" class="max-h-56 overflow-y-auto space-y-0.5 -mx-1">
+          <p class="text-xs text-zinc-500 px-2 py-3">Loading trails…</p>
+        </div>
+      </div>
+
       <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4" id="ride-panel">
         <div class="font-semibold flex items-center justify-between gap-2">
           <span class="flex items-center gap-2"><i class="fa-solid fa-location-crosshairs text-orange-500"></i> Track ride</span>
           <span id="ride-status-badge" class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">Idle</span>
         </div>
 
-        <!-- Persistent "location is on" banner — only visible while recording/paused so it can't be forgotten -->
         <div id="ride-recording-banner" class="hidden items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold border">
           <span id="ride-recording-dot" class="w-2.5 h-2.5 rounded-full shrink-0"></span>
           <span id="ride-recording-label">Location recording is ON</span>
         </div>
-
-        <p class="text-xs text-zinc-400">Start a live GPS track of your actual ride. Works offline and continues in the background on the native app. Records distance, time, and elevation.</p>
-
-        <!-- Live stats HUD -->
         <div class="grid grid-cols-2 gap-2" id="ride-stats">
           <div class="rounded-2xl bg-zinc-950 border border-zinc-800 p-3">
             <div class="text-[10px] uppercase tracking-wider text-zinc-500">Distance</div>
@@ -116,8 +355,8 @@
         </div>
 
         <div class="flex flex-wrap gap-2 pt-1 border-t border-zinc-800">
-          <button type="button" id="btn-ride-use-as-route" onclick="useRideAsRoute()" class="hidden px-3 py-2 rounded-2xl border border-zinc-600 text-xs hover:bg-zinc-800">
-            Use track as route
+          <button type="button" id="btn-ride-use-as-route" onclick="useRideAsCheckpoints()" class="hidden px-3 py-2 rounded-2xl border border-zinc-600 text-xs hover:bg-zinc-800">
+            Use track as checkpoints
           </button>
           <button type="button" id="btn-ride-save" onclick="saveRecordedRide()" class="hidden px-3 py-2 rounded-2xl border border-orange-600 text-orange-400 text-xs hover:bg-zinc-800 font-semibold">
             Save ride
@@ -128,50 +367,6 @@
         </div>
       </div>
 
-      <!-- Build route -->
-      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
-        <div class="font-semibold flex items-center gap-2"><i class="fa-solid fa-route text-orange-500"></i> Build route</div>
-        <p class="text-xs text-zinc-400">Turn on <strong class="text-zinc-200">Build route</strong>. <strong class="text-zinc-200">First click = Start</strong> (green). More clicks = checkpoints (blue). Only the trail section between points is used — not the whole trail. Snap stays on so points stick to trails when you're close.</p>
-        <div class="flex flex-wrap gap-2">
-          <button type="button" id="btn-route-mode" onclick="toggleRouteMode()" class="px-4 py-2 rounded-2xl bg-orange-600 hover:bg-orange-700 text-sm font-semibold">Build route</button>
-          <button type="button" id="btn-snap-toggle" onclick="toggleSnap()" class="px-4 py-2 rounded-2xl border border-emerald-600 text-emerald-400 text-sm hover:bg-zinc-800">Snap: ON</button>
-          <button type="button" onclick="undoWaypoint()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Undo</button>
-          <button type="button" onclick="clearRoute()" class="px-4 py-2 rounded-2xl border border-zinc-600 text-sm hover:bg-zinc-800">Clear</button>
-        </div>
-
-        <div id="selected-trails-list" class="pt-2 border-t border-zinc-800 max-h-40 overflow-y-auto">
-          <p class="text-xs text-zinc-500">Click trails on the map to build a route.</p>
-        </div>
-        <div class="text-sm">
-          <span class="text-zinc-500">Distance</span>
-          <div class="text-2xl font-black tracking-tight" id="route-distance">0.0 km</div>
-          <div class="text-xs text-zinc-500" id="route-points">0 points</div>
-        </div>
-        <div id="save-route-panel" class="space-y-3 pt-2 border-t border-zinc-800">
-          <input id="route-name" type="text" placeholder="Route name" class="w-full px-4 py-2.5 rounded-2xl bg-zinc-950 border border-zinc-700 text-sm outline-none focus:border-orange-600">
-          <textarea id="route-desc" rows="2" placeholder="Notes (optional)" class="w-full px-4 py-2.5 rounded-2xl bg-zinc-950 border border-zinc-700 text-sm outline-none focus:border-orange-600"></textarea>
-          <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-            <input type="checkbox" id="route-public" class="accent-orange-600"> Share publicly with club
-          </label>
-          <button type="button" onclick="saveRoute()" class="w-full py-3 rounded-2xl bg-white text-zinc-900 font-semibold text-sm hover:bg-amber-50">
-            Save route
-          </button>
-          <p id="save-route-hint" class="text-xs text-zinc-500">Log in on Members to save routes to your account.</p>
-        </div>
-      </div>
-
-      <!-- Jump areas -->
-      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
-        <div class="font-semibold mb-3 text-sm">Jump to area</div>
-        <div class="flex flex-wrap gap-2">
-          <button type="button" onclick="flyTo('hat')" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">Medicine Hat</button>
-          <button type="button" onclick="flyTo('redcliff')" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">Redcliff</button>
-          <button type="button" onclick="flyTo('elkwater')" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">Elkwater</button>
-          <button type="button" onclick="flyTo('cypress')" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">Cypress Hills</button>
-        </div>
-      </div>
-
-      <!-- Saved routes -->
       <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
         <div class="font-semibold mb-3 text-sm flex items-center justify-between">
           <span>My saved routes</span>
@@ -185,13 +380,13 @@
   </div>
 </main>
 
-<!-- Shared footer + cart + toast (edit partials/footer.html only) -->
 <div id="site-footer"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/shared.js"></script>
+<script src="js/trail-info.js"></script>
 <script src="js/ride-tracker.js"></script>
 <script src="js/trails-map.js"></script>
 </body>

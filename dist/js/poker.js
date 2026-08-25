@@ -107,7 +107,77 @@ async function refreshLeaderboard(){
   if(lb)lb.classList.remove('hidden');
 }
 
-async function loadPokerAdmin(eventId){const panel=document.getElementById('poker-admin-panel');if(!panel)return;panel.classList.remove('hidden');const{data,error}=await window.sb.from('poker_locations').select('*').eq('event_id',eventId).order('sort_order',{ascending:true});if(error){panel.innerHTML=`<p class="text-red-400 text-sm">${escapeHtml(error.message)}</p><p class="text-xs text-zinc-500">Run supabase/poker_run.sql</p>`;return}const base=location.origin+location.pathname.replace(/[^/]*$/,'')+'poker.html';panel.innerHTML=`<div class="flex justify-between mb-4 gap-3 flex-wrap"><div><div class="font-bold text-lg">Poker checkpoints</div><p class="text-xs text-zinc-500">One QR per trail stop · 1 card each</p></div><button type="button" onclick="addPokerLocation(${eventId})" class="px-4 py-2 rounded-2xl bg-orange-600 text-sm font-semibold">Add location</button></div><div class="space-y-3">${(data||[]).map(loc=>{const url=`${base}?e=${eventId}&t=${loc.qr_token}`;const qr=`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(url)}`;return`<div class="border border-zinc-700 rounded-2xl p-4 flex flex-col sm:flex-row gap-4 bg-zinc-950"><img src="${qr}" class="w-32 h-32 bg-white p-1 rounded-xl"><div class="flex-1 min-w-0"><div class="font-semibold">${escapeHtml(loc.name)}</div><div class="text-[10px] text-zinc-600 break-all mt-1">${escapeHtml(url)}</div><div class="mt-2 flex gap-2"><a href="${qr}" target="_blank" class="text-xs border border-zinc-600 px-3 py-1 rounded-xl">Open QR</a><button type="button" onclick="deletePokerLocation(${loc.id},${eventId})" class="text-xs text-red-400 border border-red-900 px-3 py-1 rounded-xl">Delete</button></div></div></div>`}).join('')||'<p class="text-zinc-500 text-sm">No checkpoints yet</p>'}</div><div class="mt-4"><a class="text-orange-500 text-sm" href="poker.html?e=${eventId}">Leaderboard →</a></div>`}
-async function addPokerLocation(eventId){const name=prompt('Checkpoint name');if(!name)return;const description=prompt('Description (optional)')||'';const{error}=await window.sb.from('poker_locations').insert({event_id:eventId,name:name.trim(),description:description.trim()||null,sort_order:Date.now()%100000});if(error)showToast(error.message,true);else{showToast('Added');await loadPokerAdmin(eventId)}}
-async function deletePokerLocation(id,eventId){if(!confirm('Delete checkpoint?'))return;const{error}=await window.sb.from('poker_locations').delete().eq('id',id);if(error)showToast(error.message,true);else{showToast('Deleted');await loadPokerAdmin(eventId)}}
+async function loadPokerAdmin(eventId){
+  const panel=document.getElementById('poker-admin-panel');
+  if(!panel)return;
+  panel.classList.remove('hidden');
+  const{data,error}=await window.sb.from('poker_locations').select('*').eq('event_id',eventId).order('sort_order',{ascending:true});
+  if(error){
+    panel.innerHTML=`<p class="text-red-400 text-sm">${escapeHtml(error.message)}</p><p class="text-xs text-zinc-500">Run supabase/poker_run.sql</p>`;
+    return;
+  }
+  const base=location.origin+location.pathname.replace(/[^/]*$/,'')+'poker.html';
+  panel.innerHTML=`
+    <div class="flex justify-between mb-4 gap-3 flex-wrap">
+      <div>
+        <div class="font-bold text-lg">Poker checkpoints</div>
+        <p class="text-xs text-zinc-500">One QR per trail stop · 1 card each · flag marks where to post the code</p>
+      </div>
+      <button type="button" onclick="addPokerLocation(${eventId})" class="px-4 py-2 rounded-2xl bg-orange-600 text-sm font-semibold">Add location</button>
+    </div>
+    <div class="space-y-3">${
+      (data||[]).map(loc=>{
+        const url=`${base}?e=${eventId}&t=${loc.qr_token}`;
+        const qr=`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(url)}`;
+        const coords=(loc.lat!=null&&loc.lng!=null)
+          ? `<div class="text-[10px] text-zinc-400 mt-1"><i class="fa-solid fa-flag text-orange-500 mr-1"></i>${Number(loc.lat).toFixed(5)}, ${Number(loc.lng).toFixed(5)}</div>`
+          : '';
+        const mapsLink=(loc.lat!=null&&loc.lng!=null)
+          ? `<a href="https://www.google.com/maps?q=${loc.lat},${loc.lng}" target="_blank" rel="noopener" class="text-xs border border-zinc-600 px-3 py-1 rounded-xl">Map</a>`
+          : '';
+        return `<div class="border border-zinc-700 rounded-2xl p-4 flex flex-col sm:flex-row gap-4 bg-zinc-950">
+          <img src="${qr}" class="w-32 h-32 bg-white p-1 rounded-xl" alt="QR">
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold">${escapeHtml(loc.name)}</div>
+            ${coords}
+            <div class="text-[10px] text-zinc-600 break-all mt-1">${escapeHtml(url)}</div>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <a href="${qr}" target="_blank" class="text-xs border border-zinc-600 px-3 py-1 rounded-xl">Open QR</a>
+              ${mapsLink}
+              <button type="button" onclick="deletePokerLocation(${loc.id},${eventId})" class="text-xs text-red-400 border border-red-900 px-3 py-1 rounded-xl">Delete</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('') || '<p class="text-zinc-500 text-sm">No checkpoints yet</p>'
+    }</div>
+    <div class="mt-4"><a class="text-orange-500 text-sm" href="poker.html?e=${eventId}">Leaderboard →</a></div>`;
+}
+async function addPokerLocation(eventId){
+  const name=prompt('Checkpoint name (e.g. Trailhead, Mid climb)');
+  if(!name)return;
+  const description=prompt('Note / description (optional)')||'';
+  let lat=null,lng=null;
+  const coords=prompt('Optional: lat,lng where the QR will be posted\n(e.g. 50.04123, -110.68100)\nLeave blank to skip');
+  if(coords&&coords.trim()){
+    const parts=coords.split(/[,\s]+/).map(Number).filter(n=>!isNaN(n));
+    if(parts.length>=2){lat=parts[0];lng=parts[1];}
+  }
+  const row={event_id:eventId,name:name.trim(),description:description.trim()||null,sort_order:Date.now()%100000};
+  if(lat!=null&&lng!=null){row.lat=lat;row.lng=lng;}
+  let{error}=await window.sb.from('poker_locations').insert(row);
+  if(error&&row.lat!=null){
+    // Columns may not exist yet — store coords in description
+    delete row.lat;delete row.lng;
+    row.description=(row.description?row.description+' · ':'')+'📍 '+lat.toFixed(5)+', '+lng.toFixed(5);
+    ({error}=await window.sb.from('poker_locations').insert(row));
+  }
+  if(error)showToast(error.message,true);
+  else{showToast('Added');await loadPokerAdmin(eventId);}
+}
+async function deletePokerLocation(id,eventId){
+  if(!confirm('Delete checkpoint?'))return;
+  const{error}=await window.sb.from('poker_locations').delete().eq('id',id);
+  if(error)showToast(error.message,true);
+  else{showToast('Deleted');await loadPokerAdmin(eventId);}
+}
 document.addEventListener('DOMContentLoaded',()=>{if(document.body&&document.body.getAttribute('data-page')==='poker')initPokerPage()});

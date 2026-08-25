@@ -4,6 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>SB Racing • Medicine Hat Mountain Bike Club</title>
+    <script>
+    /* App-only entry: native iOS/Android opens Soggy Scoop home; website stays on this page */
+    (function () {
+      try {
+        var native = false;
+        var proto = String(location.protocol || '');
+        if (proto === 'capacitor:' || proto === 'ionic:') native = true;
+        else if (window.Capacitor) {
+          if (typeof Capacitor.isNativePlatform === 'function' && Capacitor.isNativePlatform()) native = true;
+          else {
+            var p = typeof Capacitor.getPlatform === 'function' ? Capacitor.getPlatform() : '';
+            if (p === 'ios' || p === 'android') native = true;
+          }
+        }
+        if (native) {
+          var path = (location.pathname || '').toLowerCase();
+          if (!path || path === '/' || path.endsWith('/') || path.endsWith('index.html')) {
+            location.replace('home.html');
+            return;
+          }
+        }
+      } catch (e) {}
+    })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/styles.css">

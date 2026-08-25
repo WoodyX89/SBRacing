@@ -7,6 +7,12 @@ let isLeader = false;
 let canManageEvents = false;
 let editingEventId = null;
 let editingEventBaseline = null;
+/** Pending QR checkpoints while creating/editing a poker run in the modal */
+let pendingCheckpoints = [];
+let pendingMapPin = null; // { lat, lng } while placing
+let evCheckpointMap = null;
+let evCheckpointMarkers = [];
+let evPendingMarker = null;
 /** @type {Record<number, {likes: any[], comments: any[], liked: boolean}>} */
 let eventSocial = {};
 let eventsCurrentUserId = null;
@@ -17,6 +23,12 @@ let eventsSpotsChannel = null;
 let myRsvpByEvent = {};
 /** @type {Record<number, number>} confirmed rsvp counts */
 let rsvpCountByEvent = {};
+/** @type {Record<number, Array>} event_id -> poker checkpoint rows */
+let eventCheckpointsById = {};
+/** Cached trail GeoJSON for event card maps */
+let eventTrailsGeo = null;
+/** @type {Record<number, L.Map>} live Leaflet maps on event cards */
+let eventCardMaps = {};
 
 function normalizeEventField(key, val) {
   if (val === null || val === undefined) return '';
@@ -273,17 +285,29 @@ function renderEvents() {
       advanced: 'bg-orange-900/60 text-orange-400',
       all_levels: 'bg-sky-900/60 text-sky-400'
     }[ev.difficulty] || 'bg-zinc-800 text-zinc-400';
-    var badgeColor = expired ? 'text-zinc-500' : (ev.is_featured ? 'text-orange-400' : (ev.category === 'clinic' ? 'text-sky-400' : 'text-emerald-400'));
-    var badgeText = expired ? 'COMPLETED' : (ev.is_featured ? 'FEATURED' : (ev.category === 'clinic' ? 'CLINIC' : (ev.category === 'social' ? 'SOCIAL' : 'RIDE')));
+    var badgeColor = expired ? 'text-zinc-500' : (ev.is_featured ? 'text-orange-400' : (ev.category === 'clinic' ? 'text-sky-400' : (ev.category === 'poker_run' ? 'text-orange-400' : 'text-emerald-400')));
+    var badgeText = expired ? 'COMPLETED' : (ev.is_featured ? 'FEATURED' : (ev.category === 'clinic' ? 'CLINIC' : (ev.category === 'social' ? 'SOCIAL' : (ev.category === 'poker_run' ? 'POKER RUN' : 'RIDE'))));
 
-    const pokerBtn = (canManageEvents && ev.category === 'poker_run') ? `
+    const isPoker = ev.category === 'poker_run';
+    const pokerBtn = (canManageEvents && isPoker) ? `
         <a href="poker.html?e=${ev.id}" class="text-xs px-3 py-1.5 rounded-xl border border-orange-700 text-orange-400 hover:bg-orange-950/40">
-          <i class="fa-solid fa-spade mr-1"></i>Poker run
+          <i class="fa-solid fa-spade mr-1"></i>Leaderboard
         </a>
         <button type="button" onclick="showPokerAdminFor(${ev.id})" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">
-          Checkpoints
-        </button>` : (ev.category === 'poker_run' ? `
-        <a href="poker.html?e=${ev.id}" class="text-xs px-3 py-1.5 rounded-xl border border-orange-700 text-orange-400">Leaderboard</a>` : '');
+          Manage checkpoints
+        </button>` : (isPoker ? `
+        <a href="poker.html?e=${ev.id}" class="text-xs px-3 py-1.5 rounded-xl border border-orange-700 text-orange-400">
+          <i class="fa-solid fa-spade mr-1"></i>Leaderboard
+        </a>` : '');
+    const trackRideBtn = isPoker
+      ? `<a href="trails.html?event=${ev.id}" class="inline-flex items-center justify-center gap-1.5 w-full mt-2 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold text-white">
+          <i class="fa-solid fa-play"></i> Track Ride
+        </a>`
+      : '';
+    const eventMapHtml = isPoker
+      ? `<div id="event-map-${ev.id}" class="event-cp-map" data-event-map="${ev.id}"></div>
+         <p class="text-[10px] text-zinc-500 mt-1.5"><i class="fa-solid fa-flag text-orange-500 mr-1"></i>QR checkpoints on the trail map</p>`
+      : '';
     const adminBtns = canManageEvents ? `
       <div class="flex gap-2 mt-3">
         <button type="button" onclick="openEventModal(${ev.id})" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">
@@ -323,13 +347,15 @@ function renderEvents() {
           </div>
         </div>
         ${ev.description ? `<p class="text-sm text-zinc-400 mt-3 line-clamp-3">${escapeHtml(ev.description)}</p>` : ''}
-        <div class="mt-auto pt-6">
+        ${eventMapHtml}
+        <div class="mt-auto pt-4">
           <div class="flex items-center gap-x-2 text-xs mb-4 flex-wrap gap-y-1">
             <span class="px-2 py-1 rounded-lg ${diffClass}">${escapeHtml((ev.difficulty || 'all_levels').replace('_', ' '))}</span>
             <span class="text-zinc-500">${spotsLeft} spots left</span>
             ${ev.is_members_only ? '<span class="text-orange-500">Members only</span>' : ''}
           </div>
           ${rsvpBtnHtml}
+          ${trackRideBtn}
           ${pokerBtn ? `<div class="flex flex-wrap gap-2 mt-3">${pokerBtn}</div>` : ''}
           ${adminBtns}
           ${renderEventSocial(ev.id)}
@@ -362,6 +388,11 @@ function renderEvents() {
   if (location.protocol === 'capacitor:' || location.protocol === 'ionic:') {
     initEventSwipeToDelete(grid);
   }
+
+  // Poker-run cards: load checkpoints + draw trail maps
+  loadAndDrawEventMaps().catch(function (e) {
+    console.warn('[events] maps', e);
+  });
 }
 
 /** Swipe-left to reveal Delete on event cards (admin only) */
@@ -805,6 +836,9 @@ function openEventModal(id) {
 
   title.textContent = id ? 'Edit Event' : 'Add Event';
   editingEventBaseline = null;
+  pendingCheckpoints = [];
+  pendingMapPin = null;
+  clearEvCheckpointMarkers();
 
   const ev = id ? allEvents.find((e) => String(e.id) === String(id)) : null;
   document.getElementById('ev-title').value = ev ? ev.title : '';
@@ -817,6 +851,12 @@ function openEventModal(id) {
   document.getElementById('ev-category').value = ev ? (ev.category || 'ride') : 'ride';
   document.getElementById('ev-featured').checked = !!(ev && ev.is_featured);
   document.getElementById('ev-members-only').checked = !!(ev && ev.is_members_only);
+
+  var nameEl = document.getElementById('ev-cp-name');
+  var descEl = document.getElementById('ev-cp-desc');
+  if (nameEl) nameEl.value = '';
+  if (descEl) descEl.value = '';
+  renderPendingCheckpointList();
 
   if (ev) {
     editingEventBaseline = {
@@ -836,6 +876,14 @@ function openEventModal(id) {
   }
   modal.classList.remove('hidden');
   modal.classList.add('flex');
+
+  // Wire category toggle + map after modal is visible
+  var cat = document.getElementById('ev-category');
+  if (cat && !cat._pokerBound) {
+    cat.addEventListener('change', onEventCategoryChange);
+    cat._pokerBound = true;
+  }
+  onEventCategoryChange();
 }
 
 function closeEventModal() {
@@ -845,6 +893,287 @@ function closeEventModal() {
   modal.classList.remove('flex');
   editingEventId = null;
   editingEventBaseline = null;
+  pendingCheckpoints = [];
+  pendingMapPin = null;
+  clearEvCheckpointMarkers();
+  if (evPendingMarker && evCheckpointMap) {
+    try { evCheckpointMap.removeLayer(evPendingMarker); } catch (e) {}
+    evPendingMarker = null;
+  }
+}
+
+function onEventCategoryChange() {
+  var cat = document.getElementById('ev-category');
+  var section = document.getElementById('ev-poker-checkpoints');
+  if (!section) return;
+  var isPoker = cat && cat.value === 'poker_run';
+  section.classList.toggle('hidden', !isPoker);
+  if (isPoker) {
+    setTimeout(function () {
+      initEvCheckpointMap();
+      // When editing an existing poker run, load existing checkpoints into the list (read-only hint)
+      if (editingEventId) loadExistingCheckpointsForEdit(editingEventId);
+    }, 50);
+  }
+}
+
+function evDiffColor(raw) {
+  var s = String(raw || '').toLowerCase().trim();
+  if (/easy|beginner|green|novice|white/.test(s)) return '#22c55e';
+  if (/advanced|difficult|hard|black|expert|severe|double/.test(s)) return '#0a0a0a';
+  if (/intermediate|moderate|blue/.test(s)) return '#3b82f6';
+  if (s === 'black' || s === 'double black') return '#0a0a0a';
+  if (s === 'blue') return '#3b82f6';
+  if (s === 'green') return '#22c55e';
+  return '#3b82f6';
+}
+
+function placeEvCheckpointPin(latlng, trailName) {
+  pendingMapPin = { lat: latlng.lat, lng: latlng.lng };
+  if (evPendingMarker && evCheckpointMap) evCheckpointMap.removeLayer(evPendingMarker);
+  evPendingMarker = L.marker([latlng.lat, latlng.lng], {
+    icon: L.divIcon({
+      className: '',
+      html: '<div style="background:#f97316;color:#fff;width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center"><i class="fa-solid fa-flag" style="transform:rotate(45deg);font-size:11px"></i></div>',
+      iconSize: [28, 28],
+      iconAnchor: [14, 28]
+    })
+  }).addTo(evCheckpointMap);
+  var nameEl = document.getElementById('ev-cp-name');
+  if (trailName && nameEl && !nameEl.value.trim()) {
+    nameEl.value = trailName;
+  }
+  showToast(trailName
+    ? 'Pin on “' + trailName + '” — name it and tap Add flag'
+    : 'Pin placed — enter a name and tap Add flag');
+}
+
+function initEvCheckpointMap() {
+  if (typeof L === 'undefined') return;
+  var el = document.getElementById('ev-checkpoint-map');
+  if (!el) return;
+  if (evCheckpointMap) {
+    setTimeout(function () { evCheckpointMap.invalidateSize(); }, 100);
+    return;
+  }
+
+  // Same area as Trails page (Medicine Hat / Redcliff / Elkwater)
+  evCheckpointMap = L.map('ev-checkpoint-map', {
+    scrollWheelZoom: true,
+    tap: true
+  }).setView([50.04, -110.68], 12);
+
+  var streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  });
+  var satellite = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { maxZoom: 19, attribution: 'Tiles &copy; Esri' }
+  );
+  streets.addTo(evCheckpointMap);
+  L.control.layers(
+    { 'Street map': streets, 'Satellite': satellite },
+    null,
+    { position: 'topright', collapsed: true }
+  ).addTo(evCheckpointMap);
+
+  // Load the same trail network as Trails page
+  fetch('assets/trails/region.geojson')
+    .then(function (res) { return res.json(); })
+    .then(function (geo) {
+      var trailLayer = L.geoJSON(geo, {
+        style: function (f) {
+          var p = f.properties || {};
+          var col = evDiffColor(p.difficulty || p.Difficulty || p.rating);
+          return { color: col, weight: 4, opacity: 0.9 };
+        },
+        onEachFeature: function (f, layer) {
+          var p = f.properties || {};
+          var name = p.name || p.Name || 'Trail';
+          layer.bindTooltip(name, { sticky: true, direction: 'top' });
+          layer.on('click', function (e) {
+            L.DomEvent.stopPropagation(e);
+            placeEvCheckpointPin(e.latlng, name);
+          });
+        }
+      }).addTo(evCheckpointMap);
+      try {
+        evCheckpointMap.fitBounds(trailLayer.getBounds(), { padding: [20, 20], maxZoom: 13 });
+      } catch (e) {}
+    })
+    .catch(function (err) {
+      console.warn('[events] could not load trails geojson', err);
+    });
+
+  // Empty map click still places a free pin (off-trail)
+  evCheckpointMap.on('click', function (e) {
+    placeEvCheckpointPin(e.latlng, null);
+  });
+
+  setTimeout(function () { evCheckpointMap.invalidateSize(); }, 150);
+}
+
+function clearPendingMapPin() {
+  pendingMapPin = null;
+  if (evPendingMarker && evCheckpointMap) {
+    evCheckpointMap.removeLayer(evPendingMarker);
+    evPendingMarker = null;
+  }
+}
+
+function confirmPendingCheckpoint() {
+  var nameEl = document.getElementById('ev-cp-name');
+  var descEl = document.getElementById('ev-cp-desc');
+  var name = (nameEl && nameEl.value || '').trim();
+  if (!name) {
+    showToast('Enter a checkpoint name', true);
+    return;
+  }
+  if (!pendingMapPin) {
+    showToast('Tap the map to place a flag first', true);
+    return;
+  }
+  pendingCheckpoints.push({
+    name: name,
+    description: (descEl && descEl.value || '').trim() || null,
+    lat: pendingMapPin.lat,
+    lng: pendingMapPin.lng
+  });
+  if (nameEl) nameEl.value = '';
+  if (descEl) descEl.value = '';
+  clearPendingMapPin();
+  renderPendingCheckpointList();
+  showToast('Checkpoint added (' + pendingCheckpoints.length + ')');
+}
+
+function removePendingCheckpoint(idx) {
+  pendingCheckpoints.splice(idx, 1);
+  renderPendingCheckpointList();
+}
+
+function clearEvCheckpointMarkers() {
+  if (evCheckpointMap && evCheckpointMarkers.length) {
+    evCheckpointMarkers.forEach(function (m) {
+      try { evCheckpointMap.removeLayer(m); } catch (e) {}
+    });
+  }
+  evCheckpointMarkers = [];
+}
+
+function renderPendingCheckpointList() {
+  var list = document.getElementById('ev-cp-list');
+  if (!list) return;
+  clearEvCheckpointMarkers();
+  if (!pendingCheckpoints.length) {
+    list.innerHTML = '<p class="text-xs text-zinc-500" id="ev-cp-empty">No checkpoints yet.</p>';
+    return;
+  }
+  list.innerHTML = pendingCheckpoints.map(function (cp, i) {
+    return '<div class="cp-flag-row">' +
+      '<span class="text-orange-500 mt-0.5"><i class="fa-solid fa-flag"></i></span>' +
+      '<div class="flex-1 min-w-0">' +
+      '<div class="font-medium text-sm truncate">' + escapeHtmlEvent(cp.name) + '</div>' +
+      '<div class="text-[10px] text-zinc-500">' +
+      (cp.lat != null ? cp.lat.toFixed(5) + ', ' + cp.lng.toFixed(5) : 'no coords') +
+      (cp.description ? ' · ' + escapeHtmlEvent(cp.description) : '') +
+      '</div></div>' +
+      '<button type="button" onclick="removePendingCheckpoint(' + i + ')" class="text-red-400 text-xs px-2 py-1 rounded-lg border border-red-900/50 hover:bg-zinc-800">Remove</button>' +
+      '</div>';
+  }).join('');
+
+  // Draw permanent markers for confirmed flags
+  if (evCheckpointMap) {
+    pendingCheckpoints.forEach(function (cp, i) {
+      if (cp.lat == null || cp.lng == null) return;
+      var m = L.marker([cp.lat, cp.lng], {
+        icon: L.divIcon({
+          className: '',
+          html: '<div style="background:#22c55e;color:#fff;width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700"><span style="transform:rotate(45deg)">' + (i + 1) + '</span></div>',
+          iconSize: [26, 26],
+          iconAnchor: [13, 26]
+        })
+      }).addTo(evCheckpointMap);
+      m.bindTooltip(cp.name, { direction: 'top' });
+      evCheckpointMarkers.push(m);
+    });
+  }
+}
+
+function escapeHtmlEvent(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function loadExistingCheckpointsForEdit(eventId) {
+  // Only seed the list if empty (don't overwrite flags user already added in this session)
+  if (pendingCheckpoints.length) return;
+  try {
+    var result = await window.sb.from('poker_locations')
+      .select('id, name, description, lat, lng, sort_order')
+      .eq('event_id', eventId)
+      .order('sort_order', { ascending: true });
+    if (result.error) {
+      // lat/lng columns may not exist yet — try without
+      result = await window.sb.from('poker_locations')
+        .select('id, name, description, sort_order')
+        .eq('event_id', eventId)
+        .order('sort_order', { ascending: true });
+    }
+    if (result.error || !result.data) return;
+    pendingCheckpoints = result.data.map(function (row) {
+      return {
+        id: row.id,
+        name: row.name,
+        description: row.description || null,
+        lat: row.lat != null ? Number(row.lat) : null,
+        lng: row.lng != null ? Number(row.lng) : null,
+        existing: true
+      };
+    });
+    renderPendingCheckpointList();
+  } catch (e) {
+    console.warn('[events] load checkpoints', e);
+  }
+}
+
+async function savePendingCheckpointsForEvent(eventId) {
+  if (!pendingCheckpoints.length || !eventId) return { added: 0, errors: [] };
+  var added = 0;
+  var errors = [];
+  for (var i = 0; i < pendingCheckpoints.length; i++) {
+    var cp = pendingCheckpoints[i];
+    if (cp.existing && cp.id) continue; // already in DB
+    var row = {
+      event_id: eventId,
+      name: cp.name,
+      description: cp.description || null,
+      sort_order: i + 1
+    };
+    if (cp.lat != null && cp.lng != null) {
+      row.lat = cp.lat;
+      row.lng = cp.lng;
+    }
+    var result = await window.sb.from('poker_locations').insert(row);
+    if (result.error) {
+      // Retry without lat/lng if columns missing
+      if (row.lat != null) {
+        delete row.lat;
+        delete row.lng;
+        // stash coords in description so they're not lost
+        if (cp.lat != null) {
+          row.description = (row.description ? row.description + ' · ' : '') +
+            '📍 ' + cp.lat.toFixed(5) + ', ' + cp.lng.toFixed(5);
+        }
+        result = await window.sb.from('poker_locations').insert(row);
+      }
+      if (result.error) errors.push(result.error.message || 'insert failed');
+      else added++;
+    } else {
+      added++;
+    }
+  }
+  return { added: added, errors: errors };
 }
 
 async function saveEvent(e) {
@@ -881,14 +1210,31 @@ async function saveEvent(e) {
 
   try {
     let error;
+    let savedEventId = editingEventId;
     if (editingEventId) {
       ({ error } = await window.sb.from('events').update(payload).eq('id', editingEventId));
     } else {
-      ({ error } = await window.sb.from('events').insert(payload));
+      var ins = await window.sb.from('events').insert(payload).select('id').single();
+      error = ins.error;
+      if (!error && ins.data) savedEventId = ins.data.id;
     }
     if (error) throw error;
 
-    showToast(editingEventId ? 'Event updated' : 'Event added');
+    // Save any pending QR checkpoint flags for poker runs
+    if (payload.category === 'poker_run' && savedEventId && pendingCheckpoints.length) {
+      var cpResult = await savePendingCheckpointsForEvent(savedEventId);
+      if (cpResult.errors && cpResult.errors.length) {
+        console.warn('[events] checkpoint errors', cpResult.errors);
+        showToast('Event saved, but some checkpoints failed — add them from Checkpoints on the card', true);
+      } else if (cpResult.added) {
+        showToast((editingEventId ? 'Event updated' : 'Event added') + ' · ' + cpResult.added + ' checkpoint' + (cpResult.added === 1 ? '' : 's'));
+      } else {
+        showToast(editingEventId ? 'Event updated' : 'Event added');
+      }
+    } else {
+      showToast(editingEventId ? 'Event updated' : 'Event added');
+    }
+
     // Local + remote notify on both create and edit (include what changed)
     try {
       var isEdit = !!editingEventId;
@@ -1380,6 +1726,145 @@ if (document.readyState === 'loading') {
   bootEvents();
 }
 
+
+function parseCoordsFromLoc(loc) {
+  if (loc && loc.lat != null && loc.lng != null && !isNaN(Number(loc.lat)) && !isNaN(Number(loc.lng))) {
+    return { lat: Number(loc.lat), lng: Number(loc.lng) };
+  }
+  // Fallback when lat/lng columns missing — coords stored in description as 📍 lat, lng
+  var desc = (loc && loc.description) || '';
+  var m = desc.match(/📍\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)/);
+  if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+  return null;
+}
+
+async function fetchEventCheckpoints(eventIds) {
+  if (!eventIds || !eventIds.length || !window.sb) return {};
+  var byId = {};
+  eventIds.forEach(function (id) { byId[id] = []; });
+  try {
+    var result = await window.sb
+      .from('poker_locations')
+      .select('id, event_id, name, description, lat, lng, sort_order, qr_token, is_active')
+      .in('event_id', eventIds)
+      .order('sort_order', { ascending: true });
+    if (result.error) {
+      // Retry without lat/lng if columns don't exist
+      result = await window.sb
+        .from('poker_locations')
+        .select('id, event_id, name, description, sort_order, qr_token, is_active')
+        .in('event_id', eventIds)
+        .order('sort_order', { ascending: true });
+    }
+    if (result.error) {
+      console.warn('[events] poker_locations', result.error);
+      return byId;
+    }
+    (result.data || []).forEach(function (row) {
+      if (!byId[row.event_id]) byId[row.event_id] = [];
+      byId[row.event_id].push(row);
+    });
+  } catch (e) {
+    console.warn('[events] fetch checkpoints', e);
+  }
+  return byId;
+}
+
+async function getEventTrailsGeo() {
+  if (eventTrailsGeo) return eventTrailsGeo;
+  try {
+    var res = await fetch('assets/trails/region.geojson');
+    eventTrailsGeo = await res.json();
+  } catch (e) {
+    console.warn('[events] trails geojson', e);
+    eventTrailsGeo = null;
+  }
+  return eventTrailsGeo;
+}
+
+function destroyEventCardMaps() {
+  Object.keys(eventCardMaps).forEach(function (id) {
+    try { eventCardMaps[id].remove(); } catch (e) {}
+  });
+  eventCardMaps = {};
+}
+
+async function loadAndDrawEventMaps() {
+  if (typeof L === 'undefined') return;
+  destroyEventCardMaps();
+
+  var pokerEvents = (allEvents || []).filter(function (ev) {
+    return ev.category === 'poker_run';
+  });
+  if (!pokerEvents.length) return;
+
+  var ids = pokerEvents.map(function (ev) { return ev.id; });
+  eventCheckpointsById = await fetchEventCheckpoints(ids);
+  var geo = await getEventTrailsGeo();
+
+  pokerEvents.forEach(function (ev) {
+    var el = document.getElementById('event-map-' + ev.id);
+    if (!el) return;
+
+    var map = L.map(el, {
+      scrollWheelZoom: false,
+      dragging: true,
+      tap: true,
+      attributionControl: false
+    }).setView([50.04, -110.68], 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18
+    }).addTo(map);
+
+    var bounds = null;
+    if (geo) {
+      try {
+        var trailLayer = L.geoJSON(geo, {
+          style: function (f) {
+            var p = f.properties || {};
+            var col = (typeof evDiffColor === 'function')
+              ? evDiffColor(p.difficulty || p.Difficulty || p.rating)
+              : '#3b82f6';
+            return { color: col, weight: 3, opacity: 0.85 };
+          }
+        }).addTo(map);
+        bounds = trailLayer.getBounds();
+      } catch (e) {}
+    }
+
+    var locs = eventCheckpointsById[ev.id] || [];
+    var cpLatLngs = [];
+    locs.forEach(function (loc, i) {
+      var coords = parseCoordsFromLoc(loc);
+      if (!coords) return;
+      cpLatLngs.push([coords.lat, coords.lng]);
+      L.marker([coords.lat, coords.lng], {
+        icon: L.divIcon({
+          className: '',
+          html: '<div style="background:#f97316;color:#fff;width:24px;height:24px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700"><span style="transform:rotate(45deg)">' + (i + 1) + '</span></div>',
+          iconSize: [24, 24],
+          iconAnchor: [12, 24]
+        })
+      }).addTo(map).bindTooltip(loc.name || ('CP ' + (i + 1)), { direction: 'top' });
+    });
+
+    if (cpLatLngs.length) {
+      try {
+        map.fitBounds(L.latLngBounds(cpLatLngs), { padding: [28, 28], maxZoom: 14 });
+      } catch (e) {
+        if (bounds) try { map.fitBounds(bounds, { padding: [16, 16], maxZoom: 13 }); } catch (e2) {}
+      }
+    } else if (bounds) {
+      try { map.fitBounds(bounds, { padding: [16, 16], maxZoom: 12 }); } catch (e) {}
+    }
+
+    eventCardMaps[ev.id] = map;
+    setTimeout(function () {
+      try { map.invalidateSize(); } catch (e) {}
+    }, 120);
+  });
+}
 
 function showPokerAdminFor(eventId) {
   let panel = document.getElementById('poker-admin-panel');

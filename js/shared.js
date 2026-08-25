@@ -1206,6 +1206,8 @@ async function updateNavAuth(forcedUser) {
     const desktopJoin = Array.from(document.querySelectorAll('#navbar a[href="join.html"]'))
         .find(a => (a.className || '').includes('bg-white') || (a.textContent || '').includes('JOIN THE CREW'));
 
+    const websiteOnly = !isNativeAppShell();
+
     if (user) {
         const rawName = profile?.full_name || (user.email ? user.email.split('@')[0] : 'Member');
         const name = String(rawName).split(' ')[0];
@@ -1221,6 +1223,14 @@ async function updateNavAuth(forcedUser) {
             ? `<img src="${escapeAttrNav(avatarUrl)}" alt="" class="w-9 h-9 rounded-full object-cover bg-zinc-800" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="w-9 h-9 rounded-full bg-orange-600 text-white hidden items-center justify-center font-bold">${initial}</span>`
             : `<span class="w-9 h-9 rounded-full bg-orange-600 text-white flex items-center justify-center font-bold">${initial}</span>`;
 
+        // Website-only: change password control in the nav
+        const changePwDesktop = websiteOnly
+            ? `<button type="button" onclick="openChangePasswordModal()" class="hidden md:inline-flex items-center gap-x-1.5 px-2.5 py-1.5 rounded-xl text-xs text-zinc-400 hover:text-white hover:bg-zinc-800/80 transition-all border border-transparent hover:border-zinc-700" title="Change password">
+                    <i class="fa-solid fa-key text-[10px]"></i>
+                    <span>Password</span>
+               </button>`
+            : '';
+
         slot.style.display = 'flex';
         slot.innerHTML = `
             <div class="flex items-center gap-x-1.5">
@@ -1231,11 +1241,17 @@ async function updateNavAuth(forcedUser) {
                     </span>
                     <span class="text-sm font-medium max-w-[100px] truncate hidden md:inline pl-1">${escapeHtmlNav(display)}</span>
                 </a>
+                ${changePwDesktop}
             </div>`;
 
         if (desktopJoin) desktopJoin.style.display = 'none';
 
         if (mobileSlot) {
+            const changePwMobile = websiteOnly
+                ? `<button type="button" onclick="openChangePasswordModal(); try{toggleMobileMenu()}catch(e){}" class="mt-2 w-full text-left px-4 py-3 rounded-2xl hover:bg-zinc-800 text-zinc-300 text-sm">
+                        <i class="fa-solid fa-key mr-2"></i> Change password
+                   </button>`
+                : '';
             mobileSlot.innerHTML = `
                 <a href="members.html" class="flex items-center gap-x-3 px-4 py-3 rounded-2xl bg-zinc-800/80">
                     <span class="relative inline-flex">${avatarHtmlLg}</span>
@@ -1244,26 +1260,44 @@ async function updateNavAuth(forcedUser) {
                         <div class="text-xs text-emerald-400">Logged in</div>
                     </div>
                 </a>
+                ${changePwMobile}
                 <button type="button" onclick="navLogout()" class="mt-2 w-full text-left px-4 py-3 rounded-2xl hover:bg-zinc-800 text-zinc-400 text-sm">
                     <i class="fa-solid fa-right-from-bracket mr-2"></i> Log out
                 </button>`;
         }
     } else {
+        // Website-only: reset password link when logged out
+        const resetPwDesktop = websiteOnly
+            ? `<button type="button" onclick="openResetPasswordModal()" class="hidden sm:inline-flex items-center gap-x-1.5 px-2.5 py-1.5 rounded-xl text-xs text-zinc-500 hover:text-zinc-300 transition-all" title="Reset password">
+                    <i class="fa-solid fa-key text-[10px]"></i>
+                    <span>Reset password</span>
+               </button>`
+            : '';
+
         slot.style.display = 'flex';
         slot.innerHTML = `
-            <a href="members.html" class="flex items-center gap-x-2 px-3 py-1.5 rounded-2xl border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-400 hover:text-white transition-all">
-                <i class="fa-solid fa-user text-xs"></i>
-                <span class="hidden sm:inline">Log in</span>
-            </a>`;
+            <div class="flex items-center gap-x-1.5">
+                <a href="members.html" class="flex items-center gap-x-2 px-3 py-1.5 rounded-2xl border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-400 hover:text-white transition-all">
+                    <i class="fa-solid fa-user text-xs"></i>
+                    <span class="hidden sm:inline">Log in</span>
+                </a>
+                ${resetPwDesktop}
+            </div>`;
 
         if (desktopJoin) desktopJoin.style.display = '';
 
         if (mobileSlot) {
+            const resetPwMobile = websiteOnly
+                ? `<button type="button" onclick="openResetPasswordModal(); try{toggleMobileMenu()}catch(e){}" class="mt-2 w-full text-left px-4 py-3 rounded-2xl hover:bg-zinc-800 text-zinc-400 text-sm">
+                        <i class="fa-solid fa-key mr-2"></i> Reset password
+                   </button>`
+                : '';
             mobileSlot.innerHTML = `
                 <a href="members.html" class="flex items-center gap-x-2 px-4 py-3 rounded-2xl hover:bg-zinc-800 text-zinc-300">
                     <i class="fa-solid fa-user"></i>
                     <span>Log in</span>
-                </a>`;
+                </a>
+                ${resetPwMobile}`;
         }
     }
 }
@@ -1293,6 +1327,242 @@ function escapeHtmlNav(str) {
 }
 function escapeAttrNav(str) {
     return escapeHtmlNav(str).replace(/'/g, '&#39;');
+}
+
+// ---------- Password change / reset (website only) ----------
+function ensurePasswordModal() {
+    if (document.getElementById('password-modal')) return;
+    var wrap = document.createElement('div');
+    wrap.id = 'password-modal';
+    wrap.className = 'fixed inset-0 z-[200] hidden items-center justify-center p-4';
+    wrap.style.cssText = 'display:none;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
+    wrap.innerHTML =
+        '<div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-3xl shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="pw-modal-title">' +
+        '  <div class="px-6 py-5 border-b border-zinc-800 flex items-center justify-between">' +
+        '    <h3 id="pw-modal-title" class="text-lg font-semibold tracking-tight">Password</h3>' +
+        '    <button type="button" onclick="closePasswordModal()" class="w-9 h-9 rounded-xl hover:bg-zinc-800 flex items-center justify-center text-zinc-400" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>' +
+        '  </div>' +
+        '  <div class="px-6 py-5 space-y-4">' +
+        '    <p id="pw-modal-desc" class="text-sm text-zinc-400"></p>' +
+        '    <div id="pw-reset-fields" class="hidden space-y-3">' +
+        '      <div>' +
+        '        <label class="text-xs font-medium tracking-widest text-zinc-400">EMAIL</label>' +
+        '        <input type="email" id="pw-reset-email" autocomplete="email" placeholder="you@email.com" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">' +
+        '      </div>' +
+        '    </div>' +
+        '    <div id="pw-change-fields" class="hidden space-y-3">' +
+        '      <div>' +
+        '        <label class="text-xs font-medium tracking-widest text-zinc-400">NEW PASSWORD</label>' +
+        '        <input type="password" id="pw-new" autocomplete="new-password" minlength="6" placeholder="Min 6 characters" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">' +
+        '      </div>' +
+        '      <div>' +
+        '        <label class="text-xs font-medium tracking-widest text-zinc-400">CONFIRM NEW PASSWORD</label>' +
+        '        <input type="password" id="pw-new-confirm" autocomplete="new-password" minlength="6" placeholder="Repeat password" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">' +
+        '      </div>' +
+        '    </div>' +
+        '    <p id="pw-modal-msg" class="text-sm hidden"></p>' +
+        '  </div>' +
+        '  <div class="px-6 py-4 border-t border-zinc-800 flex gap-3 justify-end">' +
+        '    <button type="button" onclick="closePasswordModal()" class="px-4 py-2.5 rounded-2xl text-sm text-zinc-400 hover:text-white hover:bg-zinc-800">Cancel</button>' +
+        '    <button type="button" id="pw-modal-submit" class="px-5 py-2.5 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold">Submit</button>' +
+        '  </div>' +
+        '</div>';
+    document.body.appendChild(wrap);
+    wrap.addEventListener('click', function (e) {
+        if (e.target === wrap) closePasswordModal();
+    });
+}
+
+var _pwModalMode = null; // 'reset' | 'change' | 'recovery'
+
+function openPasswordModal(mode) {
+    if (typeof isNativeAppShell === 'function' && isNativeAppShell()) {
+        showToast('Password changes are available on the website', true);
+        return;
+    }
+    ensurePasswordModal();
+    _pwModalMode = mode || 'reset';
+    var modal = document.getElementById('password-modal');
+    var title = document.getElementById('pw-modal-title');
+    var desc = document.getElementById('pw-modal-desc');
+    var resetFields = document.getElementById('pw-reset-fields');
+    var changeFields = document.getElementById('pw-change-fields');
+    var msg = document.getElementById('pw-modal-msg');
+    var submit = document.getElementById('pw-modal-submit');
+
+    if (msg) {
+        msg.classList.add('hidden');
+        msg.textContent = '';
+    }
+
+    if (_pwModalMode === 'reset') {
+        if (title) title.textContent = 'Reset password';
+        if (desc) desc.textContent = 'Enter the email on your account. We\'ll send a link to set a new password.';
+        if (resetFields) resetFields.classList.remove('hidden');
+        if (changeFields) changeFields.classList.add('hidden');
+        if (submit) {
+            submit.textContent = 'Send reset link';
+            submit.onclick = submitResetPassword;
+        }
+        var emailInput = document.getElementById('pw-reset-email');
+        if (emailInput && !emailInput.value) {
+            try {
+                var loginEmail = document.getElementById('login-email');
+                if (loginEmail && loginEmail.value) emailInput.value = loginEmail.value.trim();
+            } catch (e) {}
+        }
+        setTimeout(function () { try { document.getElementById('pw-reset-email').focus(); } catch (e) {} }, 50);
+    } else {
+        // change or recovery (set new password while session is recovery/authenticated)
+        if (title) title.textContent = _pwModalMode === 'recovery' ? 'Set new password' : 'Change password';
+        if (desc) desc.textContent = _pwModalMode === 'recovery'
+            ? 'Choose a new password for your account.'
+            : 'Enter a new password for your account (min 6 characters).';
+        if (resetFields) resetFields.classList.add('hidden');
+        if (changeFields) changeFields.classList.remove('hidden');
+        var n1 = document.getElementById('pw-new');
+        var n2 = document.getElementById('pw-new-confirm');
+        if (n1) n1.value = '';
+        if (n2) n2.value = '';
+        if (submit) {
+            submit.textContent = 'Update password';
+            submit.onclick = submitChangePassword;
+        }
+        setTimeout(function () { try { document.getElementById('pw-new').focus(); } catch (e) {} }, 50);
+    }
+
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+}
+
+function openResetPasswordModal() {
+    openPasswordModal('reset');
+}
+
+function openChangePasswordModal() {
+    openPasswordModal('change');
+}
+
+function closePasswordModal() {
+    var modal = document.getElementById('password-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+    _pwModalMode = null;
+}
+
+async function submitResetPassword() {
+    if (!window.sb) {
+        showToast('Auth not ready — try again', true);
+        return;
+    }
+    var emailEl = document.getElementById('pw-reset-email');
+    var email = (emailEl && emailEl.value || '').trim();
+    if (!email || email.indexOf('@') === -1) {
+        showToast('Enter a valid email', true);
+        return;
+    }
+    var submit = document.getElementById('pw-modal-submit');
+    var msg = document.getElementById('pw-modal-msg');
+    if (submit) {
+        submit.disabled = true;
+        submit.textContent = 'Sending…';
+    }
+    try {
+        // Redirect back to members page so recovery session is picked up on the website
+        var redirectTo = (window.location.origin || '') + (window.location.pathname.indexOf('/') === 0
+            ? window.location.pathname.replace(/[^/]+$/, 'members.html')
+            : '/members.html');
+        if (!/members\.html/i.test(redirectTo)) {
+            redirectTo = (window.location.origin || '') + '/members.html';
+        }
+        var { error } = await window.sb.auth.resetPasswordForEmail(email, { redirectTo: redirectTo });
+        if (error) throw error;
+        if (msg) {
+            msg.classList.remove('hidden');
+            msg.className = 'text-sm text-emerald-400';
+            msg.textContent = 'Check your email for a reset link. It may take a minute.';
+        }
+        showToast('Reset link sent — check your email');
+        if (submit) {
+            submit.textContent = 'Sent';
+            setTimeout(closePasswordModal, 1800);
+        }
+    } catch (err) {
+        console.warn('[password] reset', err);
+        showToast((err && err.message) || 'Could not send reset email', true);
+        if (submit) {
+            submit.disabled = false;
+            submit.textContent = 'Send reset link';
+        }
+    }
+}
+
+async function submitChangePassword() {
+    if (!window.sb) {
+        showToast('Auth not ready — try again', true);
+        return;
+    }
+    var p1 = (document.getElementById('pw-new') && document.getElementById('pw-new').value) || '';
+    var p2 = (document.getElementById('pw-new-confirm') && document.getElementById('pw-new-confirm').value) || '';
+    if (p1.length < 6) {
+        showToast('Password must be at least 6 characters', true);
+        return;
+    }
+    if (p1 !== p2) {
+        showToast('Passwords do not match', true);
+        return;
+    }
+    var submit = document.getElementById('pw-modal-submit');
+    if (submit) {
+        submit.disabled = true;
+        submit.textContent = 'Updating…';
+    }
+    try {
+        var { data, error } = await window.sb.auth.updateUser({ password: p1 });
+        if (error) throw error;
+        showToast('Password updated');
+        closePasswordModal();
+        // Clear recovery hash from URL if present
+        try {
+            if (window.history && window.history.replaceState && (location.hash || location.search)) {
+                var clean = location.pathname + location.search.replace(/[?&](type|access_token|refresh_token|expires_in|token_type)=[^&]*/g, '').replace(/^&/, '?');
+                if (clean.endsWith('?')) clean = clean.slice(0, -1);
+                window.history.replaceState({}, document.title, clean || location.pathname);
+            }
+        } catch (e) {}
+    } catch (err) {
+        console.warn('[password] update', err);
+        showToast((err && err.message) || 'Could not update password', true);
+        if (submit) {
+            submit.disabled = false;
+            submit.textContent = 'Update password';
+        }
+    }
+}
+
+/** If user lands from Supabase recovery email, open set-new-password modal */
+function handlePasswordRecoveryFromUrl() {
+    if (typeof isNativeAppShell === 'function' && isNativeAppShell()) return;
+    try {
+        var hash = String(location.hash || '');
+        var search = String(location.search || '');
+        var isRecovery = /type=recovery/i.test(hash) || /type=recovery/i.test(search);
+        if (!isRecovery && window.sb && window.sb.auth) {
+            // Also listen once for PASSWORD_RECOVERY event
+            window.sb.auth.onAuthStateChange(function (event) {
+                if (event === 'PASSWORD_RECOVERY') {
+                    openPasswordModal('recovery');
+                }
+            });
+        }
+        if (isRecovery) {
+            // Give client a moment to parse tokens from URL
+            setTimeout(function () { openPasswordModal('recovery'); }, 400);
+        }
+    } catch (e) {
+        console.warn('[password] recovery check', e);
+    }
 }
 
 /** True only inside the Capacitor iOS/Android shell — not mobile Safari/Chrome */
@@ -1389,6 +1659,11 @@ function hideWebsiteMenuForNative() {
     navbar.style.setProperty('display', 'block', 'important');
     navbar.style.setProperty('visibility', 'visible', 'important');
     navbar.style.setProperty('opacity', '1', 'important');
+
+    // Logo goes to app home (Soggy Scoop), not the website index
+    navbar.querySelectorAll('a[href="index.html"]').forEach(function (a) {
+        a.setAttribute('href', 'home.html');
+    });
 
     // Hide every text nav link (About, Merch, Events, HQ, Trails, Members, Join, Cart text link)
     navbar.querySelectorAll('a.nav-link, button.nav-link').forEach(function (el) {
@@ -1589,7 +1864,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         client.auth.onAuthStateChange((event, session) => {
             console.log('[nav-auth] event:', event);
             updateNavAuth(session?.user || null);
+            if (event === 'PASSWORD_RECOVERY') {
+                try { openPasswordModal('recovery'); } catch (e) {}
+            }
         });
+        try { handlePasswordRecoveryFromUrl(); } catch (e) {}
         return true;
     };
     if (!bootAuth()) {

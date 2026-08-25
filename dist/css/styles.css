@@ -925,3 +925,12 @@ body.is-native-app #product-modal {
   padding-top: env(safe-area-inset-top, 0px) !important;
   padding-bottom: env(safe-area-inset-bottom, 0px) !important;
 }
+
+/* Website-only password links/buttons — hidden inside Capacitor app */
+html.is-native-app .website-only-pw,
+body.is-native-app .website-only-pw,
+html.is-native-app #password-modal,
+body.is-native-app #password-modal {
+  display: none !important;
+}
+

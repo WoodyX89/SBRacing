@@ -7,8 +7,45 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#000000">
+<style>
+  #ev-checkpoint-map {
+    height: 280px;
+    width: 100%;
+    border-radius: 12px;
+    background: #18181b;
+    border: 1px solid #3f3f46;
+  }
+  @media (min-width: 640px) {
+    #ev-checkpoint-map { height: 320px; }
+  }
+  .leaflet-container { font-family: inherit; background: #18181b; }
+  .cp-flag-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    border: 1px solid #3f3f46;
+    background: #09090b;
+  }
+  .event-cp-map {
+    height: 180px;
+    width: 100%;
+    border-radius: 12px;
+    background: #18181b;
+    border: 1px solid #3f3f46;
+    margin-top: 12px;
+    z-index: 0;
+  }
+  .event-cp-map .leaflet-control-zoom a {
+    background: #18181b !important;
+    color: #e4e4e7 !important;
+    border-color: #3f3f46 !important;
+  }
+</style>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -162,6 +199,34 @@
           <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="ev-featured" class="accent-orange-600"> Featured</label>
           <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="ev-members-only" class="accent-orange-600"> Members only</label>
         </div>
+
+        <!-- Poker run QR checkpoints (shown when category = poker_run) -->
+        <div id="ev-poker-checkpoints" class="hidden space-y-3 pt-2 border-t border-zinc-800">
+          <div class="font-semibold flex items-center gap-2 text-orange-400">
+            <i class="fa-solid fa-flag"></i> QR checkpoints
+          </div>
+          <p class="text-xs text-zinc-500">
+            Same trail map as Trails. Drop flags where each QR will be posted. Tap a coloured trail or anywhere on the map. You can still add more later from the event card.
+          </p>
+          <div id="ev-checkpoint-map"></div>
+          <p class="text-[11px] text-zinc-500">
+            <i class="fa-solid fa-hand-pointer mr-1"></i>Tap a trail (or the map) to place a flag, then name it and tap Add flag. Green / blue / black = difficulty.
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input id="ev-cp-name" type="text" placeholder="Checkpoint name *" class="w-full px-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-sm outline-none focus:border-orange-600">
+            <input id="ev-cp-desc" type="text" placeholder="Note (optional)" class="w-full px-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 text-sm outline-none focus:border-orange-600">
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="confirmPendingCheckpoint()" class="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-sm font-semibold">
+              <i class="fa-solid fa-flag mr-1"></i> Add flag
+            </button>
+            <button type="button" onclick="clearPendingMapPin()" class="px-3 py-2 rounded-xl border border-zinc-600 text-sm hover:bg-zinc-800">Clear pin</button>
+          </div>
+          <div id="ev-cp-list" class="space-y-2 max-h-40 overflow-y-auto">
+            <p class="text-xs text-zinc-500" id="ev-cp-empty">No checkpoints yet.</p>
+          </div>
+        </div>
+
         <button type="submit" class="w-full py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-white">Save event</button>
       </form>
     </div>
@@ -177,6 +242,7 @@
 <!-- Cart Drawer -->
 <!-- Success Toast -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/shared.js"></script>
 <script src="js/native-notifications.js"></script>

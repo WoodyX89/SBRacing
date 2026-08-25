@@ -1,22 +1,22 @@
-// SB Racing — Leaflet trails: green/blue/black, start + checkpoints routing, save
+// SB Racing — Trails map (simplified for phone)
+// - Track ride (GPS)
+// - Drop checkpoints to plan a route
+// - Trail popups with short description + photos
 
 var map, trailLayer, routeLine, routeMarkers = [];
-var routeMode = false;
-var snapEnabled = true;
-var trailSegments = [];
-var trailFeatures = []; // {id, name, difficulty, latlngs}
-var SNAP_MAX_M = 80;
+var checkpointMode = false;
+var trailFeatures = [];
+var highlightedLayer = null;
+var currentDiffFilter = '';
+var currentAreaFilter = '';
 
-/** Ordered route points: first = start, rest = checkpoints / end */
+/** Ordered checkpoints: first = start, rest = checkpoints */
 var routePoints = [];
 
-var gpsWatchId = null;
 var gpsMarker = null;
 var gpsAccuracyCircle = null;
 var gpsTrackLine = null;
-var gpsTrackPoints = [];
-var gpsFollow = true;
-
+var rideFollow = true;
 
 var AREAS = {
   hat: { center: [50.04, -110.68], zoom: 12 },
@@ -66,23 +66,6 @@ function haversineM(a, b) {
   return haversineKm(a, b) * 1000;
 }
 
-function closestOnSegment(p, a, b) {
-  var toRad = Math.PI / 180;
-  var cosLat = Math.cos(p[0] * toRad) || 1e-6;
-  var ax = (a[1] - p[1]) * cosLat, ay = a[0] - p[0];
-  var bx = (b[1] - p[1]) * cosLat, by = b[0] - p[0];
-  var abx = bx - ax, aby = by - ay;
-  var apx = -ax, apy = -ay;
-  var ab2 = abx * abx + aby * aby;
-  var t = ab2 < 1e-18 ? 0 : (apx * abx + apy * aby) / ab2;
-  if (t < 0) t = 0;
-  if (t > 1) t = 1;
-  var lat = p[0] + (ay + t * aby);
-  var lng = p[1] + (ax + t * abx) / cosLat;
-  var pt = [lat, lng];
-  return { point: pt, distM: haversineM(p, pt), t: t };
-}
-
 function densifyLine(coords, maxStepDeg) {
   maxStepDeg = maxStepDeg || 0.00025;
   var out = [];
@@ -103,9 +86,7 @@ function densifyLine(coords, maxStepDeg) {
 
 function geometryToLatLngs(geom) {
   if (!geom) return [];
-  if (geom.type === 'LineString') {
-    return densifyLine(geom.coordinates);
-  }
+  if (geom.type === 'LineString') return densifyLine(geom.coordinates);
   if (geom.type === 'MultiLineString' && geom.coordinates.length) {
     var all = [];
     geom.coordinates.forEach(function (line) {
@@ -116,8 +97,7 @@ function geometryToLatLngs(geom) {
   return [];
 }
 
-function buildSnapNetwork(geojson) {
-  trailSegments = [];
+function buildTrailIndex(geojson) {
   trailFeatures = [];
   if (!geojson || !geojson.features) return;
   geojson.features.forEach(function (f, idx) {
@@ -126,135 +106,74 @@ function buildSnapNetwork(geojson) {
     if (latlngs.length < 2) return;
     var id = (f.id != null) ? String(f.id)
       : (f.properties && f.properties.id != null) ? String(f.properties.id)
+      : (f.properties && f.properties.osm_id != null) ? String(f.properties.osm_id)
       : 'idx:' + idx;
     var name = (f.properties && (f.properties.name || f.properties.Name)) || ('Trail ' + (idx + 1));
     var difficulty = normalizeDifficulty(f.properties && (f.properties.difficulty || f.properties.Difficulty || f.properties.rating));
-    trailFeatures.push({ id: id, name: name, difficulty: difficulty, latlngs: latlngs, feature: f, index: idx });
-    for (var i = 1; i < latlngs.length; i++) {
-      trailSegments.push({ a: latlngs[i - 1], b: latlngs[i], trailId: id });
-    }
+    var area = (f.properties && f.properties.area) || '';
+    trailFeatures.push({
+      id: id,
+      name: name,
+      difficulty: difficulty,
+      area: area,
+      latlngs: latlngs,
+      feature: f,
+      index: idx,
+      layer: null
+    });
   });
-  console.log('[trails] features:', trailFeatures.length, 'segments:', trailSegments.length);
-}
-
-/** Snap click → point + optional trail id + vertex index */
-function snapToTrails(latlng) {
-  var p = [latlng.lat, latlng.lng];
-  if (!snapEnabled || !trailSegments.length) {
-    return { lat: p[0], lng: p[1], snapped: false, trailId: null, vertexIndex: null };
-  }
-  var best = null;
-  var bestTrailId = null;
-  for (var i = 0; i < trailSegments.length; i++) {
-    var seg = trailSegments[i];
-    var r = closestOnSegment(p, seg.a, seg.b);
-    if (!best || r.distM < best.distM) {
-      best = r;
-      bestTrailId = seg.trailId;
-    }
-  }
-  if (best && best.distM <= SNAP_MAX_M) {
-    var trail = trailFeatures.find(function (tf) { return tf.id === bestTrailId; });
-    var vIdx = 0;
-    if (trail) {
-      var nv = nearestVertexIndex(trail.latlngs, best.point);
-      vIdx = nv.index;
-    }
-    return {
-      lat: best.point[0],
-      lng: best.point[1],
-      snapped: true,
-      trailId: bestTrailId,
-      vertexIndex: vIdx,
-      distM: best.distM
-    };
-  }
-  return { lat: p[0], lng: p[1], snapped: false, trailId: null, vertexIndex: null, distM: best ? best.distM : null };
-}
-
-function nearestVertexIndex(latlngs, point) {
-  var bestI = 0, bestD = Infinity;
-  for (var i = 0; i < latlngs.length; i++) {
-    var d = haversineM(point, latlngs[i]);
-    if (d < bestD) { bestD = d; bestI = i; }
-  }
-  return { index: bestI, distM: bestD };
-}
-
-/** Subpath along a single trail between two vertex indices (inclusive) */
-function subpathAlongTrail(trailId, i0, i1) {
-  var trail = trailFeatures.find(function (tf) { return tf.id === trailId; });
-  if (!trail) return null;
-  var a = Math.min(i0, i1), b = Math.max(i0, i1);
-  var slice = trail.latlngs.slice(a, b + 1);
-  if (i0 > i1) slice = slice.reverse();
-  return slice.length >= 2 ? slice : null;
-}
-
-/** Build full polyline from routePoints (follow trail between pts when same trail) */
-function buildRouteLatLngs() {
-  if (!routePoints.length) return [];
-  if (routePoints.length === 1) return [[routePoints[0].lat, routePoints[0].lng]];
-
-  var out = [];
-  for (var i = 0; i < routePoints.length; i++) {
-    var pt = routePoints[i];
-    var ll = [pt.lat, pt.lng];
-    if (i === 0) {
-      out.push(ll);
-      continue;
-    }
-    var prev = routePoints[i - 1];
-    // Same trail → only the section between the two points
-    if (prev.trailId && pt.trailId && prev.trailId === pt.trailId &&
-        prev.vertexIndex != null && pt.vertexIndex != null) {
-      var along = subpathAlongTrail(pt.trailId, prev.vertexIndex, pt.vertexIndex);
-      if (along && along.length) {
-        along.forEach(function (p, j) {
-          if (j === 0 && out.length && haversineM(out[out.length - 1], p) < 8) return;
-          out.push(p);
-        });
-        continue;
-      }
-    }
-    // Different trails / free points → straight connector (hop)
-    if (out.length && haversineM(out[out.length - 1], ll) < 8) continue;
-    out.push(ll);
-  }
-  return out;
+  console.log('[trails] features:', trailFeatures.length);
 }
 
 function routeDistanceKm() {
-  var line = buildRouteLatLngs();
   var d = 0;
-  for (var i = 1; i < line.length; i++) d += haversineKm(line[i - 1], line[i]);
+  for (var i = 1; i < routePoints.length; i++) {
+    d += haversineKm(
+      [routePoints[i - 1].lat, routePoints[i - 1].lng],
+      [routePoints[i].lat, routePoints[i].lng]
+    );
+  }
   return d;
 }
 
-function updateRouteUI() {
-  var el = document.getElementById('route-distance');
-  var pts = document.getElementById('route-points');
+function updateCheckpointUI() {
+  var el = document.getElementById('checkpoint-distance');
+  var pts = document.getElementById('checkpoint-count');
   if (el) el.textContent = routeDistanceKm().toFixed(1) + ' km';
   if (pts) {
-    if (!routePoints.length) pts.textContent = 'No start point yet';
-    else if (routePoints.length === 1) pts.textContent = 'Start set · add checkpoints';
+    if (!routePoints.length) pts.textContent = '0 points';
+    else if (routePoints.length === 1) pts.textContent = 'Start set';
     else pts.textContent = 'Start + ' + (routePoints.length - 1) + ' checkpoint' + (routePoints.length === 2 ? '' : 's');
+  }
+
+  var hud = document.getElementById('map-checkpoint-hud');
+  var hudDist = document.getElementById('map-cp-distance');
+  var hudPts = document.getElementById('map-cp-points');
+  if (hud) {
+    if (routePoints.length > 0 || checkpointMode) hud.classList.add('visible');
+    else hud.classList.remove('visible');
+  }
+  if (hudDist) hudDist.textContent = routeDistanceKm().toFixed(1) + ' km';
+  if (hudPts) {
+    hudPts.textContent = routePoints.length === 0
+      ? 'tap map'
+      : (routePoints.length === 1 ? 'start set' : routePoints.length + ' pts');
   }
 
   routeMarkers.forEach(function (m) { map.removeLayer(m); });
   routeMarkers = [];
   if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
 
-  var line = buildRouteLatLngs();
-  if (line.length >= 2) {
-    routeLine = L.polyline(line, { color: '#f97316', weight: 4, opacity: 0.95 }).addTo(map);
+  if (routePoints.length >= 2) {
+    var line = routePoints.map(function (p) { return [p.lat, p.lng]; });
+    routeLine = L.polyline(line, { color: '#f97316', weight: 4, opacity: 0.95, dashArray: null }).addTo(map);
   }
 
   routePoints.forEach(function (pt, i) {
     var isStart = i === 0;
     var isEnd = i === routePoints.length - 1 && i > 0;
     var marker = L.circleMarker([pt.lat, pt.lng], {
-      radius: isStart ? 9 : 7,
+      radius: isStart ? 10 : 8,
       color: '#fff',
       weight: 2,
       fillColor: isStart ? '#22c55e' : (isEnd ? '#f97316' : '#3b82f6'),
@@ -265,101 +184,112 @@ function updateRouteUI() {
     routeMarkers.push(marker);
   });
 
-  updateSelectedList();
+  updateCheckpointList();
+  updateFabCheckpointState();
 }
 
-function updateSelectedList() {
-  var el = document.getElementById('selected-trails-list');
+function updateCheckpointList() {
+  var el = document.getElementById('checkpoint-list');
   if (!el) return;
   if (!routePoints.length) {
-    el.innerHTML = '<p class="text-xs text-zinc-500">Click the map or a trail to set <strong class="text-zinc-300">Start</strong>, then add checkpoints. Only the section between points is used — not the whole trail.</p>';
+    el.innerHTML = '<p class="text-xs text-zinc-500">No checkpoints yet — turn on “Add checkpoints” and tap the map.</p>';
     return;
   }
   el.innerHTML = routePoints.map(function (pt, i) {
     var label = i === 0 ? 'Start' : ('Checkpoint ' + i);
-    var trail = pt.trailId ? trailFeatures.find(function (tf) { return tf.id === pt.trailId; }) : null;
-    var extra = trail ? escapeHtmlTrail(trail.name) : (pt.snapped ? 'on trail' : 'off-trail');
     return '<div class="flex items-center gap-2 text-sm py-1.5 border-b border-zinc-800 last:border-0">' +
       '<span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:' + (i === 0 ? '#22c55e' : '#3b82f6') + '"></span>' +
       '<span class="flex-1 min-w-0"><span class="font-medium">' + label + '</span>' +
-      '<span class="text-xs text-zinc-500 block truncate">' + extra + '</span></span></div>';
+      '<span class="text-xs text-zinc-500 block">' + pt.lat.toFixed(5) + ', ' + pt.lng.toFixed(5) + '</span></span></div>';
   }).join('');
 }
 
-function toggleRouteMode() {
-  routeMode = !routeMode;
-  var btn = document.getElementById('btn-route-mode');
+function updateFabCheckpointState() {
+  var fab = document.getElementById('fab-checkpoint');
+  var btn = document.getElementById('btn-checkpoint-mode');
+  if (fab) fab.classList.toggle('active-checkpoint', checkpointMode);
   if (btn) {
-    btn.textContent = routeMode ? 'Picking points…' : 'Build route';
-    btn.classList.toggle('bg-emerald-600', routeMode);
-    btn.classList.toggle('bg-orange-600', !routeMode);
+    btn.textContent = checkpointMode ? 'Dropping points…' : 'Add checkpoints';
+    btn.classList.toggle('bg-emerald-600', checkpointMode);
+    btn.classList.toggle('bg-orange-600', !checkpointMode);
   }
-  if (map) map.getContainer().style.cursor = routeMode ? 'crosshair' : '';
-  showToast(routeMode
-    ? (routePoints.length ? 'Click to add a checkpoint' : 'Click to set the START point')
-    : 'Route mode off');
 }
 
-function toggleSnap() {
-  snapEnabled = !snapEnabled;
-  var btn = document.getElementById('btn-snap-toggle');
-  if (btn) {
-    btn.textContent = snapEnabled ? 'Snap: ON' : 'Snap: OFF';
-    btn.classList.toggle('border-emerald-600', snapEnabled);
-    btn.classList.toggle('text-emerald-400', snapEnabled);
-  }
-  showToast(snapEnabled ? 'Snap to trails on' : 'Free placement');
+function toggleCheckpointMode() {
+  checkpointMode = !checkpointMode;
+  updateFabCheckpointState();
+  if (map) map.getContainer().style.cursor = checkpointMode ? 'crosshair' : '';
+  updateCheckpointUI();
+  showToast(checkpointMode
+    ? (routePoints.length ? 'Tap map to add a checkpoint' : 'Tap map to set the START point')
+    : 'Checkpoint mode off');
 }
 
-function clearRoute() {
+function clearCheckpoints() {
   routePoints = [];
-  updateRouteUI();
-  showToast('Route cleared');
+  updateCheckpointUI();
+  showToast('Checkpoints cleared');
 }
 
-function undoWaypoint() {
+function undoCheckpoint() {
   if (!routePoints.length) return;
-  var removed = routePoints.pop();
-  updateRouteUI();
+  routePoints.pop();
+  updateCheckpointUI();
   showToast(routePoints.length === 0 ? 'Start cleared' : 'Removed last point');
 }
 
-function addRoutePoint(latlng, opts) {
-  opts = opts || {};
-  var snapped = opts.skipSnap
-    ? { lat: latlng.lat, lng: latlng.lng, snapped: false, trailId: null, vertexIndex: null }
-    : snapToTrails(latlng);
-
-  // Optional: require snap when enabled and near trails
-  // Allow off-trail for true hops between networks
-  var pt = {
-    lat: snapped.lat,
-    lng: snapped.lng,
-    snapped: !!snapped.snapped,
-    trailId: snapped.trailId || null,
-    vertexIndex: snapped.vertexIndex != null ? snapped.vertexIndex : null
-  };
-
-  // Avoid stacking duplicates
+function addCheckpoint(latlng) {
+  var pt = { lat: latlng.lat, lng: latlng.lng };
   if (routePoints.length) {
     var last = routePoints[routePoints.length - 1];
-    if (haversineM([last.lat, last.lng], [pt.lat, pt.lng]) < 5) return;
+    if (haversineM([last.lat, last.lng], [pt.lat, pt.lng]) < 8) return;
   }
-
   routePoints.push(pt);
-  updateRouteUI();
-
+  updateCheckpointUI();
   if (routePoints.length === 1) {
-    showToast('Start set' + (pt.snapped ? ' (on trail)' : '') + ' · click checkpoints next');
+    showToast('Start set · tap more points for checkpoints');
   } else {
     showToast('Checkpoint ' + (routePoints.length - 1) + ' added');
   }
 }
 
-/** Trail click: use as start/checkpoint at that location — NOT the whole trail */
-function onTrailClick(feature, idx, latlng) {
-  if (!routeMode) return;
-  addRoutePoint(latlng || L.latLng(0, 0), {});
+function focusTrail(trailId, openPopup) {
+  var trail = trailFeatures.find(function (tf) { return tf.id === trailId; });
+  if (!trail || !trail.latlngs.length) return;
+  clearHighlight();
+  if (trail.layer) {
+    highlightLayer(trail.layer);
+    if (openPopup) {
+      try {
+        var mid = trail.latlngs[Math.floor(trail.latlngs.length / 2)];
+        trail.layer.openPopup(L.latLng(mid[0], mid[1]));
+      } catch (e) {}
+    }
+  }
+  var bounds = L.latLngBounds(trail.latlngs);
+  map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+}
+
+function highlightLayer(layer) {
+  clearHighlight();
+  if (!layer) return;
+  highlightedLayer = layer;
+  try {
+    layer.setStyle({ weight: 9, opacity: 1 });
+    if (layer._path) layer._path.classList.add('trail-highlight');
+  } catch (e) {}
+}
+
+function clearHighlight() {
+  if (highlightedLayer) {
+    try {
+      var f = highlightedLayer.feature;
+      var col = diffColor(f && f.properties && (f.properties.difficulty || f.properties.Difficulty || f.properties.rating));
+      highlightedLayer.setStyle({ weight: 5, opacity: 0.9, color: col });
+      if (highlightedLayer._path) highlightedLayer._path.classList.remove('trail-highlight');
+    } catch (e) {}
+    highlightedLayer = null;
+  }
 }
 
 function flyTo(key) {
@@ -367,9 +297,190 @@ function flyTo(key) {
   if (a && map) map.flyTo(a.center, a.zoom, { duration: 1.2 });
 }
 
+function locateMe() {
+  if (!navigator.geolocation) {
+    showToast('Geolocation not available', true);
+    return;
+  }
+  showToast('Finding your location…');
+  navigator.geolocation.getCurrentPosition(
+    function (pos) {
+      var ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
+      map.flyTo(ll, 14, { duration: 1 });
+      if (!gpsMarker) {
+        gpsMarker = L.circleMarker(ll, {
+          radius: 8, color: '#fff', weight: 3,
+          fillColor: '#3b82f6', fillOpacity: 1
+        }).addTo(map);
+        gpsMarker.bindTooltip('You', { direction: 'top' });
+      } else {
+        gpsMarker.setLatLng(ll);
+      }
+      if (!gpsAccuracyCircle) {
+        gpsAccuracyCircle = L.circle(ll, {
+          radius: pos.coords.accuracy || 30,
+          color: '#3b82f6', weight: 1, opacity: 0.35,
+          fillColor: '#3b82f6', fillOpacity: 0.08
+        }).addTo(map);
+      } else {
+        gpsAccuracyCircle.setLatLng(ll);
+        gpsAccuracyCircle.setRadius(pos.coords.accuracy || 30);
+      }
+      showToast('Location found');
+    },
+    function () {
+      showToast('Could not get location — check permissions', true);
+    },
+    { enableHighAccuracy: true, timeout: 12000 }
+  );
+}
+
+// ---------- Trail browser ----------
+
+function setDiffFilter(diff) {
+  currentDiffFilter = diff || '';
+  document.querySelectorAll('.trail-filter-btn').forEach(function (btn) {
+    var d = btn.getAttribute('data-diff') || '';
+    var active = d === currentDiffFilter;
+    btn.classList.toggle('border-orange-600', active);
+    btn.classList.toggle('bg-orange-600/20', active);
+    btn.classList.toggle('text-orange-400', active);
+    btn.classList.toggle('border-zinc-600', !active);
+    btn.classList.toggle('text-zinc-400', !active);
+  });
+  filterTrailBrowser();
+}
+
+function setAreaFilter(area) {
+  currentAreaFilter = area || '';
+  document.querySelectorAll('.trail-area-btn').forEach(function (btn) {
+    var a = btn.getAttribute('data-area') || '';
+    var active = a === currentAreaFilter;
+    btn.classList.toggle('border-orange-600', active);
+    btn.classList.toggle('bg-orange-600/20', active);
+    btn.classList.toggle('text-orange-400', active);
+    btn.classList.toggle('border-zinc-600', !active);
+    btn.classList.toggle('text-zinc-400', !active);
+  });
+  filterTrailBrowser();
+}
+
+function filterTrailBrowser() {
+  var q = ((document.getElementById('trail-search') || {}).value || '').toLowerCase().trim();
+  var list = document.getElementById('trail-browser-list');
+  if (!list) return;
+
+  var matches = trailFeatures.filter(function (tf) {
+    if (currentDiffFilter && tf.difficulty !== currentDiffFilter) return false;
+    if (currentAreaFilter) {
+      var area = (tf.area || '').toLowerCase();
+      if (currentAreaFilter === 'Cypress Hills / Elkwater') {
+        if (area.indexOf('cypress') === -1 && area.indexOf('elkwater') === -1) return false;
+      } else if (area.indexOf(currentAreaFilter.toLowerCase()) === -1) {
+        return false;
+      }
+    }
+    if (q && tf.name.toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  });
+
+  matches.sort(function (a, b) { return a.name.localeCompare(b.name); });
+
+  if (!matches.length) {
+    list.innerHTML = '<p class="text-xs text-zinc-500 px-2 py-3">No trails match.</p>';
+    return;
+  }
+
+  list.innerHTML = matches.slice(0, 80).map(function (tf) {
+    var col = diffColor(tf.difficulty);
+    var safeId = String(tf.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return '<div class="trail-browser-item" data-id="' + escapeHtmlTrail(tf.id) + '" onclick="onBrowserTrailClick(\'' + safeId + '\')">' +
+      '<span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:' + col + '; box-shadow:0 0 0 1px rgba(255,255,255,0.2)"></span>' +
+      '<div class="flex-1 min-w-0">' +
+      '<div class="text-sm font-medium truncate">' + escapeHtmlTrail(tf.name) + '</div>' +
+      '<div class="text-[10px] text-zinc-500 truncate">' + diffLabel(tf.difficulty) + (tf.area ? ' · ' + escapeHtmlTrail(tf.area) : '') + '</div>' +
+      '</div>' +
+      '</div>';
+  }).join('');
+
+  if (matches.length > 80) {
+    list.innerHTML += '<p class="text-[10px] text-zinc-500 px-2 py-2">Showing first 80 of ' + matches.length + '</p>';
+  }
+}
+
+function onBrowserTrailClick(trailId) {
+  focusTrail(trailId, true);
+  document.querySelectorAll('.trail-browser-item').forEach(function (el) {
+    el.classList.toggle('active', el.getAttribute('data-id') === trailId);
+  });
+}
+
+/** Enhanced popup: description + photos from trail-info.js */
+function buildTrailPopupHtml(name, diff, area, trailId) {
+  var col = diffColor(diff);
+  var norm = normalizeDifficulty(diff);
+  var info = (typeof getTrailDescription === 'function')
+    ? getTrailDescription(name, area, diff)
+    : { desc: '', photos: [] };
+  var photosHtml = '';
+  if (info.photos && info.photos.length) {
+    photosHtml = '<div class="trail-popup-photos">' +
+      info.photos.map(function (src) {
+        return '<img src="' + src + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
+      }).join('') + '</div>';
+  }
+  var descHtml = info.desc
+    ? '<div class="trail-popup-desc">' + escapeHtmlTrail(info.desc) + '</div>'
+    : '';
+  var linkHtml = info.trailforks
+    ? '<a href="' + info.trailforks + '" target="_blank" rel="noopener" class="trail-popup-btn" style="text-decoration:none">Trailforks</a>'
+    : '';
+  var safeId = String(trailId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+  // Advanced (black) is hard to read on dark popup — white pill badge
+  var diffBadge;
+  if (norm === 'advanced') {
+    diffBadge =
+      '<span style="display:inline-block;background:#fff;color:#0a0a0a;font-size:11px;font-weight:700;' +
+      'padding:2px 8px;border-radius:999px;line-height:1.4">' +
+      diffLabel(diff) + '</span>';
+  } else {
+    diffBadge = '<span style="color:' + col + ';font-size:12px;font-weight:600">' + diffLabel(diff) + '</span>';
+  }
+
+  return '<div style="min-width:200px;max-width:280px">' +
+    '<strong style="font-size:15px">' + escapeHtmlTrail(name) + '</strong><br>' +
+    '<div style="margin-top:4px;display:flex;align-items:center;flex-wrap:wrap;gap:6px">' +
+    diffBadge +
+    (area ? '<span style="font-size:11px;opacity:.75">' + escapeHtmlTrail(area) + '</span>' : '') +
+    '</div>' +
+    photosHtml +
+    descHtml +
+    '<div class="trail-popup-actions">' +
+    '<button type="button" class="trail-popup-btn primary" onclick="addTrailMidpointAsCheckpoint(\'' + safeId + '\')">' +
+    '<i class="fa-solid fa-map-pin"></i> Add checkpoint</button>' +
+    '<button type="button" class="trail-popup-btn" onclick="focusTrail(\'' + safeId + '\', false)">Zoom</button>' +
+    linkHtml +
+    '</div>' +
+    '</div>';
+}
+
+/** Drop a checkpoint roughly in the middle of a trail (quick plan aid) */
+function addTrailMidpointAsCheckpoint(trailId) {
+  var trail = trailFeatures.find(function (tf) { return tf.id === trailId; });
+  if (!trail || !trail.latlngs.length) return;
+  var mid = trail.latlngs[Math.floor(trail.latlngs.length / 2)];
+  if (!checkpointMode) {
+    checkpointMode = true;
+    updateFabCheckpointState();
+    if (map) map.getContainer().style.cursor = 'crosshair';
+  }
+  addCheckpoint({ lat: mid[0], lng: mid[1] });
+  if (map) map.closePopup();
+}
 
 async function initMap() {
-  map = L.map('trail-map', { scrollWheelZoom: true }).setView(AREAS.hat.center, 11);
+  map = L.map('trail-map', { scrollWheelZoom: true, tap: true }).setView(AREAS.hat.center, 11);
 
   var streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
@@ -395,13 +506,13 @@ async function initMap() {
   L.control.layers(
     { 'Street map': streets, 'Satellite': satelliteGroup },
     null,
-    { position: 'topright', collapsed: false }
+    { position: 'topright', collapsed: true }
   ).addTo(map);
 
   try {
     var res = await fetch('assets/trails/region.geojson');
     var geo = await res.json();
-    buildSnapNetwork(geo);
+    buildTrailIndex(geo);
 
     var idx = 0;
     trailLayer = L.geoJSON(geo, {
@@ -413,21 +524,40 @@ async function initMap() {
         var i = idx++;
         var p = f.properties || {};
         var name = p.name || p.Name || 'Trail';
-        var col = diffColor(p.difficulty || p.Difficulty || p.rating);
-        var diff = diffLabel(p.difficulty || p.Difficulty || p.rating);
-        var area = p.area ? ' · ' + escapeHtmlTrail(p.area) : '';
-        var baseWeight = 5;
+        var diff = normalizeDifficulty(p.difficulty || p.Difficulty || p.rating);
+        var area = p.area || '';
+        var id = (f.id != null) ? String(f.id)
+          : (p.id != null) ? String(p.id)
+          : (p.osm_id != null) ? String(p.osm_id)
+          : 'idx:' + i;
 
-        layer.bindPopup(
-          '<strong>' + escapeHtmlTrail(name) + '</strong><br>' +
-          '<span style="color:' + col + '">' + diff + '</span>' + area +
-          '<br><span style="font-size:11px;opacity:.8">In Build route mode, click the trail to set start / checkpoint here</span>'
-        );
+        var tf = trailFeatures.find(function (t) { return t.id === id; });
+        if (tf) tf.layer = layer;
+        layer.feature = f;
+
+        layer.bindPopup(buildTrailPopupHtml(name, diff, area, id), {
+          maxWidth: 300,
+          className: 'trail-popup'
+        });
 
         layer.on('click', function (e) {
-          if (!routeMode) return;
-          L.DomEvent.stopPropagation(e);
-          addRoutePoint(e.latlng);
+          if (checkpointMode) {
+            L.DomEvent.stopPropagation(e);
+            addCheckpoint(e.latlng);
+          } else {
+            highlightLayer(layer);
+          }
+        });
+
+        layer.on('mouseover', function () {
+          if (!checkpointMode) {
+            try { layer.setStyle({ weight: 7, opacity: 1 }); } catch (err) {}
+          }
+        });
+        layer.on('mouseout', function () {
+          if (highlightedLayer !== layer) {
+            try { layer.setStyle({ weight: 5, opacity: 0.9 }); } catch (err) {}
+          }
         });
       }
     }).addTo(map);
@@ -436,19 +566,24 @@ async function initMap() {
       map.fitBounds(trailLayer.getBounds(), { padding: [30, 30], maxZoom: 13 });
     } catch (e) {}
 
+    filterTrailBrowser();
+
   } catch (e) {
     console.warn('[trails] geojson', e);
     showToast('Could not load region.geojson', true);
+    var list = document.getElementById('trail-browser-list');
+    if (list) list.innerHTML = '<p class="text-xs text-red-400 px-2 py-3">Failed to load trails</p>';
   }
 
   map.on('click', function (e) {
-    if (!routeMode) return;
-    addRoutePoint(e.latlng);
+    if (!checkpointMode) return;
+    addCheckpoint(e.latlng);
   });
 
   updateSaveHint();
-  updateSelectedList();
+  updateCheckpointList();
   loadMyRoutes();
+  updateFabCheckpointState();
 }
 
 async function updateSaveHint() {
@@ -465,8 +600,7 @@ async function updateSaveHint() {
 }
 
 async function saveRoute() {
-  var line = buildRouteLatLngs();
-  if (line.length < 2) {
+  if (routePoints.length < 2) {
     showToast('Set a start and at least one more point', true);
     return;
   }
@@ -478,11 +612,8 @@ async function saveRoute() {
   }
   var name = ((document.getElementById('route-name') || {}).value || '').trim();
   if (!name) {
-    showToast('Name your route', true);
-    return;
+    name = 'Route ' + new Date().toLocaleDateString();
   }
-  var description = ((document.getElementById('route-desc') || {}).value || '').trim() || null;
-  var is_public = !!(document.getElementById('route-public') || {}).checked;
   var geojson = {
     type: 'Feature',
     properties: {
@@ -492,24 +623,23 @@ async function saveRoute() {
         return {
           role: i === 0 ? 'start' : 'checkpoint',
           lat: pt.lat,
-          lng: pt.lng,
-          trailId: pt.trailId
+          lng: pt.lng
         };
       })
     },
     geometry: {
       type: 'LineString',
-      coordinates: line.map(function (w) { return [w[1], w[0]]; })
+      coordinates: routePoints.map(function (p) { return [p.lng, p.lat]; })
     }
   };
   try {
     var result = await window.sb.from('member_routes').insert({
       user_id: user.id,
       name: name,
-      description: description,
+      description: null,
       distance_km: Math.round(routeDistanceKm() * 100) / 100,
       geojson: geojson,
-      is_public: is_public
+      is_public: false
     });
     if (result.error) throw result.error;
     showToast('Route saved');
@@ -569,23 +699,19 @@ async function loadMyRoutes() {
 }
 
 function showSavedRoute(row) {
-  clearRoute();
-  var coords = row.geojson && row.geojson.geometry && row.geojson.geometry.coordinates;
+  clearCheckpoints();
   var pts = row.geojson && row.geojson.properties && row.geojson.properties.points;
+  var coords = row.geojson && row.geojson.geometry && row.geojson.geometry.coordinates;
   if (pts && pts.length) {
     pts.forEach(function (p) {
-      addRoutePoint({ lat: p.lat, lng: p.lng }, { skipSnap: true });
+      routePoints.push({ lat: p.lat, lng: p.lng });
     });
   } else if (coords && coords.length) {
-    // Legacy full line — use endpoints + mid samples as points
-    addRoutePoint({ lat: coords[0][1], lng: coords[0][0] }, { skipSnap: true });
-    if (coords.length > 2) {
-      var mid = coords[Math.floor(coords.length / 2)];
-      addRoutePoint({ lat: mid[1], lng: mid[0] }, { skipSnap: true });
-    }
-    var last = coords[coords.length - 1];
-    addRoutePoint({ lat: last[1], lng: last[0] }, { skipSnap: true });
+    coords.forEach(function (c) {
+      routePoints.push({ lat: c[1], lng: c[0] });
+    });
   }
+  updateCheckpointUI();
   if (routeLine) map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
   var nameEl = document.getElementById('route-name');
   if (nameEl) nameEl.value = row.name || '';
@@ -604,11 +730,8 @@ async function deleteRoute(id) {
   }
 }
 
-
-// ---------- Live ride tracking (RideTracker) ----------
-var rideFollow = true;
+// ---------- Live ride tracking ----------
 var rideTimerId = null;
-var lastRideStatus = 'idle';
 
 function formatRideTime(sec) {
   sec = Math.max(0, Math.floor(sec || 0));
@@ -633,7 +756,6 @@ function updateRideUI(snap) {
           : 'bg-zinc-800 text-zinc-400 border-zinc-700');
   }
 
-  // Persistent "location is on" banner so recording can't be forgotten
   var banner = document.getElementById('ride-recording-banner');
   var bannerLabel = document.getElementById('ride-recording-label');
   var bannerDot = document.getElementById('ride-recording-dot');
@@ -675,6 +797,37 @@ function updateRideUI(snap) {
   if (elElev) elElev.textContent = (snap.elevGainM || 0) + ' m';
   if (elPts) elPts.textContent = String(snap.pointCount || 0);
 
+  var mapHud = document.getElementById('map-ride-hud');
+  var mapDist = document.getElementById('map-ride-distance');
+  var mapTime = document.getElementById('map-ride-time');
+  var mapStatus = document.getElementById('map-ride-status-label');
+  var mapDot = document.getElementById('map-ride-dot');
+  if (mapHud) {
+    if (snap.status === 'recording' || snap.status === 'paused') mapHud.classList.add('visible');
+    else mapHud.classList.remove('visible');
+  }
+  if (mapDist) mapDist.textContent = (snap.distanceKm || 0).toFixed(2) + ' km';
+  if (mapTime) mapTime.textContent = formatRideTime(snap.elapsedSec);
+  if (mapStatus) {
+    mapStatus.textContent = snap.status === 'recording' ? 'Recording' : snap.status === 'paused' ? 'Paused' : '';
+    mapStatus.className = snap.status === 'paused' ? 'text-amber-400' : 'text-emerald-400';
+  }
+  if (mapDot) {
+    mapDot.className = 'w-2 h-2 rounded-full ' +
+      (snap.status === 'recording' ? 'bg-emerald-400 ride-pulse' : 'bg-amber-400');
+  }
+
+  var fab = document.getElementById('fab-ride');
+  var fabIcon = document.getElementById('fab-ride-icon');
+  if (fab) {
+    fab.classList.toggle('recording', snap.status === 'recording');
+    fab.classList.toggle('active-ride', snap.status === 'paused');
+    if (fabIcon) {
+      if (snap.status === 'recording') fabIcon.className = 'fa-solid fa-pause';
+      else fabIcon.className = 'fa-solid fa-play';
+    }
+  }
+
   var isActive = snap.status === 'recording' || snap.status === 'paused';
   var btnStart = document.getElementById('btn-ride-start');
   var btnPause = document.getElementById('btn-ride-pause');
@@ -695,9 +848,7 @@ function updateRideUI(snap) {
       btnStart.classList.remove('hidden');
     }
   }
-  if (btnPause) {
-    btnPause.classList.toggle('hidden', snap.status !== 'recording');
-  }
+  if (btnPause) btnPause.classList.toggle('hidden', snap.status !== 'recording');
   if (btnStop) {
     btnStop.classList.toggle('hidden', !isActive && !(snap.pointCount > 0 && snap.status === 'idle'));
     if (snap.status === 'idle' && snap.pointCount > 0) btnStop.classList.add('hidden');
@@ -710,19 +861,18 @@ function updateRideUI(snap) {
   if (btnSave) btnSave.classList.toggle('hidden', !(snap.pointCount >= 2 && snap.status === 'idle'));
   if (btnGpx) btnGpx.classList.toggle('hidden', !(snap.pointCount >= 2));
 
-  var hint = document.getElementById('ride-hint');
-  if (hint) {
-    if (window.RideTracker && RideTracker.hasBackgroundSupport && RideTracker.hasBackgroundSupport()) {
-      hint.textContent = 'Background tracking enabled. Ride continues with the screen locked. A system notification stays visible while recording.';
-    } else if (window.RideTracker && RideTracker.isNative && RideTracker.isNative()) {
-      hint.textContent = 'Native app — tracking runs while the app is open. Install @capgo/background-geolocation for true background support.';
-    } else {
-      hint.textContent = 'Browser mode: tracking only while this page is open. Open the native app for background recording.';
-    }
-  }
-
-  // Keep map line in sync
   renderRideTrack(snap);
+}
+
+function fabRideToggle() {
+  if (!window.RideTracker) {
+    showToast('Ride tracker not loaded', true);
+    return;
+  }
+  var snap = RideTracker.getSnapshot();
+  if (snap.status === 'idle') rideStart();
+  else if (snap.status === 'recording') ridePause();
+  else if (snap.status === 'paused') rideStart();
 }
 
 function renderRideTrack(snap) {
@@ -823,9 +973,7 @@ async function rideStop() {
 
 function startRideTimer() {
   stopRideTimer();
-  rideTimerId = setInterval(function () {
-    updateRideUI();
-  }, 1000);
+  rideTimerId = setInterval(function () { updateRideUI(); }, 1000);
 }
 
 function stopRideTimer() {
@@ -835,8 +983,8 @@ function stopRideTimer() {
   }
 }
 
-/** Turn recorded ride into route-builder checkpoints */
-function useRideAsRoute() {
+/** Turn recorded ride into checkpoints (simplified sampling) */
+function useRideAsCheckpoints() {
   if (!window.RideTracker) return;
   var snap = RideTracker.getSnapshot();
   if (!snap.points || snap.points.length < 2) {
@@ -845,22 +993,23 @@ function useRideAsRoute() {
   }
   routePoints = [];
   var first = snap.points[0];
-  addRoutePoint({ lat: first.lat, lng: first.lng }, { skipSnap: false });
+  routePoints.push({ lat: first.lat, lng: first.lng });
   var acc = 0;
   var last = first;
   for (var i = 1; i < snap.points.length - 1; i++) {
     var p = snap.points[i];
     acc += haversineM([last.lat, last.lng], [p.lat, p.lng]);
     last = p;
-    if (acc >= 200) {
-      addRoutePoint({ lat: p.lat, lng: p.lng }, { skipSnap: false });
+    if (acc >= 250) {
+      routePoints.push({ lat: p.lat, lng: p.lng });
       acc = 0;
     }
   }
   var end = snap.points[snap.points.length - 1];
-  addRoutePoint({ lat: end.lat, lng: end.lng }, { skipSnap: false });
+  routePoints.push({ lat: end.lat, lng: end.lng });
+  updateCheckpointUI();
   if (gpsTrackLine) map.fitBounds(gpsTrackLine.getBounds(), { padding: [40, 40] });
-  showToast('Track applied to route builder — name & save it');
+  showToast('Track applied as checkpoints — name & save if you like');
 }
 
 async function saveRecordedRide() {
@@ -921,11 +1070,113 @@ function downloadRideGPX() {
 
 function escapeHtmlTrail(s) {
   if (!s) return '';
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Load poker-run checkpoints when opened via trails.html?event=ID */
+var eventCheckpointMarkers = [];
+var activeEventId = null;
+
+function parseLocCoords(loc) {
+  if (loc && loc.lat != null && loc.lng != null && !isNaN(Number(loc.lat)) && !isNaN(Number(loc.lng))) {
+    return { lat: Number(loc.lat), lng: Number(loc.lng) };
+  }
+  var desc = (loc && loc.description) || '';
+  var m = desc.match(/📍\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)/);
+  if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+  return null;
+}
+
+async function loadEventCheckpointsOnMap(eventId) {
+  if (!map || !window.sb || !eventId) return;
+  activeEventId = eventId;
+  eventCheckpointMarkers.forEach(function (m) {
+    try { map.removeLayer(m); } catch (e) {}
+  });
+  eventCheckpointMarkers = [];
+
+  var eventTitle = '';
+  try {
+    var evRes = await window.sb.from('events').select('id, title, category').eq('id', eventId).maybeSingle();
+    if (evRes.data) eventTitle = evRes.data.title || '';
+  } catch (e) {}
+
+  var locs = [];
+  try {
+    var result = await window.sb
+      .from('poker_locations')
+      .select('id, name, description, lat, lng, sort_order')
+      .eq('event_id', eventId)
+      .order('sort_order', { ascending: true });
+    if (result.error) {
+      result = await window.sb
+        .from('poker_locations')
+        .select('id, name, description, sort_order')
+        .eq('event_id', eventId)
+        .order('sort_order', { ascending: true });
+    }
+    locs = result.data || [];
+  } catch (e) {
+    console.warn('[trails] event checkpoints', e);
+  }
+
+  var latlngs = [];
+  locs.forEach(function (loc, i) {
+    var c = parseLocCoords(loc);
+    if (!c) return;
+    latlngs.push([c.lat, c.lng]);
+    var marker = L.marker([c.lat, c.lng], {
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="background:#f97316;color:#fff;width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700"><span style="transform:rotate(45deg)">' + (i + 1) + '</span></div>',
+        iconSize: [28, 28],
+        iconAnchor: [14, 28]
+      })
+    }).addTo(map);
+    marker.bindTooltip((loc.name || ('Checkpoint ' + (i + 1))), { direction: 'top', permanent: false });
+    eventCheckpointMarkers.push(marker);
+  });
+
+  // Banner under map tip area
+  var banner = document.getElementById('event-ride-banner');
+  if (!banner) {
+    var wrap = document.getElementById('trail-map-wrap');
+    if (wrap && wrap.parentNode) {
+      banner = document.createElement('div');
+      banner.id = 'event-ride-banner';
+      banner.className = 'mt-2 rounded-2xl border border-orange-800/60 bg-orange-950/40 px-4 py-3 flex flex-wrap items-center justify-between gap-2';
+      wrap.parentNode.insertBefore(banner, wrap.nextSibling);
+    }
+  }
+  if (banner) {
+    banner.innerHTML =
+      '<div class="min-w-0">' +
+      '<div class="text-xs uppercase tracking-wider text-orange-400 font-semibold">Event ride</div>' +
+      '<div class="font-semibold truncate">' + escapeHtmlTrail(eventTitle || ('Event #' + eventId)) + '</div>' +
+      '<div class="text-[11px] text-zinc-400">' + latlngs.length + ' checkpoint' + (latlngs.length === 1 ? '' : 's') + ' on map · use the green play button to track</div>' +
+      '</div>' +
+      '<button type="button" onclick="fabRideToggle()" class="shrink-0 px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold">' +
+      '<i class="fa-solid fa-play mr-1"></i> Start tracking</button>';
+  }
+
+  if (latlngs.length) {
+    try {
+      map.fitBounds(L.latLngBounds(latlngs), { padding: [40, 40], maxZoom: 14 });
+    } catch (e) {}
+    showToast((eventTitle || 'Event') + ' · ' + latlngs.length + ' checkpoints loaded');
+  } else {
+    showToast('Event loaded — no mapped checkpoints yet', true);
+  }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-  initMap();
+  initMap().then(function () {
+    var q = new URLSearchParams(location.search);
+    var eventId = q.get('event') || q.get('e');
+    if (eventId) {
+      loadEventCheckpointsOnMap(eventId);
+    }
+  }).catch(function () {});
 
   if (window.RideTracker) {
     RideTracker.onUpdate(function (snap) {
