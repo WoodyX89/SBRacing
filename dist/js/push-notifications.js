@@ -45,7 +45,12 @@ async function savePushToken(token, platform) {
   }
 }
 
+let _pushInitStarted = false;
+
 async function initPushNotifications() {
+  if (_pushInitStarted) return;
+  _pushInitStarted = true;
+
   console.log('[push] native=', isNativeApp(), 'plugin=', !!pushPlugin());
   var Push = pushPlugin();
   if (!Push) {
@@ -186,6 +191,6 @@ async function sendEventPushToAll(eventPayload, opts) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-  setTimeout(initPushNotifications, 500);
-  setTimeout(initPushNotifications, 2000);
+  // Single delayed init — avoids duplicate iOS permission prompts
+  setTimeout(initPushNotifications, 800);
 });

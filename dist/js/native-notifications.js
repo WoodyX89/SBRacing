@@ -269,7 +269,12 @@ async function testLocalNotification() {
   if (typeof showToast === 'function') showToast('Test notification sent');
 }
 
+let _nativeNotifyBooted = false;
+
 function bootNativeNotifications() {
+  if (_nativeNotifyBooted) return;
+  _nativeNotifyBooted = true;
+
   var native = isNativeApp();
   var plugin = !!getLocalNotificationsPlugin();
   console.log('[notify] boot native=', native, 'plugin=', plugin);
@@ -281,9 +286,8 @@ function bootNativeNotifications() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-  bootNativeNotifications();
-  setTimeout(bootNativeNotifications, 500);
-  setTimeout(bootNativeNotifications, 1500);
+  // Single delayed boot — avoids duplicate iOS permission prompts
+  setTimeout(bootNativeNotifications, 800);
 });
 
 
