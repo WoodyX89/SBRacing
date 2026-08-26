@@ -1023,112 +1023,127 @@ async function submitCheckout(e) {
     return;
   }
 
-  var total = cartTotal();
   var items = cart.map(function (item) {
     return {
       productId: item.productId,
       name: item.name,
       price: Number(item.price),
       qty: item.qty || 1,
-      size: item.size || ''
+      size: item.size || '',
+      color: item.color || ''
     };
   });
 
   if (btn) {
     btn.disabled = true;
-    btn.textContent = 'Placing order…';
+    btn.textContent = 'Redirecting to payment…';
   }
   if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
 
-  var userId = null;
   try {
-    if (window.sb && window.sb.auth) {
-      var sess = await window.sb.auth.getSession();
-      userId = sess.data && sess.data.session && sess.data.session.user
-        ? sess.data.session.user.id
-        : null;
+    if (!window.sb || !window.SB_URL) {
+      throw new Error('Store is offline. Try again later.');
     }
-  } catch (e) {}
 
-  try {
-    if (!window.sb) throw new Error('Store is offline. Try again later.');
-
-    var payload = {
-      user_id: userId,
-      customer_name: name,
-      customer_email: email,
-      customer_phone: phone || null,
-      shipping_address: address || null,
-      shipping_city: city || null,
-      shipping_province: province || null,
-      shipping_postal: postal || null,
-      notes: notes || null,
-      items: items,
-      total: total,
-      status: 'pending'
+    var headers = {
+      'Content-Type': 'application/json',
+      'apikey': window.SB_ANON_KEY || '',
+      'Authorization': 'Bearer ' + (window.SB_ANON_KEY || '')
     };
-
-    var result = await window.sb.from('orders').insert(payload);
-    if (result.error) throw new Error(result.error.message);
-
-    // Stock is decremented by DB trigger (apply_order_stock) — clients cannot UPDATE products (RLS).
-    // Optimistically adjust local stock so UI updates immediately; realtime will confirm.
     try {
-      if (typeof allProducts !== 'undefined' && allProducts) {
-        for (var oi = 0; oi < items.length; oi++) {
-          var it = items[oi];
-          if (it.productId == null) continue;
-          var q = Number(it.qty) || 1;
-          var lp = allProducts.find(function (p) { return String(p.id) === String(it.productId); });
-          if (lp) lp.stock_qty = Math.max(0, (Number(lp.stock_qty) || 0) - q);
+      var sess = await window.sb.auth.getSession();
+      var token = sess.data && sess.data.session && sess.data.session.access_token;
+      if (token) headers.Authorization = 'Bearer ' + token;
+    } catch (e) {}
+
+    // Public site origin for Stripe success/cancel return (not capacitor://)
+    var origin = (window.SB_SITE_URL || '').replace(/\/$/, '');
+    if (!origin && /^https?:/i.test(location.protocol)) {
+      origin = location.origin;
+    }
+    if (!origin) {
+      origin = 'https://sbracing.ca';
+    }
+
+    var res = await fetch(window.SB_URL + '/functions/v1/create-checkout-session', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({
+        items: items,
+        origin: origin,
+        customer: {
+          name: name,
+          email: email,
+          phone: phone || null,
+          address: address || null,
+          city: city || null,
+          province: province || null,
+          postal: postal || null,
+          notes: notes || null
         }
-      }
-    } catch (stockErr) {
-      console.warn('[checkout] local stock', stockErr);
+      })
+    });
+
+    var data = {};
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok) {
+      throw new Error((data && data.error) || ('Payment setup failed (' + res.status + ')'));
+    }
+    if (!data.url) {
+      throw new Error('No payment URL returned. Check Stripe keys on the server.');
     }
 
-    cart = [];
-    saveCart();
-    closeCheckoutModal();
-    showToast('Order placed — $' + total.toFixed(2) + '. We\'ll email you about payment.');
-    if (typeof refreshMerchStockUi === 'function') {
-      try { refreshMerchStockUi(); } catch (e) {}
-    }
-    // Pull confirmed stock from server shortly after (trigger may have run)
-    if (typeof loadProducts === 'function') {
-      setTimeout(function () { try { loadProducts(); } catch (e) {} }, 600);
-    }
-
-    // Admin-only push: new merch order
+    // Keep cart until paid — success page clears it
     try {
-      var itemNames = items.map(function (it) {
-        return (it.qty || 1) + '× ' + it.name + (it.size ? ' (' + it.size + ')' : '');
-      }).join(', ');
-      if (itemNames.length > 100) itemNames = itemNames.slice(0, 97) + '…';
-      if (typeof broadcastPush === 'function') {
-        await broadcastPush({
-          title: 'New order',
-          body: name + ' · $' + total.toFixed(2) + (itemNames ? ' — ' + itemNames : ''),
-          url: 'merch.html',
-          type: 'order',
-          audience: 'admins'
-        });
-      }
-    } catch (nerr) {
-      console.warn('[checkout] admin notify', nerr);
-    }
+      sessionStorage.setItem('sb_checkout_pending', '1');
+    } catch (e) {}
+
+    closeCheckoutModal();
+    showToast('Opening secure Stripe checkout…');
+    window.location.href = data.url;
   } catch (err) {
     console.error('[checkout]', err);
     if (errEl) {
-      errEl.textContent = err.message || 'Could not place order.';
+      errEl.textContent = err.message || 'Could not start payment.';
       errEl.classList.remove('hidden');
     }
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = 'Place order';
+      btn.textContent = 'Pay with card';
     }
   }
+}
+
+/** After Stripe redirects back to merch.html?checkout=success */
+function handleStripeCheckoutReturn() {
+  try {
+    var q = new URLSearchParams(location.search);
+    var status = q.get('checkout');
+    if (!status) return;
+    if (status === 'success') {
+      cart = [];
+      saveCart();
+      try { sessionStorage.removeItem('sb_checkout_pending'); } catch (e) {}
+      showToast('Payment received — thank you! We’ll process your order soon.');
+      if (typeof loadProducts === 'function') {
+        setTimeout(function () { try { loadProducts(); } catch (e) {} }, 400);
+      }
+    } else if (status === 'cancel') {
+      showToast('Payment cancelled — your cart is still here.', true);
+    }
+    if (window.history && history.replaceState) {
+      history.replaceState(null, '', location.pathname);
+    }
+  } catch (e) {
+    console.warn('[checkout] return', e);
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', handleStripeCheckoutReturn);
+} else {
+  handleStripeCheckoutReturn();
 }
 
 // Escape closes modals

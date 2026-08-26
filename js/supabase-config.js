@@ -22,6 +22,8 @@
     });
     window.SB_URL = SUPABASE_URL;
     window.SB_ANON_KEY = SUPABASE_ANON_KEY;
+    // Public HTTPS origin for Stripe return URLs (Capacitor cannot use capacitor://)
+    window.SB_SITE_URL = window.SB_SITE_URL || 'https://sbracing.ca';
     console.log('[sb] ready', SUPABASE_URL);
   } catch (err) {
     console.error('[sb] createClient error', err);

@@ -365,6 +365,118 @@ async function logoutMember() {
     showLoginWall();
 }
 
+/** Membership access request → email info@sbracing.ca */
+function openSignupRequestModal() {
+  var modal = document.getElementById('signup-request-modal');
+  if (!modal) return;
+  var err = document.getElementById('signup-request-error');
+  var ok = document.getElementById('signup-request-ok');
+  if (err) { err.textContent = ''; err.classList.add('hidden'); }
+  if (ok) { ok.textContent = ''; ok.classList.add('hidden'); }
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+}
+
+function closeSignupRequestModal() {
+  var modal = document.getElementById('signup-request-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.style.display = 'none';
+}
+
+async function submitSignupRequest(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  var name = ((document.getElementById('su-name') || {}).value || '').trim();
+  var email = ((document.getElementById('su-email') || {}).value || '').trim();
+  var phone = ((document.getElementById('su-phone') || {}).value || '').trim();
+  var message = ((document.getElementById('su-message') || {}).value || '').trim();
+  var errEl = document.getElementById('signup-request-error');
+  var okEl = document.getElementById('signup-request-ok');
+  var btn = document.getElementById('signup-request-btn');
+
+  if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
+  if (okEl) { okEl.textContent = ''; okEl.classList.add('hidden'); }
+
+  if (!name || !email) {
+    if (errEl) {
+      errEl.textContent = 'Name and email are required.';
+      errEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+  }
+
+  try {
+    // FormSubmit delivers to info@sbracing.ca (confirm email once on first use)
+    var res = await fetch('https://formsubmit.co/ajax/info@sbracing.ca', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify({
+        name: name,
+        email: email,
+        phone: phone || '—',
+        message: message || 'No message',
+        _subject: 'SB Racing membership request — ' + name,
+        _template: 'table',
+        _replyto: email,
+        source: 'Members login — Request access'
+      })
+    });
+
+    var data = {};
+    try { data = await res.json(); } catch (e) {}
+
+    if (!res.ok) {
+      throw new Error((data && (data.message || data.error)) || 'Could not send request');
+    }
+
+    if (okEl) {
+      okEl.textContent = 'Request sent. Check your inbox if FormSubmit asks you to confirm, and we’ll email you from info@sbracing.ca.';
+      okEl.classList.remove('hidden');
+    }
+    showToast('Membership request sent');
+    var form = document.getElementById('signup-request-form');
+    if (form) form.reset();
+    setTimeout(closeSignupRequestModal, 1800);
+  } catch (err) {
+    console.error('[signup-request]', err);
+    // Fallback: open mail client
+    try {
+      var body = encodeURIComponent(
+        'Name: ' + name + '\nEmail: ' + email + '\nPhone: ' + (phone || '—') +
+        '\n\n' + (message || '') + '\n\n— Sent from SB Racing Members page'
+      );
+      window.location.href =
+        'mailto:info@sbracing.ca?subject=' +
+        encodeURIComponent('Membership request — ' + name) +
+        '&body=' + body;
+      showToast('Opening email app as fallback…');
+      closeSignupRequestModal();
+    } catch (e2) {
+      if (errEl) {
+        errEl.textContent = err.message || 'Could not send. Email info@sbracing.ca directly.';
+        errEl.classList.remove('hidden');
+      }
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Send request';
+    }
+  }
+}
+
+window.openSignupRequestModal = openSignupRequestModal;
+window.closeSignupRequestModal = closeSignupRequestModal;
+window.submitSignupRequest = submitSignupRequest;
+
 function switchMemberTab(tabIndex) {
     document.querySelectorAll('.member-tab-content').forEach(el => el.classList.add('hidden'));
     document.getElementById('tab-' + tabIndex)?.classList.remove('hidden');
