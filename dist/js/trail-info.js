@@ -11,6 +11,11 @@ window.TRAIL_INFO = {
     photos: ["assets/trails/photos/mh-jump.jpg", "assets/trails/photos/flow-berm.jpg"],
     trailforks: "https://www.trailforks.com/trails/a-jacked/"
   },
+  "Echo Dale Campground Chip": {
+    desc: "Easy paved trail that runs from the Medicine Hat campground to Echo Dale Park. A good access point to get to Echo Dale trail system.",
+    area: "Medicine Hat / Redcliff",
+    photos: ["assets/trails/photos/IMG_0046.jpeg", "assets/trails/photos/IMG_0042.jpeg"],
+  },
   "Coal Burner": {
     desc: "Green adaptive-friendly flow trail with wider tread, mellow grades, and roller-coaster berms. Split into upper/lower sections — the lower is one of the easiest in the network and great for skill building.",
     area: "Medicine Hat / Echodale",
@@ -36,7 +41,7 @@ window.TRAIL_INFO = {
   "Thin Lizzy": {
     desc: "Popular green singletrack with open prairie views. Frequently ridden as part of longer loops from the Gas City campground area.",
     area: "Medicine Hat",
-    photos: ["assets/trails/photos/mh-jump.jpg"]
+    photos: ["assets/trails/photos/IMG_0048.jpeg", "assets/trails/photos/IMG_0051.jpeg"]
   },
   "Billy Goat": {
     desc: "Technical advanced trail in the Redcliff badlands. Steep exposures, sandstone and bentonite, cactus and sinkholes — classic Alberta badlands riding.",

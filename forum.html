@@ -58,6 +58,11 @@
             <span>Photo</span>
             <input type="file" id="forum-image" accept="image/*" class="hidden" onchange="onForumImagePicked(event)">
           </label>
+          <label class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border border-zinc-700 hover:bg-zinc-800 cursor-pointer text-sm">
+            <i class="fa-solid fa-video text-orange-500"></i>
+            <span>Video</span>
+            <input type="file" id="forum-video" accept="video/*" class="hidden" onchange="onForumVideoPicked(event)">
+          </label>
           <span id="forum-image-name" class="text-xs text-zinc-500 truncate max-w-[140px]"></span>
           <button type="button" id="forum-image-clear" onclick="clearForumImage()" class="hidden text-xs text-red-400">Remove</button>
           <button type="button" onclick="submitForumPost()" class="ml-auto px-5 py-2.5 rounded-2xl bg-white text-zinc-900 font-semibold text-sm hover:bg-amber-50 active:scale-[0.98]">
@@ -66,6 +71,7 @@
         </div>
         <div id="forum-image-preview" class="hidden">
           <img src="" alt="" class="max-h-40 rounded-2xl border border-zinc-700 object-cover">
+          <video src="" class="hidden max-h-40 w-full rounded-2xl border border-zinc-700 bg-black" controls playsinline muted></video>
         </div>
       </div>
 

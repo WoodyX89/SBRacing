@@ -8,6 +8,8 @@ var forumRealtimeChannel = null;
 var composerMode = 'post';
 var pendingImageFile = null;
 var pollOptionCount = 0;
+var forumPosting = false;
+var forumCommenting = {};
 
 function esc(s) {
   if (!s) return '';
@@ -92,40 +94,109 @@ function addPollOptionRow() {
   list.appendChild(row);
 }
 
+var FORUM_MEDIA_MAX_BYTES = 80 * 1024 * 1024; // 80 MB
+
+function isVideoFile(file) {
+  if (!file) return false;
+  if (file.type && file.type.indexOf('video/') === 0) return true;
+  return /\.(mp4|mov|m4v|webm|3gp|avi)$/i.test(file.name || '');
+}
+
+function isVideoUrl(url) {
+  if (!url) return false;
+  var clean = String(url).split('?')[0].toLowerCase();
+  return /\.(mp4|mov|m4v|webm|3gp|avi)$/.test(clean);
+}
+
 function onForumImagePicked(e) {
+  onForumMediaPicked(e, 'image');
+}
+
+function onForumVideoPicked(e) {
+  onForumMediaPicked(e, 'video');
+}
+
+function onForumMediaPicked(e, kind) {
   var file = e.target.files && e.target.files[0];
-  pendingImageFile = file || null;
+  if (!file) {
+    clearForumImage();
+    return;
+  }
+  if (kind === 'video' && !isVideoFile(file)) {
+    showToast('Pick a video file (mp4 / mov)', true);
+    e.target.value = '';
+    return;
+  }
+  if (kind === 'image' && isVideoFile(file)) {
+    showToast('Use Video for clips', true);
+    e.target.value = '';
+    return;
+  }
+  if (file.size > FORUM_MEDIA_MAX_BYTES) {
+    showToast('File is too big — keep it under 80 MB', true);
+    e.target.value = '';
+    return;
+  }
+  // one attachment at a time
+  pendingImageFile = file;
+  var other = document.getElementById(kind === 'video' ? 'forum-image' : 'forum-video');
+  if (other) other.value = '';
+
   var nameEl = document.getElementById('forum-image-name');
   var clearBtn = document.getElementById('forum-image-clear');
   var preview = document.getElementById('forum-image-preview');
-  if (file) {
-    nameEl.textContent = file.name;
-    clearBtn.classList.remove('hidden');
-    var url = URL.createObjectURL(file);
-    preview.classList.remove('hidden');
-    preview.querySelector('img').src = url;
+  var img = preview ? preview.querySelector('img') : null;
+  var vid = preview ? preview.querySelector('video') : null;
+  nameEl.textContent = file.name;
+  clearBtn.classList.remove('hidden');
+  preview.classList.remove('hidden');
+  var url = URL.createObjectURL(file);
+  if (isVideoFile(file)) {
+    if (img) { img.classList.add('hidden'); img.removeAttribute('src'); }
+    if (vid) {
+      vid.classList.remove('hidden');
+      vid.src = url;
+    }
   } else {
-    clearForumImage();
+    if (vid) { vid.classList.add('hidden'); vid.removeAttribute('src'); }
+    if (img) {
+      img.classList.remove('hidden');
+      img.src = url;
+    }
   }
 }
 
 function clearForumImage() {
   pendingImageFile = null;
-  var input = document.getElementById('forum-image');
-  if (input) input.value = '';
-  document.getElementById('forum-image-name').textContent = '';
-  document.getElementById('forum-image-clear').classList.add('hidden');
-  document.getElementById('forum-image-preview').classList.add('hidden');
+  var imgInput = document.getElementById('forum-image');
+  var vidInput = document.getElementById('forum-video');
+  if (imgInput) imgInput.value = '';
+  if (vidInput) vidInput.value = '';
+  var nameEl = document.getElementById('forum-image-name');
+  if (nameEl) nameEl.textContent = '';
+  var clearBtn = document.getElementById('forum-image-clear');
+  if (clearBtn) clearBtn.classList.add('hidden');
+  var preview = document.getElementById('forum-image-preview');
+  if (preview) {
+    preview.classList.add('hidden');
+    var img = preview.querySelector('img');
+    var vid = preview.querySelector('video');
+    if (img) img.removeAttribute('src');
+    if (vid) {
+      vid.pause && vid.pause();
+      vid.removeAttribute('src');
+    }
+  }
 }
 
 async function uploadForumImage(file, userId) {
-  var ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!ext) ext = 'jpg';
+  var ext = (file.name.split('.').pop() || (isVideoFile(file) ? 'mp4' : 'jpg')).toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!ext) ext = isVideoFile(file) ? 'mp4' : 'jpg';
   var path = userId + '/' + Date.now() + '.' + ext;
   var res = await window.sb.storage.from('forum').upload(path, file, {
     cacheControl: '3600',
     upsert: false,
-    contentType: file.type || 'image/jpeg'
+    contentType: file.type || (isVideoFile(file) ? 'video/mp4' : 'image/jpeg')
   });
   if (res.error) throw res.error;
   var pub = window.sb.storage.from('forum').getPublicUrl(path);
@@ -133,6 +204,7 @@ async function uploadForumImage(file, userId) {
 }
 
 async function submitForumPost() {
+  if (forumPosting) return;
   if (!forumUser) {
     showToast('Log in to post', true);
     return;
@@ -150,8 +222,16 @@ async function submitForumPost() {
     }
     if (!body) body = 'Poll';
   } else if (!body && !pendingImageFile) {
-    showToast('Write something or add a photo', true);
+    showToast('Write something or add a photo / video', true);
     return;
+  }
+
+  forumPosting = true;
+  var postBtn = document.querySelector('button[onclick="submitForumPost()"]');
+  var postBtnHtml = postBtn ? postBtn.innerHTML : '';
+  if (postBtn) {
+    postBtn.disabled = true;
+    postBtn.textContent = 'Posting…';
   }
 
   try {
@@ -177,6 +257,7 @@ async function submitForumPost() {
     }
 
     document.getElementById('forum-body').value = '';
+    var pendingWasVideo = pendingImageFile ? isVideoFile(pendingImageFile) : false;
     clearForumImage();
     document.getElementById('poll-options-list').innerHTML = '';
     pollOptionCount = 0;
@@ -187,7 +268,7 @@ async function submitForumPost() {
       if (typeof notifyActivityAll === 'function') {
         await notifyActivityAll({
           title: wasPoll ? 'SB Racing · New poll' : 'SB Racing · Forum post',
-          body: (body || (wasPoll ? 'New poll' : 'New photo post')).slice(0, 120),
+          body: (body || (wasPoll ? 'New poll' : (pendingWasVideo ? 'New video' : 'New photo post'))).slice(0, 120),
           url: 'forum.html',
           type: wasPoll ? 'forum_poll' : 'forum_post'
         });
@@ -199,6 +280,12 @@ async function submitForumPost() {
   } catch (e) {
     console.error(e);
     showToast(e.message || 'Post failed — run forum.sql?', true);
+  } finally {
+    forumPosting = false;
+    if (postBtn) {
+      postBtn.disabled = false;
+      postBtn.innerHTML = postBtnHtml || 'Post';
+    }
   }
 }
 
@@ -345,9 +432,11 @@ async function submitForumComment(postId) {
     showToast('Log in to comment', true);
     return;
   }
+  if (forumCommenting[postId]) return;
   var input = document.getElementById('comment-input-' + postId);
   var body = input ? (input.value || '').trim() : '';
   if (!body) return;
+  forumCommenting[postId] = true;
   try {
     var res = await window.sb.from('forum_comments').insert({
       post_id: postId,
@@ -371,6 +460,8 @@ async function submitForumComment(postId) {
     await loadForumFeed();
   } catch (e) {
     showToast(e.message || 'Comment failed', true);
+  } finally {
+    forumCommenting[postId] = false;
   }
 }
 
@@ -498,7 +589,9 @@ function renderPostCard(post, meta) {
     '</div>' +
     (post.body ? '<p class="mt-2 text-sm whitespace-pre-wrap">' + esc(post.body) + '</p>' : '') +
     (post.image_url
-      ? '<a href="' + esc(post.image_url) + '" target="_blank" rel="noopener"><img src="' + esc(post.image_url) + '" alt="" class="mt-3 max-h-80 rounded-2xl border border-zinc-700 object-cover w-full"></a>'
+      ? (isVideoUrl(post.image_url)
+        ? '<video src="' + esc(post.image_url) + '" class="mt-3 w-full max-h-80 rounded-2xl border border-zinc-700 bg-black" controls playsinline preload="metadata"></video>'
+        : '<a href="' + esc(post.image_url) + '" target="_blank" rel="noopener"><img src="' + esc(post.image_url) + '" alt="" class="mt-3 max-h-80 rounded-2xl border border-zinc-700 object-cover w-full"></a>')
       : '') +
     (post.post_type === 'poll' && options.length
       ? '<div class="mt-4">' + renderPoll(post, options, votes, myVote) + '</div>'

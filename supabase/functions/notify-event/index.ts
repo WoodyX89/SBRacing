@@ -105,6 +105,7 @@ Deno.serve(async (req) => {
     const message = (body.body || body.message || "").toString().slice(0, 200);
     const data = body.data || {};
     const audience = (body.audience || body.data?.audience || "all").toString().toLowerCase();
+    const excludeUserId = (body.exclude_user_id || body.excludeUserId || "").toString() || null;
     const badgeOverride =
       body.badge != null && body.badge !== "" ? Math.max(0, Math.min(99, Number(body.badge))) : null;
 
@@ -137,7 +138,10 @@ Deno.serve(async (req) => {
       tokenQuery = tokenQuery.in("user_id", ids);
     }
 
-    const { data: tokens, error: tokErr } = await tokenQuery;
+    let { data: tokens, error: tokErr } = await tokenQuery;
+    if (!tokErr && tokens && excludeUserId) {
+      tokens = tokens.filter((row: { user_id?: string | null }) => row.user_id !== excludeUserId);
+    }
 
     if (tokErr) {
       console.error("token fetch error", tokErr);
