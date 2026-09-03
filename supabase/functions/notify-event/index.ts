@@ -143,6 +143,54 @@ Deno.serve(async (req) => {
       tokens = tokens.filter((row: { user_id?: string | null }) => row.user_id !== excludeUserId);
     }
 
+    // Honour per-user notification prefs on profiles (missing columns = allow)
+    if (!tokErr && tokens && tokens.length) {
+      const type = (data.type || body.type || "").toString().toLowerCase();
+      const userIds = Array.from(
+        new Set(
+          tokens
+            .map((row: { user_id?: string | null }) => row.user_id)
+            .filter((id: string | null | undefined): id is string => !!id),
+        ),
+      );
+      if (userIds.length) {
+        const { data: prefs, error: prefErr } = await supabase
+          .from("profiles")
+          .select("id, notify_push, notify_events, notify_forum, notify_comments, notify_rsvp, notify_admin")
+          .in("id", userIds);
+        if (!prefErr && prefs) {
+          const allow = new Set<string>();
+          for (const p of prefs as {
+            id: string;
+            notify_push?: boolean | null;
+            notify_events?: boolean | null;
+            notify_forum?: boolean | null;
+            notify_comments?: boolean | null;
+            notify_rsvp?: boolean | null;
+            notify_admin?: boolean | null;
+          }[]) {
+            if (p.notify_push === false) continue;
+            let ok = true;
+            if (type === "admin") ok = p.notify_admin !== false;
+            else if (type === "rsvp") ok = p.notify_rsvp !== false;
+            else if (type === "forum_comment" || type === "event_comment") ok = p.notify_comments !== false;
+            else if (type === "forum_post" || type === "forum_poll") ok = p.notify_forum !== false;
+            else if (
+              type === "event" ||
+              type === "event_edit" ||
+              type === "event_delete" ||
+              type === "event_reminder"
+            ) ok = p.notify_events !== false;
+            if (ok) allow.add(p.id);
+          }
+          tokens = tokens.filter((row: { user_id?: string | null }) => {
+            if (!row.user_id) return true;
+            return allow.has(row.user_id);
+          });
+        }
+      }
+    }
+
     if (tokErr) {
       console.error("token fetch error", tokErr);
       return new Response(JSON.stringify({ error: tokErr.message }), {

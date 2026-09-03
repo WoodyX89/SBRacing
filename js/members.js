@@ -88,12 +88,8 @@ async function showDashboard(user) {
         }
     }
 
-    // Load rides
-    await loadRides(user.id);
-
-    // Load community feed
-    await loadPosts();
     await loadMemberDirectory();
+    switchMemberTab(7);
 }
 
 let _memberDirCache = [];
@@ -230,6 +226,89 @@ function fillProfileForm(profile, user) {
         tier.textContent = (labels[profile?.membership_tier] || 'Member') + (st ? ' · ' + st : '');
     }
     if (preview) preview.src = profile?.avatar_url || '/assets/logo.png';
+    fillNotificationPrefs(profile);
+    refreshNotifyOsStatus();
+}
+
+function prefChecked(id, fallback) {
+    var el = document.getElementById(id);
+    if (!el) return fallback;
+    return !!el.checked;
+}
+
+function setPrefChecked(id, value) {
+    var el = document.getElementById(id);
+    if (el) el.checked = value !== false;
+}
+
+function fillNotificationPrefs(profile) {
+    setPrefChecked('pref-notify-push', profile?.notify_push);
+    setPrefChecked('pref-notify-events', profile?.notify_events);
+    setPrefChecked('pref-notify-forum', profile?.notify_forum);
+    setPrefChecked('pref-notify-comments', profile?.notify_comments);
+    setPrefChecked('pref-notify-rsvp', profile?.notify_rsvp);
+    setPrefChecked('pref-notify-admin', profile?.notify_admin);
+}
+
+async function refreshNotifyOsStatus() {
+    var el = document.getElementById('notify-os-status');
+    if (!el) return;
+    var granted = null;
+    try {
+        var Push = window.Capacitor && (
+            (Capacitor.Plugins && Capacitor.Plugins.PushNotifications) ||
+            (typeof Capacitor.registerPlugin === 'function' && Capacitor.registerPlugin('PushNotifications'))
+        );
+        if (Push && typeof Push.checkPermissions === 'function') {
+            var perm = await Push.checkPermissions();
+            granted = perm && perm.receive === 'granted';
+        }
+    } catch (e) {}
+    if (granted === true) {
+        el.textContent = 'iPhone notifications: allowed';
+        el.className = 'text-xs text-emerald-400 mb-4';
+    } else if (granted === false) {
+        el.textContent = 'iPhone notifications: off — enable them in Settings → SB Racing → Notifications';
+        el.className = 'text-xs text-amber-400 mb-4';
+    } else {
+        el.textContent = 'Phone permission is controlled in iOS Settings → SB Racing → Notifications.';
+        el.className = 'text-xs text-zinc-500 mb-4';
+    }
+}
+
+async function saveNotificationPrefs() {
+    var user = await getCurrentUser();
+    var statusEl = document.getElementById('notify-prefs-status');
+    if (!user) {
+        if (typeof showToast === 'function') showToast('Log in first', true);
+        return;
+    }
+    var updates = {
+        notify_push: prefChecked('pref-notify-push', true),
+        notify_events: prefChecked('pref-notify-events', true),
+        notify_forum: prefChecked('pref-notify-forum', true),
+        notify_comments: prefChecked('pref-notify-comments', true),
+        notify_rsvp: prefChecked('pref-notify-rsvp', true),
+        notify_admin: prefChecked('pref-notify-admin', true),
+        updated_at: new Date().toISOString()
+    };
+    try {
+        var res = await window.sb.from('profiles').update(updates).eq('id', user.id);
+        if (res.error) throw res.error;
+        if (statusEl) {
+            statusEl.classList.remove('hidden');
+            statusEl.className = 'text-xs text-emerald-400 mt-3';
+            statusEl.textContent = 'Saved';
+        }
+    } catch (e) {
+        console.warn('[notify prefs]', e);
+        if (statusEl) {
+            statusEl.classList.remove('hidden');
+            statusEl.className = 'text-xs text-red-400 mt-3';
+            statusEl.textContent = (e && e.message) || 'Could not save — run notification-prefs.sql';
+        }
+        if (typeof showToast === 'function') showToast((e && e.message) || 'Could not save notification settings', true);
+    }
 }
 
 async function saveProfile(e) {
@@ -492,6 +571,71 @@ function switchMemberTab(tabIndex) {
         }
     });
     if (String(tabIndex) === '5') loadMemberDirectory();
+    if (String(tabIndex) === '7') loadRideLeaderboard(window._lbPeriod || 'weekly');
+}
+
+async function loadRideLeaderboard(period) {
+    period = period || 'weekly';
+    window._lbPeriod = period;
+    document.querySelectorAll('.lb-period').forEach(function (btn) {
+        var on = btn.getAttribute('data-period') === period;
+        btn.classList.toggle('border-orange-600', on);
+        btn.classList.toggle('text-orange-500', on);
+        btn.classList.toggle('border-zinc-700', !on);
+        btn.classList.toggle('text-zinc-400', !on);
+    });
+    var list = document.getElementById('leaderboard-list');
+    var status = document.getElementById('lb-status');
+    if (list) list.innerHTML = '<p class="text-zinc-500">Loading…</p>';
+    if (status) status.textContent = '';
+
+    var me = null;
+    try {
+        var u = await getCurrentUser();
+        me = u && u.id;
+    } catch (e) {}
+
+    try {
+        if (!window.sb) throw new Error('Not connected');
+        var res = await window.sb.rpc('ride_leaderboard', { p_period: period });
+        if (res.error) throw res.error;
+        var rows = res.data || [];
+        var labels = { weekly: 'this week', monthly: 'this month', yearly: 'this year' };
+        if (status) {
+            status.textContent = rows.length
+                ? rows.length + ' rider' + (rows.length === 1 ? '' : 's') + ' ' + (labels[period] || period)
+                : 'No saved rides ' + (labels[period] || period) + ' yet.';
+        }
+        if (!list) return;
+        if (!rows.length) {
+            list.innerHTML = '<p class="text-zinc-500">Save a ride from Trails to get on the board.</p>';
+            return;
+        }
+        list.innerHTML = rows.map(function (row, i) {
+            var mine = me && String(row.user_id) === String(me);
+            var rank = i + 1;
+            var medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank + '.';
+            return '<div class="flex items-center gap-3 bg-zinc-950 border ' +
+                (mine ? 'border-orange-700' : 'border-zinc-800') +
+                ' rounded-2xl px-4 py-3">' +
+                '<div class="w-8 text-center font-semibold">' + medal + '</div>' +
+                '<div class="flex-1 min-w-0">' +
+                '<div class="font-medium truncate">' + escapeHtml(row.full_name || 'Rider') +
+                (mine ? ' <span class="text-orange-500 text-xs">you</span>' : '') + '</div>' +
+                '<div class="text-xs text-zinc-500">' + (row.rides || 0) + ' ride' + (row.rides === 1 ? '' : 's') + '</div>' +
+                '</div>' +
+                '<div class="text-right shrink-0">' +
+                '<div class="font-semibold text-orange-400">' + (row.points || 0) + ' pts</div>' +
+                '<div class="text-[11px] text-zinc-500">' + (row.km || 0) + ' km · +' + (row.elev_m || 0) + ' m</div>' +
+                '</div></div>';
+        }).join('');
+    } catch (e) {
+        console.warn('[leaderboard]', e);
+        if (list) {
+            list.innerHTML = '<p class="text-red-400">Run ride-leaderboard.sql in Supabase, then save a ride from Trails.</p>';
+        }
+        if (status) status.textContent = (e && e.message) || 'Leaderboard not available yet';
+    }
 }
 
 async function loadRides(userId) {
@@ -793,13 +937,20 @@ async function sendAdminPush() {
 
         // Prefer existing broadcastPush helper if available
         if (typeof broadcastPush === 'function') {
-            await broadcastPush({
+            var pushRes = await broadcastPush({
                 title: title,
                 body: body,
                 url: url,
                 type: 'admin',
-                audience: audience
+                audience: audience,
+                excludeSelf: false
             });
+            if (pushRes && pushRes.error) throw pushRes.error;
+            console.log('[admin push]', pushRes);
+            if (statusEl && pushRes && typeof pushRes.sent === 'number') {
+                statusEl.className = 'text-sm text-emerald-400';
+                statusEl.textContent = 'Sent ' + pushRes.sent + ' of ' + (pushRes.total || pushRes.sent) + ' devices.';
+            }
         } else {
             var res = await window.sb.functions.invoke('notify-event', {
                 body: {

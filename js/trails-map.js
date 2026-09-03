@@ -16,6 +16,8 @@ var routePoints = [];
 var gpsMarker = null;
 var gpsAccuracyCircle = null;
 var gpsTrackLine = null;
+var loadedRouteLine = null;
+var loadedRouteEnds = [];
 var rideFollow = true;
 
 var AREAS = {
@@ -136,6 +138,13 @@ function routeDistanceKm() {
   return d;
 }
 
+/** Club score: 10 pts per km + 1 pt per 10 m of climbing */
+function scoreRidePoints(km, elevGainM) {
+  km = Number(km) || 0;
+  elevGainM = Number(elevGainM) || 0;
+  return Math.max(0, Math.round(km * 10 + elevGainM / 10));
+}
+
 function updateCheckpointUI() {
   var el = document.getElementById('checkpoint-distance');
   var pts = document.getElementById('checkpoint-count');
@@ -225,8 +234,20 @@ function toggleCheckpointMode() {
     : 'Checkpoint mode off');
 }
 
+function clearLoadedRoute() {
+  if (loadedRouteLine && map) {
+    try { map.removeLayer(loadedRouteLine); } catch (e) {}
+    loadedRouteLine = null;
+  }
+  loadedRouteEnds.forEach(function (m) {
+    try { map.removeLayer(m); } catch (e2) {}
+  });
+  loadedRouteEnds = [];
+}
+
 function clearCheckpoints() {
   routePoints = [];
+  clearLoadedRoute();
   updateCheckpointUI();
   showToast('Checkpoints cleared');
 }
@@ -619,6 +640,7 @@ async function saveRoute() {
     properties: {
       name: name,
       pointCount: routePoints.length,
+      elev_gain_m: 0,
       points: routePoints.map(function (pt, i) {
         return {
           role: i === 0 ? 'start' : 'checkpoint',
@@ -633,14 +655,27 @@ async function saveRoute() {
     }
   };
   try {
-    var result = await window.sb.from('member_routes').insert({
+    var km = Math.round(routeDistanceKm() * 100) / 100;
+    var payload = {
       user_id: user.id,
       name: name,
       description: null,
-      distance_km: Math.round(routeDistanceKm() * 100) / 100,
+      distance_km: km,
+      elev_gain_m: 0,
+      elev_loss_m: 0,
+      point_count: routePoints.length,
+      points: scoreRidePoints(km, 0),
       geojson: geojson,
       is_public: false
-    });
+    };
+    var result = await window.sb.from('member_routes').insert(payload);
+    if (result.error && /elev_gain_m|point_count|column/i.test(result.error.message || '')) {
+      delete payload.elev_gain_m;
+      delete payload.elev_loss_m;
+      delete payload.point_count;
+      delete payload.points;
+      result = await window.sb.from('member_routes').insert(payload);
+    }
     if (result.error) throw result.error;
     showToast('Route saved');
     loadMyRoutes();
@@ -663,9 +698,16 @@ async function loadMyRoutes() {
   try {
     var result = await window.sb
       .from('member_routes')
-      .select('id, name, distance_km, description, created_at, geojson')
+      .select('id, name, distance_km, description, created_at, geojson, elev_gain_m, point_count, points')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
+    if (result.error) {
+      result = await window.sb
+        .from('member_routes')
+        .select('id, name, distance_km, description, created_at, geojson')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+    }
     if (result.error) throw result.error;
     var data = result.data;
     if (!data || !data.length) {
@@ -676,7 +718,11 @@ async function loadMyRoutes() {
       return '<div class="flex items-center gap-2 p-3 rounded-2xl bg-zinc-950 border border-zinc-800">' +
         '<div class="flex-1 min-w-0">' +
         '<div class="font-medium truncate">' + escapeHtmlTrail(r.name) + '</div>' +
-        '<div class="text-xs text-zinc-500">' + (r.distance_km != null ? r.distance_km + ' km' : '') + '</div></div>' +
+        '<div class="text-xs text-zinc-500">' +
+        (r.distance_km != null ? r.distance_km + ' km' : '') +
+        (r.elev_gain_m ? ' · +' + Math.round(r.elev_gain_m) + ' m' : '') +
+        (r.points ? ' · ' + r.points + ' pts' : '') +
+        '</div></div>' +
         '<button type="button" class="text-xs px-2 py-1 rounded-lg border border-zinc-600 hover:bg-zinc-800" data-load="' + r.id + '">Load</button>' +
         '<button type="button" class="text-xs px-2 py-1 rounded-lg border border-red-900 text-red-400" data-del="' + r.id + '">Del</button>' +
         '</div>';
@@ -699,20 +745,59 @@ async function loadMyRoutes() {
 }
 
 function showSavedRoute(row) {
-  clearCheckpoints();
-  var pts = row.geojson && row.geojson.properties && row.geojson.properties.points;
-  var coords = row.geojson && row.geojson.geometry && row.geojson.geometry.coordinates;
-  if (pts && pts.length) {
-    pts.forEach(function (p) {
-      routePoints.push({ lat: p.lat, lng: p.lng });
-    });
-  } else if (coords && coords.length) {
-    coords.forEach(function (c) {
-      routePoints.push({ lat: c[1], lng: c[0] });
-    });
-  }
+  clearLoadedRoute();
+  routePoints = [];
   updateCheckpointUI();
-  if (routeLine) map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
+
+  var gj = row.geojson || {};
+  var props = gj.properties || {};
+  var geom = gj.geometry || {};
+  var coords = geom.coordinates || [];
+  if (geom.type === 'MultiLineString' && coords.length) {
+    coords = coords.reduce(function (acc, line) { return acc.concat(line); }, []);
+  }
+
+  var latlngs = [];
+  if (coords.length) {
+    latlngs = coords.map(function (c) { return [c[1], c[0]]; });
+  } else if (props.points && props.points.length) {
+    latlngs = props.points.map(function (p) { return [p.lat, p.lng]; });
+  }
+
+  if (latlngs.length < 2) {
+    showToast('That route has no line to show', true);
+    return;
+  }
+
+  loadedRouteLine = L.polyline(latlngs, {
+    color: '#f97316',
+    weight: 5,
+    opacity: 0.95,
+    lineJoin: 'round',
+    lineCap: 'round'
+  }).addTo(map);
+
+  var start = latlngs[0];
+  var end = latlngs[latlngs.length - 1];
+  var startM = L.circleMarker(start, {
+    radius: 8,
+    color: '#f97316',
+    weight: 2,
+    fillColor: '#22c55e',
+    fillOpacity: 1
+  }).addTo(map);
+  startM.bindTooltip('Start', { direction: 'top' });
+  var endM = L.circleMarker(end, {
+    radius: 8,
+    color: '#f97316',
+    weight: 2,
+    fillColor: '#f97316',
+    fillOpacity: 1
+  }).addTo(map);
+  endM.bindTooltip('Finish', { direction: 'top' });
+  loadedRouteEnds = [startM, endM];
+
+  try { map.fitBounds(loadedRouteLine.getBounds(), { padding: [40, 40] }); } catch (e) {}
   var nameEl = document.getElementById('route-name');
   if (nameEl) nameEl.value = row.name || '';
   showToast('Loaded: ' + row.name);
@@ -1031,15 +1116,35 @@ async function saveRecordedRide() {
   if (!name) return;
 
   var geojson = RideTracker.toGeoJSON(name);
+  var km = Math.round(snap.distanceKm * 100) / 100;
+  var elev = Math.round(snap.elevGainM || 0);
+  var pts = scoreRidePoints(km, elev);
+  if (geojson && geojson.properties) {
+    geojson.properties.elev_gain_m = elev;
+    geojson.properties.elev_loss_m = Math.round(snap.elevLossM || 0);
+    geojson.properties.score = pts;
+  }
   try {
-    var result = await window.sb.from('member_routes').insert({
+    var payload = {
       user_id: user.id,
       name: name,
-      description: 'Recorded ride · ' + (snap.elevGainM || 0) + ' m elev · ' + formatRideTime(snap.elapsedSec),
-      distance_km: Math.round(snap.distanceKm * 100) / 100,
+      description: 'Recorded ride · +' + elev + ' m · ' + formatRideTime(snap.elapsedSec),
+      distance_km: km,
+      elev_gain_m: elev,
+      elev_loss_m: Math.round(snap.elevLossM || 0),
+      point_count: snap.pointCount || 0,
+      points: pts,
       geojson: geojson,
       is_public: false
-    });
+    };
+    var result = await window.sb.from('member_routes').insert(payload);
+    if (result.error && /elev_gain_m|point_count|column/i.test(result.error.message || '')) {
+      delete payload.elev_gain_m;
+      delete payload.elev_loss_m;
+      delete payload.point_count;
+      delete payload.points;
+      result = await window.sb.from('member_routes').insert(payload);
+    }
     if (result.error) throw result.error;
     showToast('Ride saved');
     loadMyRoutes();

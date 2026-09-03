@@ -89,10 +89,9 @@
                 <!-- Dashboard Tabs -->
                 <div class="px-4 sm:px-8 pt-6">
                     <div class="member-tabs-scroll flex flex-nowrap border-b border-zinc-700 text-sm font-medium overflow-x-auto overscroll-x-contain -mx-1 px-1" style="-webkit-overflow-scrolling: touch; scrollbar-width: thin;">
-                        <button onclick="switchMemberTab(0)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 border-b-2 border-orange-600 text-orange-500 font-semibold" data-tab="0">My Rides</button>
+                        <button onclick="switchMemberTab(7)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 border-b-2 border-orange-600 text-orange-500 font-semibold" data-tab="7">Leaderboard</button>
                         <button onclick="switchMemberTab(1)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="1">Private Events</button>
                         <button onclick="switchMemberTab(2)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="2">Perks &amp; Resources</button>
-                        <button onclick="switchMemberTab(3)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="3">Community Feed</button>
                         <button onclick="switchMemberTab(4)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="4">Profile</button>
                         <button onclick="switchMemberTab(5)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="5">Members</button>
                         <button id="admin-tab-btn" onclick="switchMemberTab(6)" class="member-tab hidden shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="6">
@@ -104,7 +103,7 @@
                 <!-- Tab Content -->
                 <div class="p-8">
                     <!-- My Rides Tab -->
-                    <div id="tab-0" class="member-tab-content">
+                    <div id="tab-0" class="member-tab-content hidden">
                         <div class="flex justify-between items-center mb-5">
                             <div class="font-semibold">Ride Log • 2026 Season</div>
                             <button onclick="logNewRide()" class="text-xs flex items-center gap-x-2 px-4 py-2 rounded-2xl bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white text-xs font-semibold">
@@ -114,6 +113,23 @@
                         </div>
                         
                         <div id="ride-log-list" class="space-y-3 text-sm"></div>
+                    </div>
+
+                    <!-- Leaderboard Tab -->
+                    <div id="tab-7" class="member-tab-content">
+                        <div class="flex flex-wrap items-end justify-between gap-3 mb-5">
+                            <div>
+                                <div class="font-semibold">Club leaderboard</div>
+                                <p class="text-xs text-zinc-500 mt-1">From saved GPS rides. Score = 10 pts / km + 1 pt / 10 m climbing.</p>
+                            </div>
+                            <div class="flex gap-2 text-xs font-semibold" id="lb-period-btns">
+                                <button type="button" class="lb-period px-3 py-1.5 rounded-xl border border-orange-600 text-orange-500" data-period="weekly" onclick="loadRideLeaderboard('weekly')">Week</button>
+                                <button type="button" class="lb-period px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-period="monthly" onclick="loadRideLeaderboard('monthly')">Month</button>
+                                <button type="button" class="lb-period px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-period="yearly" onclick="loadRideLeaderboard('yearly')">Year</button>
+                            </div>
+                        </div>
+                        <div id="lb-status" class="text-sm text-zinc-500 mb-3"></div>
+                        <div id="leaderboard-list" class="space-y-2 text-sm"></div>
                     </div>
 
                     <!-- Private Events Tab -->
@@ -256,6 +272,40 @@
                                 Save profile
                             </button>
                         </form>
+
+                        <!-- Notification settings -->
+                        <div class="mt-12 pt-8 border-t border-zinc-800 max-w-lg" id="notify-settings">
+                            <div class="text-xs font-semibold tracking-widest text-orange-500 uppercase mb-2">Notifications</div>
+                            <p class="text-sm text-zinc-400 mb-4">Choose which alerts reach your phone. Club broadcasts still follow these switches.</p>
+                            <p id="notify-os-status" class="text-xs text-zinc-500 mb-4"></p>
+                            <div class="space-y-3">
+                                <label class="flex items-center justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+                                    <span class="text-sm">All push notifications</span>
+                                    <input type="checkbox" id="pref-notify-push" checked class="w-5 h-5 accent-orange-600" onchange="saveNotificationPrefs()">
+                                </label>
+                                <label class="flex items-center justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+                                    <span class="text-sm">New and updated events</span>
+                                    <input type="checkbox" id="pref-notify-events" checked class="w-5 h-5 accent-orange-600" onchange="saveNotificationPrefs()">
+                                </label>
+                                <label class="flex items-center justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+                                    <span class="text-sm">Forum posts and polls</span>
+                                    <input type="checkbox" id="pref-notify-forum" checked class="w-5 h-5 accent-orange-600" onchange="saveNotificationPrefs()">
+                                </label>
+                                <label class="flex items-center justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+                                    <span class="text-sm">Comments</span>
+                                    <input type="checkbox" id="pref-notify-comments" checked class="w-5 h-5 accent-orange-600" onchange="saveNotificationPrefs()">
+                                </label>
+                                <label class="flex items-center justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+                                    <span class="text-sm">RSVP alerts <span class="text-zinc-500">(leaders)</span></span>
+                                    <input type="checkbox" id="pref-notify-rsvp" checked class="w-5 h-5 accent-orange-600" onchange="saveNotificationPrefs()">
+                                </label>
+                                <label class="flex items-center justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+                                    <span class="text-sm">Admin / club broadcasts</span>
+                                    <input type="checkbox" id="pref-notify-admin" checked class="w-5 h-5 accent-orange-600" onchange="saveNotificationPrefs()">
+                                </label>
+                            </div>
+                            <p id="notify-prefs-status" class="text-xs text-zinc-500 mt-3 hidden"></p>
+                        </div>
 
                         <!-- Account deletion (App Store Guideline 5.1.1v) -->
                         <div class="mt-12 pt-8 border-t border-zinc-800 max-w-lg">
