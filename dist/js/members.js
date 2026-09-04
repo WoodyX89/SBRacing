@@ -571,6 +571,7 @@ function switchMemberTab(tabIndex) {
         }
     });
     if (String(tabIndex) === '5') loadMemberDirectory();
+    if (String(tabIndex) === '6') loadClubApplications(window._appFilter || 'pending');
     if (String(tabIndex) === '7') loadRideLeaderboard(window._lbPeriod || 'weekly');
 }
 
@@ -998,6 +999,225 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 });
+
+var _appFilter = 'pending';
+var _appCache = [];
+
+function escapeApp(str) {
+  return escapeHtml(str || '');
+}
+
+function experienceLabel(v) {
+  var map = {
+    new: 'New to mountain biking',
+    casual: 'Casual',
+    regular: 'Regular',
+    advanced: 'Advanced / race pace'
+  };
+  return map[v] || v || '—';
+}
+
+function formatAppDate(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  } catch (e) {
+    return iso;
+  }
+}
+
+function setAppFilterButtons(filter) {
+  document.querySelectorAll('.app-filter').forEach(function (btn) {
+    var on = btn.getAttribute('data-filter') === filter;
+    btn.classList.toggle('border-orange-600', on);
+    btn.classList.toggle('text-orange-500', on);
+    btn.classList.toggle('border-zinc-700', !on);
+    btn.classList.toggle('text-zinc-400', !on);
+  });
+}
+
+async function loadClubApplications(filter) {
+  if (filter) _appFilter = filter;
+  window._appFilter = _appFilter;
+  setAppFilterButtons(_appFilter);
+
+  var list = document.getElementById('admin-apps-list');
+  var status = document.getElementById('admin-apps-status');
+  if (!list) return;
+  list.innerHTML = '<p class="text-zinc-500 text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading applications…</p>';
+  if (status) status.textContent = '';
+
+  try {
+    if (!window.sb) throw new Error('Not connected');
+    var q = window.sb.from('club_applications').select('*').order('created_at', { ascending: false });
+    if (_appFilter && _appFilter !== 'all') q = q.eq('status', _appFilter);
+    var res = await q;
+    if (res.error) throw res.error;
+    _appCache = res.data || [];
+    renderClubApplications(_appCache);
+    if (status) {
+      var n = _appCache.length;
+      status.textContent = n ? (n + ' ' + (_appFilter === 'all' ? 'application' : _appFilter) + (n === 1 ? '' : 's')) : 'No applications in this view.';
+    }
+  } catch (err) {
+    console.warn('[apps]', err);
+    var msg = (err && err.message) || 'Could not load applications';
+    list.innerHTML = '<div class="bg-zinc-950 border border-red-900 rounded-2xl p-4 text-sm text-red-400">' +
+      escapeApp(msg) +
+      (/club_applications|schema cache|relation/i.test(msg)
+        ? '<p class="text-zinc-500 mt-2">Run supabase SQL in club_applications.sql first.</p>'
+        : '') +
+      '</div>';
+    if (status) status.textContent = '';
+  }
+}
+
+function renderClubApplications(rows) {
+  var list = document.getElementById('admin-apps-list');
+  if (!list) return;
+  if (!rows || !rows.length) {
+    list.innerHTML = '<p class="text-zinc-500 text-sm">Nothing here.</p>';
+    return;
+  }
+  list.innerHTML = rows.map(function (app) {
+    var st = app.status || 'pending';
+    var badge = st === 'approved'
+      ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+      : st === 'denied'
+        ? 'bg-red-950 text-red-400 border-red-900'
+        : 'bg-amber-950 text-amber-400 border-amber-800';
+    var pending = st === 'pending';
+    var invite = '';
+    if (st === 'approved' && app.invite_token) {
+      var link = (location.origin || 'https://sbracing.ca') + '/accept.html?t=' + encodeURIComponent(app.invite_token);
+      invite = '<div class="mt-3 text-xs text-zinc-400">Invite link <button type="button" onclick="copyAppInvite(\'' +
+        String(app.invite_token).replace(/'/g, '') + '\')" class="text-orange-400 hover:text-orange-300">Copy</button>' +
+        '<div class="font-mono text-[10px] text-zinc-500 break-all mt-1">' + escapeApp(link) + '</div></div>';
+    }
+    return (
+      '<div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">' +
+        '<div class="flex flex-wrap items-start justify-between gap-3">' +
+          '<div class="min-w-0">' +
+            '<div class="font-semibold truncate">' + escapeApp(app.full_name) + '</div>' +
+            '<div class="text-xs text-zinc-400 mt-0.5">' +
+              '<a href="mailto:' + escapeApp(app.email) + '" class="hover:text-orange-400">' + escapeApp(app.email) + '</a>' +
+              (app.phone ? ' · ' + escapeApp(app.phone) : '') +
+              (app.city ? ' · ' + escapeApp(app.city) : '') +
+            '</div>' +
+          '</div>' +
+          '<span class="text-[10px] uppercase tracking-wider px-2 py-1 rounded-lg border ' + badge + '">' + escapeApp(st) + '</span>' +
+        '</div>' +
+        '<div class="grid sm:grid-cols-2 gap-2 mt-3 text-xs text-zinc-400">' +
+          '<div><span class="text-zinc-500">Experience</span><div class="text-zinc-200">' + escapeApp(experienceLabel(app.experience)) + '</div></div>' +
+          '<div><span class="text-zinc-500">Heard about us</span><div class="text-zinc-200">' + escapeApp(app.how_found || '—') + '</div></div>' +
+        '</div>' +
+        '<p class="text-sm text-zinc-300 mt-3 whitespace-pre-wrap">' + escapeApp(app.why_join || '') + '</p>' +
+        '<div class="text-[11px] text-zinc-600 mt-2">Applied ' + escapeApp(formatAppDate(app.created_at)) +
+          (app.reviewed_at ? ' · Reviewed ' + escapeApp(formatAppDate(app.reviewed_at)) : '') + '</div>' +
+        invite +
+        (pending
+          ? '<div class="flex flex-wrap gap-2 mt-4">' +
+              '<button type="button" onclick="reviewClubApplication(\'' + app.id + '\',\'approved\')" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">Approve</button>' +
+              '<button type="button" onclick="reviewClubApplication(\'' + app.id + '\',\'denied\')" class="px-4 py-2 rounded-xl border border-red-800 text-red-400 hover:bg-red-950 text-xs font-semibold">Deny</button>' +
+              '<a href="mailto:' + encodeURIComponent(app.email) + '" class="px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 hover:bg-zinc-900 text-xs font-semibold">Email</a>' +
+            '</div>'
+          : '') +
+      '</div>'
+    );
+  }).join('');
+}
+
+async function reviewClubApplication(id, action) {
+  if (!id || (action !== 'approved' && action !== 'denied')) return;
+  var verb = action === 'approved' ? 'approve' : 'deny';
+  if (!confirm('Really ' + verb + ' this application?')) return;
+
+  var note = null;
+  if (action === 'denied') {
+    note = window.prompt('Optional note (only admins see this)') || null;
+  }
+
+  try {
+    if (!window.sb) throw new Error('Not connected');
+
+    var rec = null;
+    var rpc = await window.sb.rpc('review_club_application', {
+      p_id: id,
+      p_action: action,
+      p_note: note
+    });
+    if (rpc.error) {
+      console.warn('[apps] rpc failed, trying direct update', rpc.error);
+      var patch = {
+        status: action,
+        review_note: note,
+        reviewed_at: new Date().toISOString()
+      };
+      var sess = await getSession();
+      if (sess && sess.user) patch.reviewed_by = sess.user.id;
+      if (action === 'approved') {
+        patch.invite_token = (window.crypto && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : String(Date.now());
+      }
+      var upd = await window.sb.from('club_applications').update(patch).eq('id', id).select().maybeSingle();
+      if (upd.error) throw upd.error;
+      rec = upd.data;
+      if (rec && rec.email) {
+        try {
+          if (action === 'approved') {
+            await window.sb.from('profiles').update({ membership_status: 'active' }).ilike('email', rec.email);
+          } else {
+            await window.sb.from('profiles').update({ membership_status: 'denied' }).ilike('email', rec.email);
+          }
+        } catch (e2) {
+          console.warn('[apps] profile sync', e2);
+        }
+      }
+    } else {
+      rec = rpc.data;
+    }
+
+    if (typeof showToast === 'function') {
+      showToast(action === 'approved' ? 'Approved' : 'Denied');
+    }
+    if (action === 'approved' && rec && rec.email) {
+      try {
+        var token = rec.invite_token;
+        var acceptUrl = (location.origin || 'https://sbracing.ca') + '/accept.html' + (token ? ('?t=' + encodeURIComponent(token)) : '');
+        await fetch('https://formsubmit.co/ajax/' + encodeURIComponent(rec.email), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            _subject: 'You are in — SB Racing',
+            _template: 'table',
+            name: rec.full_name,
+            message: 'Your application to SB Racing was approved. Create your login here: ' + acceptUrl,
+            link: acceptUrl
+          })
+        });
+      } catch (mailErr) {
+        console.warn('[apps] notify email', mailErr);
+      }
+    }
+    await loadClubApplications(_appFilter);
+  } catch (err) {
+    console.error('[apps] review', err);
+    if (typeof showToast === 'function') showToast(err.message || 'Could not update application', true);
+  }
+}
+
+async function copyAppInvite(token) {
+  var link = (location.origin || 'https://sbracing.ca') + '/accept.html?t=' + encodeURIComponent(token || '');
+  try {
+    await navigator.clipboard.writeText(link);
+    if (typeof showToast === 'function') showToast('Invite link copied');
+  } catch (e) {
+    window.prompt('Copy this invite link', link);
+  }
+}
+
+window.loadClubApplications = loadClubApplications;
+window.reviewClubApplication = reviewClubApplication;
+window.copyAppInvite = copyAppInvite;
 
 function bootMembers() {
   if (!window.sb) {

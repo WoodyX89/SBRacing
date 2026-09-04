@@ -190,7 +190,25 @@
 
                     <!-- Admin tab (visible only to is_admin) -->
                     <div id="tab-6" class="member-tab-content hidden">
-                        <div class="flex items-center gap-x-2 mb-5">
+                        <div class="flex flex-wrap items-start justify-between gap-3 mb-5">
+                            <div>
+                                <div class="font-semibold">Club applications</div>
+                                <p class="text-xs text-zinc-500 mt-0.5">Approve or deny people who applied from the join form. You do not need to open Supabase.</p>
+                            </div>
+                            <div class="flex flex-wrap gap-2 text-xs font-semibold" id="app-filter-btns">
+                                <button type="button" class="app-filter px-3 py-1.5 rounded-xl border border-orange-600 text-orange-500" data-filter="pending" onclick="loadClubApplications('pending')">Pending</button>
+                                <button type="button" class="app-filter px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-filter="approved" onclick="loadClubApplications('approved')">Approved</button>
+                                <button type="button" class="app-filter px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-filter="denied" onclick="loadClubApplications('denied')">Denied</button>
+                                <button type="button" class="app-filter px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-filter="all" onclick="loadClubApplications('all')">All</button>
+                                <button type="button" onclick="loadClubApplications()" class="px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400 hover:text-white" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+                            </div>
+                        </div>
+                        <p id="admin-apps-status" class="text-sm text-zinc-500 mb-3"></p>
+                        <div id="admin-apps-list" class="space-y-3 mb-10">
+                            <p class="text-zinc-500 text-sm">Open this tab to load applications.</p>
+                        </div>
+
+                        <div class="flex items-center gap-x-2 mb-5 pt-6 border-t border-zinc-800">
                             <i class="fa-solid fa-bullhorn text-orange-500"></i>
                             <div>
                                 <div class="font-semibold">Send Push Notification</div>
@@ -423,7 +441,7 @@
       <div>
         <div class="text-xs uppercase tracking-wider text-orange-500 font-semibold">Membership</div>
         <h3 class="text-xl font-bold mt-1">Request access</h3>
-        <p class="text-xs text-zinc-400 mt-1">Sends a message to info@sbracing.ca. We’ll follow up with next steps.</p>
+        <p class="text-xs text-zinc-400 mt-1">Sends a message to <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="e28b8c848da291809083818b8c85cc8183">[email&#160;protected]</a>. We’ll follow up with next steps.</p>
       </div>
       <button type="button" onclick="closeSignupRequestModal()" class="w-9 h-9 rounded-full border border-zinc-600 text-zinc-300 hover:bg-zinc-800 shrink-0">
         <i class="fa-solid fa-xmark"></i>
@@ -455,7 +473,7 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/shared.js"></script>
 <script src="js/native-notifications.js"></script>

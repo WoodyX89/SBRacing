@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Create login • SB Racing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <meta name="theme-color" content="#000000">
+  <link rel="icon" type="image/png" href="/assets/favicon-32x32.png">
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+<div id="site-nav"></div>
+<div class="page-top-spacer" aria-hidden="true"></div>
+<main class="max-w-md mx-auto px-4 py-16">
+  <div class="uppercase tracking-[3px] text-xs font-semibold text-orange-600">PRIVATE CLUB</div>
+  <h1 class="text-3xl font-black tracking-tighter mt-2 mb-2">Create your login</h1>
+  <p id="accept-lead" class="text-sm text-zinc-400 mb-6">Use the invite link from the club to set a password.</p>
+
+  <div id="accept-error" class="hidden bg-red-950 border border-red-900 text-red-300 text-sm rounded-2xl p-4 mb-5"></div>
+  <div id="accept-ok" class="hidden bg-emerald-950 border border-emerald-800 text-emerald-300 text-sm rounded-2xl p-4 mb-5"></div>
+
+  <form id="accept-form" class="hidden bg-zinc-900 border border-zinc-800 rounded-3xl p-6 space-y-4" onsubmit="finishAccept(event)">
+    <div>
+      <label class="text-xs text-zinc-500">Name</label>
+      <div id="accept-name" class="mt-1 font-semibold"></div>
+    </div>
+    <div>
+      <label class="text-xs text-zinc-500">Email</label>
+      <div id="accept-email" class="mt-1 font-mono text-sm"></div>
+    </div>
+    <div>
+      <label class="text-xs text-zinc-500">Password (min 6)</label>
+      <input id="accept-password" type="password" required minlength="6" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-orange-600">
+    </div>
+    <div>
+      <label class="text-xs text-zinc-500">Confirm password</label>
+      <input id="accept-password-2" type="password" required minlength="6" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-orange-600">
+    </div>
+    <button id="accept-btn" type="submit" class="w-full py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-sm">Create login</button>
+  </form>
+</main>
+<div id="site-footer"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/shared.js"></script>
+<script>
+var acceptToken = null;
+var acceptApp = null;
+
+function showAcceptErr(msg) {
+  var el = document.getElementById('accept-error');
+  if (!el) return;
+  el.textContent = msg || 'Something went wrong';
+  el.classList.remove('hidden');
+}
+
+async function initAccept() {
+  var q = new URLSearchParams(location.search);
+  acceptToken = (q.get('t') || q.get('token') || '').trim();
+  if (!acceptToken) {
+    showAcceptErr('This invite link is missing its token. Ask the club for a new one.');
+    return;
+  }
+  if (!window.sb) {
+    setTimeout(initAccept, 150);
+    return;
+  }
+  var res = await window.sb.rpc('get_application_by_invite', { p_token: acceptToken });
+  var row = Array.isArray(res.data) ? res.data[0] : res.data;
+  if (res.error || !row || !row.email) {
+    showAcceptErr((res.error && res.error.message) || 'Invite is not valid or was already used.');
+    return;
+  }
+  acceptApp = row;
+  document.getElementById('accept-name').textContent = acceptApp.full_name || '';
+  document.getElementById('accept-email').textContent = acceptApp.email || '';
+  document.getElementById('accept-form').classList.remove('hidden');
+}
+
+async function finishAccept(e) {
+  e.preventDefault();
+  var p1 = document.getElementById('accept-password').value;
+  var p2 = document.getElementById('accept-password-2').value;
+  if (p1.length < 6) { showAcceptErr('Password must be at least 6 characters'); return; }
+  if (p1 !== p2) { showAcceptErr('Passwords do not match'); return; }
+  var btn = document.getElementById('accept-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+  try {
+    var { data, error } = await window.sb.auth.signUp({
+      email: acceptApp.email,
+      password: p1,
+      options: { data: { full_name: acceptApp.full_name } }
+    });
+    if (error) throw error;
+    if (data && data.session) {
+      await window.sb.rpc('claim_club_application', { p_token: acceptToken });
+    }
+    document.getElementById('accept-form').classList.add('hidden');
+    var ok = document.getElementById('accept-ok');
+    ok.classList.remove('hidden');
+    ok.textContent = data && data.session
+      ? 'Account created. Head to Members to sign in.'
+      : 'Check your email to confirm the account, then sign in on the Members page.';
+    setTimeout(function () { location.href = 'members.html'; }, 1600);
+  } catch (err) {
+    showAcceptErr(err.message || 'Could not create account');
+    if (btn) { btn.disabled = false; btn.textContent = 'Create login'; }
+  }
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAccept);
+else initAccept();
+</script>
+</body>
+</html>
