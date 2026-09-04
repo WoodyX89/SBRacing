@@ -29,6 +29,8 @@ let eventCheckpointsById = {};
 let eventTrailsGeo = null;
 /** @type {Record<number, L.Map>} live Leaflet maps on event cards */
 let eventCardMaps = {};
+let eventSaving = false;
+let eventCommenting = {};
 
 function normalizeEventField(key, val) {
   if (val === null || val === undefined) return '';
@@ -194,13 +196,7 @@ async function loadEvents() {
     }
 
     allEvents = data || [];
-    // Completed (24h past start) stay visible; sort to bottom
-    allEvents = allEvents.slice().sort(function (a, b) {
-      var ax = isEventExpired(a) ? 1 : 0;
-      var bx = isEventExpired(b) ? 1 : 0;
-      if (ax !== bx) return ax - bx;
-      return String(a.event_date || '').localeCompare(String(b.event_date || ''));
-    });
+    sortEventsByDate();
     await loadEventSocial();
     await loadMyRsvps();
     renderEvents();
@@ -224,9 +220,22 @@ async function loadEvents() {
   }
 }
 
+function sortEventsByDate() {
+  allEvents = (allEvents || []).slice().sort(function (a, b) {
+    var aPast = isEventExpired(a) ? 1 : 0;
+    var bPast = isEventExpired(b) ? 1 : 0;
+    if (aPast !== bPast) return aPast - bPast;
+    var aMs = eventStartMs(a) || 0;
+    var bMs = eventStartMs(b) || 0;
+    if (aPast) return bMs - aMs;
+    return aMs - bMs;
+  });
+}
+
 function renderEvents() {
   const grid = document.getElementById('events-grid');
   if (!grid) return;
+  sortEventsByDate();
 
   if (!allEvents.length) {
     grid.innerHTML = `
@@ -774,6 +783,7 @@ async function toggleEventLike(eventId) {
 }
 
 async function submitEventComment(eventId) {
+  if (eventCommenting[eventId]) return;
   var user = null;
   try { user = await getCurrentUser(); } catch (e) {}
   if (!user) {
@@ -783,6 +793,7 @@ async function submitEventComment(eventId) {
   var input = document.getElementById('event-comment-input-' + eventId);
   var body = input ? (input.value || '').trim() : '';
   if (!body) return;
+  eventCommenting[eventId] = true;
   try {
     var res = await window.sb.from('event_comments').insert({
       event_id: eventId,
@@ -811,6 +822,8 @@ async function submitEventComment(eventId) {
     if (panel) panel.classList.remove('hidden');
   } catch (e) {
     showToast(e.message || 'Comment failed — run forum.sql?', true);
+  } finally {
+    eventCommenting[eventId] = false;
   }
 }
 
@@ -1181,6 +1194,7 @@ async function savePendingCheckpointsForEvent(eventId) {
 
 async function saveEvent(e) {
   e.preventDefault();
+  if (eventSaving) return;
   if (!canManageEvents) {
     showToast('Leaders and admins can manage events', true);
     return;
@@ -1206,6 +1220,7 @@ async function saveEvent(e) {
 
   const btn = e.target.querySelector('button[type="submit"]');
   const original = btn ? btn.innerHTML : '';
+  eventSaving = true;
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
@@ -1253,9 +1268,6 @@ async function saveEvent(e) {
         console.log('[events] edit diff:', changeSummary || '(none)', prev, payload);
       }
       var notifyOpts = { isEdit: isEdit, changeSummary: changeSummary };
-      if (typeof notifyEventAdded === 'function') {
-        await notifyEventAdded(payload, notifyOpts);
-      }
       if (typeof sendEventPushToAll === 'function') {
         await sendEventPushToAll(payload, notifyOpts);
       }
@@ -1268,6 +1280,7 @@ async function saveEvent(e) {
     console.error(err);
     showToast(err.message || 'Save failed (check admin RLS)', true);
   } finally {
+    eventSaving = false;
     if (btn) {
       btn.disabled = false;
       btn.innerHTML = original;
@@ -1287,16 +1300,6 @@ async function deleteEvent(id) {
     showToast('Event deleted');
     console.log('[events] deleted', id, deletedTitle);
     try {
-      if (typeof notifyEventDeleted === 'function') {
-        await notifyEventDeleted({
-          id: id,
-          title: deletedTitle,
-          name: deletedTitle,
-          event_date: deletedDate
-        });
-      } else {
-        console.warn('[events] notifyEventDeleted missing');
-      }
       if (typeof sendEventPushToAll === 'function') {
         await sendEventPushToAll(
           { title: deletedTitle, event_date: deletedDate },

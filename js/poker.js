@@ -1,6 +1,8 @@
 // SB Racing Poker Run
 const SUITS=['S','H','D','C'],RANKS=['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
 const RANK_VAL=Object.fromEntries(RANKS.map((r,i)=>[r,i+2]));
+const POKER_GUEST_KEY='sbr_poker_guest';
+
 function fullDeck(){const d=[];for(const r of RANKS)for(const s of SUITS)d.push(r+s);return d}
 function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function parseCard(c){return{code:c,rank:c.slice(0,-1),suit:c.slice(-1),val:RANK_VAL[c.slice(0,-1)]}}
@@ -24,7 +26,7 @@ const SUIT_GLYPH = { S: '\u2660', H: '\u2665', D: '\u2666', C: '\u2663' };
 function cardHtml(code, opts) {
   opts = opts || {};
   var large = !!opts.large;
-  var flipped = opts.flipped === true; // face-up only when requested
+  var flipped = opts.flipped === true;
   var deal = !!opts.deal;
   var p = parseCard(code);
   var red = (p.suit === 'H' || p.suit === 'D');
@@ -50,7 +52,6 @@ function renderCardFaceOnly(code) {
 
 function animateCardReveal(container, code) {
   if (!container) return Promise.resolve();
-  // Show deck image (back). User taps to flip and reveal the drawn card.
   container.innerHTML = cardHtml(code, { large: true, flipped: false, deal: true, tapHint: true });
   var el = container.querySelector('.poker-card');
   if (!el) return Promise.resolve();
@@ -67,25 +68,350 @@ function animateCardReveal(container, code) {
       setTimeout(resolve, 700);
     }
     el.addEventListener('click', flip);
-    // Also allow keyboard / accessibility
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
     el.setAttribute('title', 'Tap to reveal your card');
   });
 }
 
+let pokerEventId=null,pokerToken=null,pokerLocation=null,currentEntry=null,pokerLockedMember=false;
 
-let pokerEventId=null,pokerToken=null,pokerLocation=null,currentEntry=null;
 function getQuery(){const q=new URLSearchParams(location.search);return{eventId:q.get('e')||q.get('event'),token:q.get('t')||q.get('token')}}
 function showPokerMsg(m){const el=document.getElementById('poker-status');if(!el)return;el.textContent=m||'';el.classList.toggle('hidden',!m)}
-async function initPokerPage(){const q=getQuery();pokerEventId=q.eventId?parseInt(q.eventId,10):null;pokerToken=q.token;if(!window.sb){setTimeout(initPokerPage,150);return}if(pokerEventId&&pokerToken)await loadStopMode();else if(pokerEventId)await loadLeaderboardOnly();else showPokerMsg('Scan a checkpoint QR code to draw a card.')}
-async function loadStopMode(){showPokerMsg('Loading...');try{const{data:loc,error}=await window.sb.from('poker_locations').select('*').eq('qr_token',pokerToken).eq('event_id',pokerEventId).maybeSingle();if(error)throw error;if(!loc||!loc.is_active){showPokerMsg('Invalid checkpoint QR.');return}pokerLocation=loc;const{data:ev}=await window.sb.from('events').select('*').eq('id',pokerEventId).single();document.getElementById('poker-stop-panel').classList.remove('hidden');document.getElementById('poker-stop-name').textContent=loc.name;document.getElementById('poker-event-name').textContent=(ev&&ev.title)||'Poker Run';document.getElementById('poker-stop-desc').textContent=loc.description||'Draw your card for this checkpoint.';await tryResumeEntry();await refreshMyHand();await refreshLeaderboard();showPokerMsg('')}catch(e){console.error(e);showPokerMsg(e.message||'Load failed')}}
-async function loadLeaderboardOnly(){document.getElementById('poker-stop-panel').classList.add('hidden');document.getElementById('poker-lb-panel').classList.remove('hidden');const{data:ev}=await window.sb.from('events').select('*').eq('id',pokerEventId).single();const t=document.getElementById('poker-event-name');if(t)t.textContent=(ev&&ev.title)||'Poker Run';await refreshLeaderboard();showPokerMsg('')}
-async function tryResumeEntry(){let user=null;try{user=await getCurrentUser()}catch(e){}if(user){const{data}=await window.sb.from('poker_entries').select('*').eq('event_id',pokerEventId).eq('user_id',user.id).maybeSingle();if(data){currentEntry=data;fillRiderForm(data);return}}const saved=localStorage.getItem('poker_entry_'+pokerEventId);if(saved){try{const id=JSON.parse(saved).id;const{data}=await window.sb.from('poker_entries').select('*').eq('id',id).maybeSingle();if(data){currentEntry=data;fillRiderForm(data)}}catch(e){}}}
-function fillRiderForm(entry){const n=document.getElementById('poker-rider-name'),e=document.getElementById('poker-rider-email');if(n)n.value=entry.rider_name||'';if(e)e.value=entry.rider_email||'';const j=document.getElementById('poker-joined');if(j)j.classList.remove('hidden')}
-async function joinPokerRun(ev){if(ev)ev.preventDefault();const name=document.getElementById('poker-rider-name').value.trim();const email=document.getElementById('poker-rider-email').value.trim();if(!name){showToast('Enter your name',true);return}let user=null;try{user=await getCurrentUser()}catch(e){}try{if(email){const{data:ex}=await window.sb.from('poker_entries').select('*').eq('event_id',pokerEventId).ilike('rider_email',email).maybeSingle();if(ex){currentEntry=ex;localStorage.setItem('poker_entry_'+pokerEventId,JSON.stringify({id:ex.id}));fillRiderForm(ex);showToast('Welcome back');await refreshMyHand();return}}const{data,error}=await window.sb.from('poker_entries').insert({event_id:pokerEventId,rider_name:name,rider_email:email||null,user_id:user?user.id:null}).select().single();if(error)throw error;currentEntry=data;localStorage.setItem('poker_entry_'+pokerEventId,JSON.stringify({id:data.id}));fillRiderForm(data);showToast('You are in the run!');await refreshMyHand()}catch(err){showToast(err.message||'Could not join',true)}}
-async function drawCard(){if(!currentEntry){showToast('Join with your name first',true);return}if(!pokerLocation)return;const btn=document.getElementById('btn-draw-card');if(btn)btn.disabled=true;try{const{data:existing}=await window.sb.from('poker_draws').select('*').eq('entry_id',currentEntry.id).eq('location_id',pokerLocation.id).maybeSingle();if(existing){showToast('Already drawn: '+existing.cards.map(cardLabel).join(' '));await refreshMyHand();return}const{data:prior}=await window.sb.from('poker_draws').select('cards').eq('entry_id',currentEntry.id);const held=new Set();(prior||[]).forEach(d=>(d.cards||[]).forEach(c=>held.add(c)));const available=fullDeck().filter(c=>!held.has(c));if(!available.length){showToast('No cards left',true);return}const drawn=[shuffle(available)[0]];const{error}=await window.sb.from('poker_draws').insert({entry_id:currentEntry.id,location_id:pokerLocation.id,cards:drawn});if(error)throw error;const el=document.getElementById('poker-last-draw');if(el){el.classList.remove('hidden');var hint=document.getElementById('poker-flip-hint');if(hint)hint.classList.remove('hidden');await animateCardReveal(el,drawn[0]);if(hint)hint.classList.add('hidden')}else{showToast('You drew '+drawn.map(cardLabel).join(', '))}showToast('You drew '+drawn.map(cardLabel).join(', '));await refreshMyHand();await refreshLeaderboard()}catch(err){showToast(err.message||'Draw failed',true)}finally{if(btn)btn.disabled=false}}
-async function refreshMyHand(){const panel=document.getElementById('poker-my-hand');if(!panel||!currentEntry)return;const{data:draws}=await window.sb.from('poker_draws').select('cards').eq('entry_id',currentEntry.id);const all=[];(draws||[]).forEach(d=>(d.cards||[]).forEach(c=>all.push(c)));const scored=evaluateHand(all);panel.innerHTML=`<div class="text-xs text-zinc-500 mb-2">Your hand (${all.length})</div><div class="flex flex-wrap gap-2 mb-2">${all.length?all.map(function(c){return cardHtml(c,{flipped:true})}).join(''):'<span class="text-zinc-500 text-sm">No cards yet</span>'}</div><div class="text-sm text-orange-400 font-semibold">${all.length?scored.name:''}</div>`;panel.classList.remove('hidden')}
+
+async function getPokerUser(){
+  if(typeof getCurrentUser==='function'){
+    try{const u=await getCurrentUser();if(u)return u;}catch(e){}
+  }
+  if(!window.sb||!window.sb.auth)return null;
+  try{
+    const{data}=await window.sb.auth.getSession();
+    return(data&&data.session&&data.session.user)||null;
+  }catch(e){return null;}
+}
+
+async function getLoggedInDisplayName(user){
+  if(!user)return'';
+  if(typeof getProfile==='function'){
+    try{
+      const p=await getProfile(user.id);
+      if(p&&p.full_name)return String(p.full_name).trim();
+    }catch(e){}
+  }
+  try{
+    const{data}=await window.sb.from('profiles').select('full_name').eq('id',user.id).maybeSingle();
+    if(data&&data.full_name)return String(data.full_name).trim();
+  }catch(e){}
+  const meta=user.user_metadata||{};
+  return String(meta.full_name||meta.name||(user.email?user.email.split('@')[0]:'')||'').trim();
+}
+
+function loadGuestIdentity(){
+  try{
+    const raw=localStorage.getItem(POKER_GUEST_KEY);
+    if(raw){
+      const obj=JSON.parse(raw);
+      if(obj&&obj.name)return obj;
+    }
+  }catch(e){}
+  return null;
+}
+
+function saveGuestIdentity(name,email){
+  const prev=loadGuestIdentity()||{};
+  const obj={
+    name:String(name||prev.name||'').trim(),
+    email:String(email||prev.email||'').trim(),
+    guestId:prev.guestId||(typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():('g'+Date.now()))
+  };
+  try{localStorage.setItem(POKER_GUEST_KEY,JSON.stringify(obj));}catch(e){}
+  return obj;
+}
+
+function clearGuestIdentity(){
+  try{localStorage.removeItem(POKER_GUEST_KEY);}catch(e){}
+}
+
+function showJoinedState(name,opts){
+  opts=opts||{};
+  const form=document.getElementById('poker-join-form');
+  const banner=document.getElementById('poker-playing-as');
+  const bannerName=document.getElementById('poker-playing-as-name');
+  const changeBtn=document.getElementById('poker-change-rider');
+  const joined=document.getElementById('poker-joined');
+  if(bannerName)bannerName.textContent=name||'Rider';
+  if(banner)banner.classList.remove('hidden');
+  if(changeBtn){
+    changeBtn.classList.toggle('hidden',!!opts.locked);
+    changeBtn.disabled=!!opts.locked;
+  }
+  if(form)form.classList.add('hidden');
+  if(joined)joined.classList.remove('hidden');
+}
+
+function showJoinForm(prefill){
+  const form=document.getElementById('poker-join-form');
+  const banner=document.getElementById('poker-playing-as');
+  if(banner)banner.classList.add('hidden');
+  if(form)form.classList.remove('hidden');
+  if(prefill){
+    const n=document.getElementById('poker-rider-name');
+    const e=document.getElementById('poker-rider-email');
+    if(n&&prefill.name)n.value=prefill.name;
+    if(e&&prefill.email)e.value=prefill.email;
+  }
+}
+
+window.changePokerRider=function(){
+  if(pokerLockedMember){
+    showToast('Logged-in members play under their account name',true);
+    return;
+  }
+  currentEntry=null;
+  try{if(pokerEventId)localStorage.removeItem('poker_entry_'+pokerEventId);}catch(e){}
+  const guest=loadGuestIdentity()||{};
+  showJoinForm({name:guest.name||'',email:guest.email||''});
+};
+
+async function initPokerPage(){
+  const q=getQuery();
+  pokerEventId=q.eventId?parseInt(q.eventId,10):null;
+  pokerToken=q.token;
+  if(!window.sb){setTimeout(initPokerPage,150);return}
+  if(pokerEventId&&pokerToken)await loadStopMode();
+  else if(pokerEventId)await loadLeaderboardOnly();
+  else showPokerMsg('Scan a checkpoint QR code to draw a card.');
+}
+
+async function loadStopMode(){
+  showPokerMsg('Loading...');
+  try{
+    const{data:loc,error}=await window.sb.from('poker_locations').select('*').eq('qr_token',pokerToken).eq('event_id',pokerEventId).maybeSingle();
+    if(error)throw error;
+    if(!loc||!loc.is_active){showPokerMsg('Invalid checkpoint QR.');return}
+    pokerLocation=loc;
+    const{data:ev}=await window.sb.from('events').select('*').eq('id',pokerEventId).single();
+    document.getElementById('poker-stop-panel').classList.remove('hidden');
+    document.getElementById('poker-stop-name').textContent=loc.name;
+    document.getElementById('poker-event-name').textContent=(ev&&ev.title)||'Poker Run';
+    document.getElementById('poker-stop-desc').textContent=loc.description||'Draw your card for this checkpoint.';
+    await tryResumeEntry();
+    await refreshMyHand();
+    await refreshLeaderboard();
+    showPokerMsg('');
+  }catch(e){
+    console.error(e);
+    showPokerMsg(e.message||'Load failed');
+  }
+}
+
+async function loadLeaderboardOnly(){
+  document.getElementById('poker-stop-panel').classList.add('hidden');
+  document.getElementById('poker-lb-panel').classList.remove('hidden');
+  const{data:ev}=await window.sb.from('events').select('*').eq('id',pokerEventId).single();
+  const t=document.getElementById('poker-event-name');
+  if(t)t.textContent=(ev&&ev.title)||'Poker Run';
+  await refreshLeaderboard();
+  showPokerMsg('');
+}
+
+function persistEntryId(entry){
+  if(!entry||!entry.id||!pokerEventId)return;
+  try{localStorage.setItem('poker_entry_'+pokerEventId,JSON.stringify({id:entry.id}));}catch(e){}
+}
+
+async function findExistingEntry({user,name,email}){
+  if(!pokerEventId)return null;
+  if(user){
+    const{data}=await window.sb.from('poker_entries').select('*').eq('event_id',pokerEventId).eq('user_id',user.id).maybeSingle();
+    if(data)return data;
+  }
+  if(email){
+    const{data}=await window.sb.from('poker_entries').select('*').eq('event_id',pokerEventId).ilike('rider_email',email).maybeSingle();
+    if(data)return data;
+  }
+  if(name){
+    const{data}=await window.sb.from('poker_entries').select('*').eq('event_id',pokerEventId).ilike('rider_name',name).maybeSingle();
+    if(data)return data;
+  }
+  if(pokerEventId){
+    try{
+      const saved=localStorage.getItem('poker_entry_'+pokerEventId);
+      if(saved){
+        const id=JSON.parse(saved).id;
+        if(id){
+          const{data}=await window.sb.from('poker_entries').select('*').eq('id',id).maybeSingle();
+          if(data)return data;
+        }
+      }
+    }catch(e){}
+  }
+  return null;
+}
+
+async function ensureEntry({user,name,email}){
+  const riderName=String(name||'').trim();
+  const riderEmail=String(email||'').trim();
+  if(!riderName)return null;
+  let existing=await findExistingEntry({user,name:riderName,email:riderEmail});
+  if(existing){
+    const patch={};
+    if(user&&!existing.user_id)patch.user_id=user.id;
+    if(riderEmail&&!existing.rider_email)patch.rider_email=riderEmail;
+    if(riderName&&existing.rider_name!==riderName)patch.rider_name=riderName;
+    if(Object.keys(patch).length){
+      const{data}=await window.sb.from('poker_entries').update(patch).eq('id',existing.id).select().maybeSingle();
+      if(data)existing=data;
+    }
+    return existing;
+  }
+  const{data,error}=await window.sb.from('poker_entries').insert({
+    event_id:pokerEventId,
+    rider_name:riderName,
+    rider_email:riderEmail||null,
+    user_id:user?user.id:null
+  }).select().single();
+  if(error)throw error;
+  return data;
+}
+
+async function tryResumeEntry(){
+  const user=await getPokerUser();
+  if(user){
+    pokerLockedMember=true;
+    const displayName=await getLoggedInDisplayName(user);
+    const email=user.email||'';
+    try{
+      const entry=await ensureEntry({user,name:displayName||(email?email.split('@')[0]:'Member'),email});
+      if(entry){
+        currentEntry=entry;
+        persistEntryId(entry);
+        fillRiderForm(entry);
+        showJoinedState(entry.rider_name,{locked:true});
+        return;
+      }
+    }catch(e){
+      console.warn('[poker] auto-join member failed',e);
+      showToast(e.message||'Could not join as member',true);
+    }
+    return;
+  }
+
+  pokerLockedMember=false;
+  const guest=loadGuestIdentity();
+  const savedName=guest&&guest.name;
+  const savedEmail=guest&&guest.email;
+  try{
+    const existing=await findExistingEntry({user:null,name:savedName,email:savedEmail});
+    if(existing){
+      currentEntry=existing;
+      persistEntryId(existing);
+      if(!guest||!guest.name)saveGuestIdentity(existing.rider_name,existing.rider_email);
+      fillRiderForm(existing);
+      showJoinedState(existing.rider_name,{locked:false});
+      return;
+    }
+  }catch(e){
+    console.warn('[poker] guest resume failed',e);
+  }
+
+  if(savedName){
+    try{
+      const entry=await ensureEntry({user:null,name:savedName,email:savedEmail||''});
+      if(entry){
+        currentEntry=entry;
+        persistEntryId(entry);
+        fillRiderForm(entry);
+        showJoinedState(entry.rider_name,{locked:false});
+        return;
+      }
+    }catch(e){
+      console.warn('[poker] guest auto-join failed',e);
+    }
+  }
+
+  showJoinForm(guest||{});
+}
+
+function fillRiderForm(entry){
+  const n=document.getElementById('poker-rider-name'),e=document.getElementById('poker-rider-email');
+  if(n)n.value=(entry&&entry.rider_name)||'';
+  if(e)e.value=(entry&&entry.rider_email)||'';
+  const j=document.getElementById('poker-joined');
+  if(j)j.classList.remove('hidden');
+}
+
+async function joinPokerRun(ev){
+  if(ev)ev.preventDefault();
+  const name=document.getElementById('poker-rider-name').value.trim();
+  const email=document.getElementById('poker-rider-email').value.trim();
+  if(!name){showToast('Enter your name',true);return}
+  const user=await getPokerUser();
+  try{
+    if(!user)saveGuestIdentity(name,email);
+    const entry=await ensureEntry({user,name,email});
+    currentEntry=entry;
+    persistEntryId(entry);
+    fillRiderForm(entry);
+    showJoinedState(entry.rider_name,{locked:!!user});
+    showToast('You are in the run!');
+    await refreshMyHand();
+  }catch(err){
+    showToast(err.message||'Could not join',true);
+  }
+}
+
+async function drawCard(){
+  if(!currentEntry){showToast('Join with your name first',true);return}
+  if(!pokerLocation)return;
+  const btn=document.getElementById('btn-draw-card');
+  if(btn)btn.disabled=true;
+  try{
+    const{data:existing}=await window.sb.from('poker_draws').select('*').eq('entry_id',currentEntry.id).eq('location_id',pokerLocation.id).maybeSingle();
+    if(existing){
+      showToast('Already drawn: '+existing.cards.map(cardLabel).join(' '));
+      await refreshMyHand();
+      return;
+    }
+    const{data:prior}=await window.sb.from('poker_draws').select('cards').eq('entry_id',currentEntry.id);
+    const held=new Set();
+    (prior||[]).forEach(d=>(d.cards||[]).forEach(c=>held.add(c)));
+    const available=fullDeck().filter(c=>!held.has(c));
+    if(!available.length){showToast('No cards left',true);return}
+    const drawn=[shuffle(available)[0]];
+    const{error}=await window.sb.from('poker_draws').insert({entry_id:currentEntry.id,location_id:pokerLocation.id,cards:drawn});
+    if(error)throw error;
+    const el=document.getElementById('poker-last-draw');
+    if(el){
+      el.classList.remove('hidden');
+      var hint=document.getElementById('poker-flip-hint');
+      if(hint)hint.classList.remove('hidden');
+      await animateCardReveal(el,drawn[0]);
+      if(hint)hint.classList.add('hidden');
+    }else{
+      showToast('You drew '+drawn.map(cardLabel).join(', '));
+    }
+    showToast('You drew '+drawn.map(cardLabel).join(', '));
+    await refreshMyHand();
+    await refreshLeaderboard();
+  }catch(err){
+    showToast(err.message||'Draw failed',true);
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+}
+
+async function refreshMyHand(){
+  const panel=document.getElementById('poker-my-hand');
+  if(!panel||!currentEntry)return;
+  const{data:draws}=await window.sb.from('poker_draws').select('cards').eq('entry_id',currentEntry.id);
+  const all=[];
+  (draws||[]).forEach(d=>(d.cards||[]).forEach(c=>all.push(c)));
+  const scored=evaluateHand(all);
+  panel.innerHTML=`<div class="text-xs text-zinc-500 mb-2">Your hand (${all.length})</div><div class="flex flex-wrap gap-2 mb-2">${all.length?all.map(function(c){return cardHtml(c,{flipped:true})}).join(''):'<span class="text-zinc-500 text-sm">No cards yet</span>'}</div><div class="text-sm text-orange-400 font-semibold">${all.length?scored.name:''}</div>`;
+  panel.classList.remove('hidden');
+}
+
 async function refreshLeaderboard(){
   const panel=document.getElementById('poker-leaderboard');
   if(!panel||!pokerEventId)return;
@@ -152,6 +478,7 @@ async function loadPokerAdmin(eventId){
     }</div>
     <div class="mt-4"><a class="text-orange-500 text-sm" href="poker.html?e=${eventId}">Leaderboard →</a></div>`;
 }
+
 async function addPokerLocation(eventId){
   const name=prompt('Checkpoint name (e.g. Trailhead, Mid climb)');
   if(!name)return;
@@ -166,7 +493,6 @@ async function addPokerLocation(eventId){
   if(lat!=null&&lng!=null){row.lat=lat;row.lng=lng;}
   let{error}=await window.sb.from('poker_locations').insert(row);
   if(error&&row.lat!=null){
-    // Columns may not exist yet — store coords in description
     delete row.lat;delete row.lng;
     row.description=(row.description?row.description+' · ':'')+'📍 '+lat.toFixed(5)+', '+lng.toFixed(5);
     ({error}=await window.sb.from('poker_locations').insert(row));
@@ -174,10 +500,12 @@ async function addPokerLocation(eventId){
   if(error)showToast(error.message,true);
   else{showToast('Added');await loadPokerAdmin(eventId);}
 }
+
 async function deletePokerLocation(id,eventId){
   if(!confirm('Delete checkpoint?'))return;
   const{error}=await window.sb.from('poker_locations').delete().eq('id',id);
   if(error)showToast(error.message,true);
   else{showToast('Deleted');await loadPokerAdmin(eventId);}
 }
+
 document.addEventListener('DOMContentLoaded',()=>{if(document.body&&document.body.getAttribute('data-page')==='poker')initPokerPage()});

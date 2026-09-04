@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Join • SB Racing</title>
+    <title>Apply • SB Racing</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/styles.css">
@@ -14,253 +14,105 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="SB Racing">
     <link rel="apple-touch-icon" href="/assets/logo.png">
-    <link rel="icon" type="image/png" href="/assets/favicon-32x32.png">   
+    <link rel="icon" type="image/png" href="/assets/favicon-32x32.png">
 </head>
 <body class="bg-zinc-950 text-zinc-200">
-<!-- Shared nav (edit partials/nav.html only) -->
 <div id="site-nav"></div>
 <div class="page-top-spacer" aria-hidden="true"></div>
 <div class="page-body">
-    <!-- JOIN / SIGN UP -->
     <section id="join" class="bg-zinc-900 border-y border-zinc-800 py-20">
         <div class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12">
-            <div class="max-w-2xl mx-auto text-center mb-12 mt-10">
-                <div class="uppercase tracking-[3px] text-xs font-semibold text-orange-600">YOUR NEXT ADVENTURE STARTS HERE</div>
-                <h2 class="section-header tracking-tighter mt-3">Become a Member</h2>
-                <p class="mt-4 text-lg text-zinc-400">Join a crew of passionate riders who live for the trails around Medicine Hat. Membership keeps the lights on, supports trail maintenance, and unlocks the full SB experience.</p>
+            <div class="max-w-2xl mx-auto text-center mb-10 mt-10">
+                <div class="uppercase tracking-[3px] text-xs font-semibold text-orange-600">PRIVATE CLUB</div>
+                <h2 class="section-header tracking-tighter mt-3">Apply to ride with us</h2>
+                <p class="mt-4 text-lg text-zinc-400">SB Racing is a private group. Fill out the form and we will review it. If you are a fit, someone from the crew will get in touch.</p>
             </div>
 
-            <!-- Membership Tiers -->
-            <div class="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                <!-- Tier 1 -->
-                <div onclick="selectTier(0, this)" class="tier-card cursor-pointer border border-zinc-700 hover:border-orange-600 transition-all rounded-3xl p-7 bg-zinc-950 group">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <div class="font-bold text-2xl">Trail Rider</div>
-                            <div class="text-xs uppercase tracking-widest text-zinc-500 mt-0.5">ANNUAL MEMBERSHIP</div>
-                        </div>
-                        <div class="text-right">
-                            <div class="font-mono text-4xl font-black tracking-tighter">$45</div>
-                            <div class="text-[10px] text-zinc-500 -mt-1">/ year</div>
-                        </div>
-                    </div>
-                    <ul class="mt-8 space-y-3 text-sm text-zinc-300">
-                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Access to all group rides &amp; Discord</span></li>
-                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Monthly newsletter + trail reports</span></li>
-                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Club voting rights</span></li>
-                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>10% merch discount</span></li>
-                    </ul>
-                    <div class="mt-8 text-center text-xs text-orange-600 font-semibold group-hover:underline">SELECT THIS TIER →</div>
-                </div>
-
-                <!-- Tier 2 - Popular -->
-                <div onclick="selectTier(1, this)" class="tier-card cursor-pointer border-2 border-orange-600 relative rounded-3xl p-7 bg-zinc-950 group scale-[1.015]">
-                    <div class="absolute -top-3 right-6 bg-orange-600 text-white text-[10px] font-bold tracking-widest px-4 py-0.5 rounded-full">MOST POPULAR</div>
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <div class="font-bold text-2xl">Coulee Crusher</div>
-                            <div class="text-xs uppercase tracking-widest text-orange-500 mt-0.5">PREMIUM ANNUAL</div>
-                        </div>
-                        <div class="text-right">
-                            <div class="font-mono text-4xl font-black tracking-tighter">$85</div>
-                            <div class="text-[10px] text-zinc-500 -mt-1">/ year</div>
-                        </div>
-                    </div>
-                    <ul class="mt-8 space-y-3 text-sm text-zinc-300">
-                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Everything in Trail Rider</span></li>
-                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span><strong>20% off</strong> all merchandise</span></li>
-                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Priority event registration</span></li>
-                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Exclusive members-only rides</span></li>
-                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Full access to Members Area</span></li>
-                    </ul>
-                    <div class="mt-8 text-center text-xs text-orange-600 font-semibold group-hover:underline">SELECT THIS TIER →</div>
-                </div>
-
-                <!-- Tier 3 -->
-                <div onclick="selectTier(2, this)" class="tier-card cursor-pointer border border-zinc-700 hover:border-orange-600 transition-all rounded-3xl p-7 bg-zinc-950 group">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <div class="font-bold text-2xl">Youth / Student</div>
-                            <div class="text-xs uppercase tracking-widest text-zinc-500 mt-0.5">ANNUAL MEMBERSHIP</div>
-                        </div>
-                        <div class="text-right">
-                            <div class="font-mono text-4xl font-black tracking-tighter">$25</div>
-                            <div class="text-[10px] text-zinc-500 -mt-1">/ year</div>
-                        </div>
-                    </div>
-                    <ul class="mt-8 space-y-3 text-sm text-zinc-300">
-                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Full ride access + Discord</span></li>
-                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Youth skills clinics included</span></li>
-                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>5% merch discount</span></li>
-                        <li class="flex gap-x-3"><i class="fa-solid fa-check text-emerald-500 mt-1"></i> <span>Parental waiver required</span></li>
-                    </ul>
-                    <div class="mt-8 text-center text-xs text-orange-600 font-semibold group-hover:underline">SELECT THIS TIER →</div>
-                </div>
+            <div id="apply-success" class="hidden max-w-xl mx-auto bg-zinc-950 border border-emerald-800 rounded-3xl p-8 md:p-10 text-center">
+                <i class="fa-solid fa-check-circle text-emerald-500 text-4xl mb-4"></i>
+                <h3 class="font-semibold text-xl mb-2">Application sent</h3>
+                <p class="text-sm text-zinc-400">Thanks. We have your info. Sit tight — this is not instant access. You will hear from us if you are in.</p>
+                <a href="events.html" class="inline-block mt-6 text-sm text-orange-400 hover:text-orange-300">Browse public events →</a>
             </div>
 
-            <!-- Signup Form -->
-            <div class="max-w-xl mx-auto mt-14 bg-zinc-950 border border-zinc-800 rounded-3xl p-8 md:p-10">
-                <h3 class="font-semibold text-xl mb-1">Ready to join?</h3>
-                <p class="text-sm text-zinc-400 mb-6">Fill out the form below and complete payment to activate your membership instantly.</p>
+            <div id="apply-card" class="max-w-xl mx-auto bg-zinc-950 border border-zinc-800 rounded-3xl p-8 md:p-10">
+                <h3 class="font-semibold text-xl mb-1">Club application</h3>
+                <p class="text-sm text-zinc-400 mb-6">No dues, no checkout. Submit once. Do not create a second application unless we ask.</p>
 
-                <form id="membership-form" onsubmit="submitMembership(event)">
+                <form id="apply-form" onsubmit="submitClubApplication(event)">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
-                            <label class="text-xs font-medium tracking-wider text-zinc-400">FULL NAME</label>
-                            <input type="text" id="full-name" required class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
+                            <label class="text-xs font-medium tracking-wider text-zinc-400">FULL NAME *</label>
+                            <input type="text" id="full-name" required autocomplete="name" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
                         </div>
                         <div>
-                            <label class="text-xs font-medium tracking-wider text-zinc-400">EMAIL ADDRESS</label>
-                            <input type="email" id="email" required class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
+                            <label class="text-xs font-medium tracking-wider text-zinc-400">EMAIL *</label>
+                            <input type="email" id="email" required autocomplete="email" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+                        <div>
+                            <label class="text-xs font-medium tracking-wider text-zinc-400">PHONE</label>
+                            <input type="tel" id="phone" autocomplete="tel" placeholder="403-555-0192" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium tracking-wider text-zinc-400">CITY</label>
+                            <input type="text" id="city" value="Medicine Hat" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
                         </div>
                     </div>
 
                     <div class="mt-5">
-                        <label class="text-xs font-medium tracking-wider text-zinc-400">PHONE NUMBER</label>
-                        <input type="tel" id="phone" placeholder="(403) 555-0192" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
+                        <label class="text-xs font-medium tracking-wider text-zinc-400">RIDING EXPERIENCE *</label>
+                        <select id="experience" required class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
+                            <option value="">Select one</option>
+                            <option value="new">New to mountain biking</option>
+                            <option value="casual">Casual — I ride when I can</option>
+                            <option value="regular">Regular — I am out most weeks</option>
+                            <option value="advanced">Advanced / race pace</option>
+                        </select>
                     </div>
 
                     <div class="mt-5">
-                        <label class="text-xs font-medium tracking-wider text-zinc-400">SELECTED MEMBERSHIP TIER</label>
-                        <div id="selected-tier-display" 
-                             class="mt-1.5 flex items-center justify-between bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
-                            <span id="tier-name">Please select a tier above</span>
-                            <span id="tier-price" class="font-mono font-semibold"></span>
-                        </div>
-                        <input type="hidden" id="selected-tier" value="">
+                        <label class="text-xs font-medium tracking-wider text-zinc-400">HOW DID YOU HEAR ABOUT US?</label>
+                        <input type="text" id="how-found" placeholder="Friend, trail, Instagram…" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
                     </div>
 
-                    <button type="submit" 
-                            class="mt-8 w-full py-4 rounded-3xl bg-white hover:bg-amber-100 active:scale-[0.985] font-bold text-zinc-900 tracking-wider text-sm transition-all flex items-center justify-center gap-x-2">
-                        <span>COMPLETE MEMBERSHIP PAYMENT</span>
+                    <div class="mt-5">
+                        <label class="text-xs font-medium tracking-wider text-zinc-400">WHY DO YOU WANT TO JOIN? *</label>
+                        <textarea id="why-join" required rows="4" placeholder="Who you ride with, what you are looking for from the group…" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none"></textarea>
+                    </div>
+
+                    <div class="flex items-start gap-x-3 mt-6">
+                        <input type="checkbox" id="private-club-ack" required class="mt-1 accent-orange-600">
+                        <label for="private-club-ack" class="text-xs leading-tight text-zinc-400">I understand SB Racing is a private club. Applying does not guarantee a spot. Someone will contact me if approved.</label>
+                    </div>
+
+                    <button type="submit" id="apply-submit"
+                            class="mt-8 w-full py-4 rounded-3xl bg-white hover:bg-amber-100 active:scale-[0.985] font-bold text-zinc-900 tracking-wider text-sm transition-all">
+                        SUBMIT APPLICATION
                     </button>
-                    
-                    <p class="text-center text-[10px] text-zinc-500 mt-4">Secure checkout powered by Stripe • Cancel anytime</p>
+                    <p class="text-center text-[10px] text-zinc-500 mt-4">We will only use this to review your application.</p>
                 </form>
             </div>
         </div>
     </section>
+</div>
 
-    <!-- Modals -->
-    <!-- RSVP Modal -->
-    <div id="rsvp-modal" onclick="if (event.target.id === 'rsvp-modal') hideRSVPModal()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex items-center justify-center p-6">
-        <div onclick="event.stopImmediatePropagation()" class="modal bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-8">
-            <div class="flex justify-between items-start mb-6">
-                <div>
-                    <div id="rsvp-event-title" class="font-bold text-2xl tracking-tight"></div>
-                    <div id="rsvp-event-date" class="text-sm text-zinc-400"></div>
-                </div>
-                <button onclick="hideRSVPModal()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
-            </div>
-
-            <form id="rsvp-form" onsubmit="submitRSVP(event)">
-                <div class="space-y-5">
-                    <div>
-                        <label class="text-xs font-medium text-zinc-400">FULL NAME</label>
-                        <input type="text" id="rsvp-name" value="Trevor Wood" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="text-xs font-medium text-zinc-400">EMAIL</label>
-                            <input type="email" id="rsvp-email" value="trevor@sb-racing.ca" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
-                        </div>
-                        <div>
-                            <label class="text-xs font-medium text-zinc-400">EMERGENCY CONTACT</label>
-                            <input type="tel" id="rsvp-emergency" placeholder="403-555-1234" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm">
-                        </div>
-                    </div>
-                    <div class="flex items-start gap-x-3 pt-2">
-                        <input type="checkbox" id="waiver-check" checked class="mt-1 accent-orange-600">
-                        <label for="waiver-check" class="text-xs leading-tight text-zinc-400">I have read and agree to the SB Racing waiver and release of liability. I understand the risks involved in mountain biking.</label>
-                    </div>
-                </div>
-
-                <div class="flex gap-x-3 mt-8">
-                    <button type="button" onclick="hideRSVPModal()" 
-                            class="flex-1 py-3 rounded-2xl border border-zinc-700 font-semibold text-sm">CANCEL</button>
-                    <button type="submit" 
-                            class="flex-1 py-3 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-sm">CONFIRM MY SPOT</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Payment Modal -->
-    <div id="payment-modal" onclick="if (event.target.id === 'payment-modal') hidePaymentModal()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[80] flex items-center justify-center p-6">
-        <div onclick="event.stopImmediatePropagation()" class="modal bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-8">
-            <div class="flex justify-between mb-2">
-                <div class="font-bold text-xl">Complete Payment</div>
-                <button onclick="hidePaymentModal()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-2xl"></i></button>
-            </div>
-            <div class="text-sm text-zinc-400 mb-6">Membership: <span id="payment-tier-name" class="font-semibold text-white"></span></div>
-
-            <div class="bg-zinc-950 border border-zinc-700 rounded-2xl p-5 mb-6">
-                <div class="flex justify-between text-sm">
-                    <span>Subtotal</span>
-                    <span id="payment-amount" class="font-mono font-semibold"></span>
-                </div>
-                <div class="h-px bg-zinc-700 my-3"></div>
-                <div class="flex justify-between font-bold text-lg">
-                    <span>Total due today</span>
-                    <span id="payment-total" class="font-mono"></span>
-                </div>
-            </div>
-
-            <form id="payment-form" onsubmit="processPayment(event)">
-                <div class="space-y-4">
-                    <div>
-                        <label class="text-xs font-medium text-zinc-400">CARD NUMBER</label>
-                        <input type="text" id="card-number" value="4242 4242 4242 4242" maxlength="19" 
-                               class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 font-mono text-sm tracking-widest outline-none focus:border-orange-600">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="text-xs font-medium text-zinc-400">EXPIRY DATE</label>
-                            <input type="text" id="card-expiry" value="04 / 28" maxlength="7" 
-                                   class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 font-mono text-sm outline-none focus:border-orange-600">
-                        </div>
-                        <div>
-                            <label class="text-xs font-medium text-zinc-400">CVC</label>
-                            <input type="text" id="card-cvc" value="424" maxlength="4" 
-                                   class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 font-mono text-sm outline-none focus:border-orange-600">
-                        </div>
-                    </div>
-                </div>
-
-                <button type="submit" 
-                        class="mt-8 w-full py-4 rounded-3xl bg-emerald-600 hover:bg-emerald-700 font-bold text-sm tracking-wider flex justify-center items-center gap-x-2 active:scale-[0.985]">
-                    <span>PAY &amp; ACTIVATE MEMBERSHIP</span>
-                </button>
-                <p class="text-center text-[10px] text-zinc-500 mt-4">This is a demo. No real payment will be processed.</p>
-            </form>
-        </div>
-    </div>
-
-    <!-- Cart Drawer -->
-    </div><!-- /.page-body -->
-<!-- Success Toast -->
-    <!-- Shared footer + cart + toast (edit partials/footer.html only) -->
 <div id="site-footer"></div>
-
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/shared.js"></script>
 <script src="js/join.js"></script>
-
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    // Prefer same-folder sw.js; ignore failures (login/merch do not depend on it)
     var swUrl = 'sw.js';
     navigator.serviceWorker.getRegistrations().then(function (regs) {
-      // If sw is missing, clear any old broken registrations so they don't cache stale pages
       fetch(swUrl, { method: 'HEAD' }).then(function (res) {
-        if (res.ok) {
-          navigator.serviceWorker.register(swUrl).catch(function () {});
-        } else {
-          regs.forEach(function (r) { r.unregister(); });
-        }
+        if (res.ok) navigator.serviceWorker.register(swUrl).catch(function () {});
+        else regs.forEach(function (r) { r.unregister(); });
       }).catch(function () {
         regs.forEach(function (r) { r.unregister(); });
       });

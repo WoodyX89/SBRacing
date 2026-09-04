@@ -46,14 +46,25 @@
       <p id="poker-stop-desc" class="text-sm text-zinc-400 mt-2"></p>
     </div>
 
-    <form onsubmit="joinPokerRun(event)" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 space-y-4">
+    <div id="poker-playing-as" class="hidden bg-zinc-900 border border-zinc-800 rounded-3xl p-5 flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <div class="text-[10px] uppercase tracking-widest text-zinc-500">Playing as</div>
+        <div id="poker-playing-as-name" class="font-semibold truncate"></div>
+      </div>
+      <button type="button" id="poker-change-rider" onclick="changePokerRider()" class="shrink-0 text-xs text-orange-400 border border-zinc-700 px-3 py-1.5 rounded-xl">
+        Change
+      </button>
+    </div>
+
+    <form id="poker-join-form" onsubmit="joinPokerRun(event)" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 space-y-4">
       <div class="text-sm font-semibold">Your rider info</div>
+      <p class="text-xs text-zinc-500">Guests: this name is saved on this device so you keep one hand.</p>
       <div>
         <label class="text-xs text-zinc-500">Name *</label>
         <input id="poker-rider-name" required class="mt-1 w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none focus:border-orange-600">
       </div>
       <div>
-        <label class="text-xs text-zinc-500">Email (to resume later)</label>
+        <label class="text-xs text-zinc-500">Email (optional — helps resume on another phone)</label>
         <input id="poker-rider-email" type="email" class="mt-1 w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none focus:border-orange-600">
       </div>
       <button type="submit" class="w-full py-3 rounded-2xl bg-white text-zinc-900 font-semibold">Join / resume run</button>
