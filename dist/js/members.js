@@ -444,16 +444,13 @@ async function logoutMember() {
     showLoginWall();
 }
 
-/** Membership access request → email info@sbracing.ca */
+/** Take web + iOS app to the private club application form */
+function goToJoinApplication() {
+  window.location.href = 'join.html';
+}
+
 function openSignupRequestModal() {
-  var modal = document.getElementById('signup-request-modal');
-  if (!modal) return;
-  var err = document.getElementById('signup-request-error');
-  var ok = document.getElementById('signup-request-ok');
-  if (err) { err.textContent = ''; err.classList.add('hidden'); }
-  if (ok) { ok.textContent = ''; ok.classList.add('hidden'); }
-  modal.classList.remove('hidden');
-  modal.style.display = 'flex';
+  goToJoinApplication();
 }
 
 function closeSignupRequestModal() {
@@ -1148,19 +1145,23 @@ async function reviewClubApplication(id, action) {
     });
     if (rpc.error) {
       console.warn('[apps] rpc failed, trying direct update', rpc.error);
-      var patch = {
+      var token = (window.crypto && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : String(Date.now());
+      var sess = await getSession();
+      var base = {
         status: action,
         review_note: note,
         reviewed_at: new Date().toISOString()
       };
-      var sess = await getSession();
-      if (sess && sess.user) patch.reviewed_by = sess.user.id;
-      if (action === 'approved') {
-        patch.invite_token = (window.crypto && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : String(Date.now());
-      }
+      if (sess && sess.user) base.reviewed_by = sess.user.id;
+      var patch = Object.assign({}, base);
+      if (action === 'approved') patch.invite_token = token;
       var upd = await window.sb.from('club_applications').update(patch).eq('id', id).select().maybeSingle();
+      if (upd.error && /invite_token/i.test(upd.error.message || '')) {
+        upd = await window.sb.from('club_applications').update(base).eq('id', id).select().maybeSingle();
+      }
       if (upd.error) throw upd.error;
-      rec = upd.data;
+      rec = upd.data || {};
+      if (action === 'approved' && !rec.invite_token) rec.invite_token = token;
       if (rec && rec.email) {
         try {
           if (action === 'approved') {

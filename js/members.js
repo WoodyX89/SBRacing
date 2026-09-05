@@ -1184,19 +1184,37 @@ async function reviewClubApplication(id, action) {
       try {
         var token = rec.invite_token;
         var acceptUrl = (location.origin || 'https://sbracing.ca') + '/accept.html' + (token ? ('?t=' + encodeURIComponent(token)) : '');
-        await fetch('https://formsubmit.co/ajax/' + encodeURIComponent(rec.email), {
+        var sessMail = await getSession();
+        var access = (sessMail && sessMail.access_token) || '';
+        var fnUrl = (window.SB_URL || '').replace(/\/$/, '') + '/functions/v1/send-approval-email';
+        var mailRes = await fetch(fnUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + access,
+            apikey: window.SB_ANON_KEY || ''
+          },
           body: JSON.stringify({
-            _subject: 'You are in — SB Racing',
-            _template: 'table',
+            to: rec.email,
             name: rec.full_name,
-            message: 'Your application to SB Racing was approved. Create your login here: ' + acceptUrl,
-            link: acceptUrl
+            acceptUrl: acceptUrl
           })
         });
+        if (!mailRes.ok) {
+          var mailText = '';
+          try { mailText = await mailRes.text(); } catch (e) {}
+          console.warn('[apps] smtp2go', mailRes.status, mailText);
+          if (typeof showToast === 'function') {
+            showToast('Approved — email failed, copy the invite link', true);
+          }
+        } else if (typeof showToast === 'function') {
+          showToast('Approved — invite email sent');
+        }
       } catch (mailErr) {
         console.warn('[apps] notify email', mailErr);
+        if (typeof showToast === 'function') {
+          showToast('Approved — email failed, copy the invite link', true);
+        }
       }
     }
     await loadClubApplications(_appFilter);

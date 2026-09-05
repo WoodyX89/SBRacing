@@ -16,10 +16,23 @@
 <main class="max-w-md mx-auto px-4 py-16">
   <div class="uppercase tracking-[3px] text-xs font-semibold text-orange-600">PRIVATE CLUB</div>
   <h1 class="text-3xl font-black tracking-tighter mt-2 mb-2">Create your login</h1>
-  <p id="accept-lead" class="text-sm text-zinc-400 mb-6">Use the invite link from the club to set a password.</p>
+  <p id="accept-lead" class="text-sm text-zinc-400 mb-6">Approved applicants set a password here.</p>
 
   <div id="accept-error" class="hidden bg-red-950 border border-red-900 text-red-300 text-sm rounded-2xl p-4 mb-5"></div>
   <div id="accept-ok" class="hidden bg-emerald-950 border border-emerald-800 text-emerald-300 text-sm rounded-2xl p-4 mb-5"></div>
+
+  <form id="lookup-form" class="hidden bg-zinc-900 border border-zinc-800 rounded-3xl p-6 space-y-4 mb-4" onsubmit="lookupByEmail(event)">
+    <p class="text-sm text-zinc-400">Paste the invite code from your approval email, or use the email you applied with.</p>
+    <div>
+      <label class="text-xs text-zinc-500">Invite code (optional)</label>
+      <input id="lookup-token" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-orange-600" placeholder="from the link after ?t=">
+    </div>
+    <div>
+      <label class="text-xs text-zinc-500">Email you applied with</label>
+      <input id="lookup-email" type="email" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-orange-600" placeholder="you@email.com">
+    </div>
+    <button type="submit" class="w-full py-3.5 rounded-2xl bg-zinc-100 text-zinc-900 font-semibold text-sm">Find my application</button>
+  </form>
 
   <form id="accept-form" class="hidden bg-zinc-900 border border-zinc-800 rounded-3xl p-6 space-y-4" onsubmit="finishAccept(event)">
     <div>
@@ -49,6 +62,13 @@
 var acceptToken = null;
 var acceptApp = null;
 
+function qs() {
+  var search = new URLSearchParams(location.search || '');
+  var hash = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
+  function get(k) { return (search.get(k) || hash.get(k) || '').trim(); }
+  return { t: get('t') || get('token'), e: get('e') || get('email') };
+}
+
 function showAcceptErr(msg) {
   var el = document.getElementById('accept-error');
   if (!el) return;
@@ -56,31 +76,101 @@ function showAcceptErr(msg) {
   el.classList.remove('hidden');
 }
 
-async function initAccept() {
-  var q = new URLSearchParams(location.search);
-  acceptToken = (q.get('t') || q.get('token') || '').trim();
-  if (!acceptToken) {
-    showAcceptErr('This invite link is missing its token. Ask the club for a new one.');
-    return;
+function hideAcceptErr() {
+  var el = document.getElementById('accept-error');
+  if (el) { el.textContent = ''; el.classList.add('hidden'); }
+}
+
+function firstRow(data) {
+  if (!data) return null;
+  if (Array.isArray(data)) return data[0] || null;
+  if (data.email || data.full_name) return data;
+  return null;
+}
+
+async function lookupInvite(token, email) {
+  token = (token || '').trim();
+  email = (email || '').trim();
+  if (!window.sb) throw new Error('Not connected yet');
+
+  if (token) {
+    var byTok = await window.sb.rpc('get_application_by_invite', { p_token: token });
+    if (!byTok.error) {
+      var row = firstRow(byTok.data);
+      if (row && row.email) return row;
+    }
   }
+  if (email) {
+    var byMail = await window.sb.rpc('get_approved_application_by_email', { p_email: email });
+    if (!byMail.error) {
+      var row2 = firstRow(byMail.data);
+      if (row2 && row2.email) {
+        if (row2.invite_token) acceptToken = row2.invite_token;
+        return row2;
+      }
+    }
+    if (byMail.error) console.warn('[accept] email rpc', byMail.error);
+  }
+  return null;
+}
+
+function showPasswordForm(row) {
+  acceptApp = row;
+  document.getElementById('accept-name').textContent = row.full_name || '';
+  document.getElementById('accept-email').textContent = row.email || '';
+  document.getElementById('lookup-form').classList.add('hidden');
+  document.getElementById('accept-form').classList.remove('hidden');
+}
+
+async function initAccept() {
   if (!window.sb) {
     setTimeout(initAccept, 150);
     return;
   }
-  var res = await window.sb.rpc('get_application_by_invite', { p_token: acceptToken });
-  var row = Array.isArray(res.data) ? res.data[0] : res.data;
-  if (res.error || !row || !row.email) {
-    showAcceptErr((res.error && res.error.message) || 'Invite is not valid or was already used.');
+  var p = qs();
+  acceptToken = p.t || null;
+  try {
+    var row = await lookupInvite(p.t, p.e);
+    if (row) {
+      showPasswordForm(row);
+      return;
+    }
+  } catch (err) {
+    console.warn('[accept] init', err);
+  }
+  document.getElementById('lookup-form').classList.remove('hidden');
+  if (p.e) document.getElementById('lookup-email').value = p.e;
+  if (p.t) document.getElementById('lookup-token').value = p.t;
+  if (p.t || p.e) {
+    showAcceptErr('Could not match that invite. Check the code, or use the same email you applied with. If this keeps happening, the club needs to re-approve so a new invite is created.');
+  }
+}
+
+async function lookupByEmail(e) {
+  e.preventDefault();
+  hideAcceptErr();
+  var token = (document.getElementById('lookup-token').value || '').trim();
+  var email = (document.getElementById('lookup-email').value || '').trim();
+  if (!token && !email) {
+    showAcceptErr('Enter the invite code or your email.');
     return;
   }
-  acceptApp = row;
-  document.getElementById('accept-name').textContent = acceptApp.full_name || '';
-  document.getElementById('accept-email').textContent = acceptApp.email || '';
-  document.getElementById('accept-form').classList.remove('hidden');
+  acceptToken = token || acceptToken;
+  try {
+    var row = await lookupInvite(token, email);
+    if (!row) {
+      showAcceptErr('No approved application found for that invite / email.');
+      return;
+    }
+    showPasswordForm(row);
+  } catch (err) {
+    showAcceptErr(err.message || 'Lookup failed');
+  }
 }
 
 async function finishAccept(e) {
   e.preventDefault();
+  hideAcceptErr();
   var p1 = document.getElementById('accept-password').value;
   var p2 = document.getElementById('accept-password-2').value;
   if (p1.length < 6) { showAcceptErr('Password must be at least 6 characters'); return; }
@@ -88,20 +178,21 @@ async function finishAccept(e) {
   var btn = document.getElementById('accept-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
   try {
-    var { data, error } = await window.sb.auth.signUp({
+    var result = await window.sb.auth.signUp({
       email: acceptApp.email,
       password: p1,
       options: { data: { full_name: acceptApp.full_name } }
     });
-    if (error) throw error;
-    if (data && data.session) {
-      await window.sb.rpc('claim_club_application', { p_token: acceptToken });
+    if (result.error) throw result.error;
+    if (result.data && result.data.session && acceptToken) {
+      var claim = await window.sb.rpc('claim_club_application', { p_token: acceptToken });
+      if (claim.error) console.warn('[accept] claim', claim.error);
     }
     document.getElementById('accept-form').classList.add('hidden');
     var ok = document.getElementById('accept-ok');
     ok.classList.remove('hidden');
-    ok.textContent = data && data.session
-      ? 'Account created. Head to Members to sign in.'
+    ok.textContent = result.data && result.data.session
+      ? 'Account created. Taking you to Members…'
       : 'Check your email to confirm the account, then sign in on the Members page.';
     setTimeout(function () { location.href = 'members.html'; }, 1600);
   } catch (err) {
