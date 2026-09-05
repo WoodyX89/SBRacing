@@ -1,13 +1,46 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const cors = {
-  "Access-Control-Allow-Origin": "https://sbracing.ca",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const ALLOWED = new Set([
+  "https://sbracing.ca",
+  "https://www.sbracing.ca",
+  "capacitor://localhost",
+  "ionic://localhost",
+  "https://localhost",
+  "http://localhost",
+  "http://localhost:5173",
+  "http://localhost:8080",
+]);
+
+function corsHeaders(req: Request) {
+  const origin = req.headers.get("Origin") || "";
+  return {
+    "Access-Control-Allow-Origin": ALLOWED.has(origin) ? origin : "https://sbracing.ca",
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+}
+
+function json(req: Request, obj: unknown, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+  });
+}
+
+function escapeHtml(s: string) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!)
+  );
+}
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405, headers: cors });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders(req) });
+  }
+  if (req.method !== "POST") {
+    return json(req, { error: "Method not allowed" }, 405);
+  }
 
   const authHeader = req.headers.get("Authorization") || "";
   const supabase = createClient(
@@ -18,7 +51,7 @@ Deno.serve(async (req) => {
 
   const { data: { user }, error: userErr } = await supabase.auth.getUser();
   if (userErr || !user) {
-    return json({ error: "Not signed in" }, 401);
+    return json(req, { error: "Not signed in" }, 401);
   }
 
   const { data: profile } = await supabase
@@ -27,11 +60,13 @@ Deno.serve(async (req) => {
     .eq("id", user.id)
     .maybeSingle();
   if (!profile?.is_admin) {
-    return json({ error: "Admin only" }, 403);
+    return json(req, { error: "Admin only" }, 403);
   }
 
   const { to, name, acceptUrl } = await req.json();
-  if (!to || !acceptUrl) return json({ error: "Missing to or acceptUrl" }, 400);
+  if (!to || !acceptUrl) {
+    return json(req, { error: "Missing to or acceptUrl" }, 400);
+  }
 
   const html = `
     <p>Hey ${escapeHtml(name || "")},</p>
@@ -59,20 +94,7 @@ Deno.serve(async (req) => {
 
   const body = await res.json();
   if (!res.ok || body?.data?.failed) {
-    return json({ error: body?.data?.failures?.[0] || body || "Send failed" }, 502);
+    return json(req, { error: body?.data?.failures?.[0] || body || "Send failed" }, 502);
   }
-  return json({ ok: true, email_id: body?.data?.email_id });
+  return json(req, { ok: true, email_id: body?.data?.email_id });
 });
-
-function json(obj: unknown, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { ...cors, "Content-Type": "application/json" },
-  });
-}
-
-function escapeHtml(s: string) {
-  return String(s).replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!)
-  );
-}
