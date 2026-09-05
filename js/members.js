@@ -1086,7 +1086,7 @@ function renderClubApplications(rows) {
     var pending = st === 'pending';
     var invite = '';
     if (st === 'approved' && app.invite_token) {
-      var link = (location.origin || 'https://sbracing.ca') + '/accept.html?t=' + encodeURIComponent(app.invite_token);
+      var link = (window.SB_SITE_URL || 'https://sbracing.ca').replace(/\/$/, '') + '/accept?t=' + encodeURIComponent(app.invite_token);
       invite = '<div class="mt-3 text-xs text-zinc-400">Invite link <button type="button" onclick="copyAppInvite(\'' +
         String(app.invite_token).replace(/'/g, '') + '\')" class="text-orange-400 hover:text-orange-300">Copy</button>' +
         '<div class="font-mono text-[10px] text-zinc-500 break-all mt-1">' + escapeApp(link) + '</div></div>';
@@ -1183,7 +1183,7 @@ async function reviewClubApplication(id, action) {
     if (action === 'approved' && rec && rec.email) {
       try {
         var token = rec.invite_token;
-        var acceptUrl = (location.origin || 'https://sbracing.ca') + '/accept.html' + (token ? ('?t=' + encodeURIComponent(token)) : '');
+        var acceptUrl = (window.SB_SITE_URL || 'https://sbracing.ca').replace(/\/$/, '') + '/accept' + (token ? ('?t=' + encodeURIComponent(token)) : '');
         var sessMail = await getSession();
         var access = (sessMail && sessMail.access_token) || '';
         var fnUrl = (window.SB_URL || '').replace(/\/$/, '') + '/functions/v1/send-approval-email';
@@ -1225,7 +1225,7 @@ async function reviewClubApplication(id, action) {
 }
 
 async function copyAppInvite(token) {
-  var link = (location.origin || 'https://sbracing.ca') + '/accept.html?t=' + encodeURIComponent(token || '');
+  var link = (window.SB_SITE_URL || 'https://sbracing.ca').replace(/\/$/, '') + '/accept?t=' + encodeURIComponent(token || '');
   try {
     await navigator.clipboard.writeText(link);
     if (typeof showToast === 'function') showToast('Invite link copied');
