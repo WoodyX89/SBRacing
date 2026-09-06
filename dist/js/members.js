@@ -78,10 +78,13 @@ async function showDashboard(user) {
 
     fillProfileForm(profile, user);
 
+    window._myId = user.id;
+    window._isAdmin = !!(profile && profile.is_admin);
+
     // Admin tab — only for is_admin
     var adminBtn = document.getElementById('admin-tab-btn');
     if (adminBtn) {
-        if (profile && profile.is_admin) {
+        if (window._isAdmin) {
             adminBtn.classList.remove('hidden');
         } else {
             adminBtn.classList.add('hidden');
@@ -154,7 +157,7 @@ async function openMemberProfile(userId) {
   try {
     const { data: p, error } = await window.sb
       .from('profiles')
-      .select('id, full_name, avatar_url, membership_tier, membership_status, created_at, email')
+      .select('id, full_name, avatar_url, membership_tier, membership_status, created_at, email, is_admin')
       .eq('id', userId)
       .maybeSingle();
     if (error) throw error;
@@ -568,7 +571,11 @@ function switchMemberTab(tabIndex) {
         }
     });
     if (String(tabIndex) === '5') loadMemberDirectory();
-    if (String(tabIndex) === '6') loadClubApplications(window._appFilter || 'pending');
+    if (String(tabIndex) === '6') {
+        loadClubApplications(window._appFilter || 'pending');
+        ensureAdminPermsUi();
+        loadAdminMembers();
+    }
     if (String(tabIndex) === '7') loadRideLeaderboard(window._lbPeriod || 'weekly');
 }
 
@@ -1223,6 +1230,158 @@ async function reviewClubApplication(id, action) {
     if (typeof showToast === 'function') showToast(err.message || 'Could not update application', true);
   }
 }
+
+function ensureAdminPermsUi() {
+  var tab = document.getElementById('tab-6');
+  if (!tab || document.getElementById('admin-members-list')) return;
+  var wrap = document.createElement('div');
+  wrap.id = 'admin-perms-wrap';
+  wrap.className = 'pt-8 mt-8 border-t border-zinc-800';
+  wrap.innerHTML =
+    '<div class="flex items-center gap-x-2 mb-2">' +
+      '<i class="fa-solid fa-user-shield text-orange-500"></i>' +
+      '<div>' +
+        '<div class="font-semibold">Member permissions</div>' +
+        '<p class="text-xs text-zinc-500 mt-0.5">Change role, membership status, and admin access. You cannot remove your own admin flag.</p>' +
+      '</div>' +
+    '</div>' +
+    '<input id="admin-member-search" type="search" placeholder="Search name or email" oninput="filterAdminMembers()" class="mt-4 w-full max-w-lg bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm outline-none focus:border-orange-600">' +
+    '<p id="admin-members-status" class="text-sm text-zinc-500 mt-3 mb-3"></p>' +
+    '<div id="admin-members-list" class="space-y-3"></div>';
+  var pushTitle = tab.querySelector('#admin-push-title');
+  if (pushTitle) {
+    var section = pushTitle.closest('.max-w-lg') || pushTitle.parentElement;
+    var header = section && section.previousElementSibling;
+    tab.insertBefore(wrap, header || section || tab.firstChild);
+  } else {
+    tab.appendChild(wrap);
+  }
+}
+
+var _adminMemberCache = [];
+
+async function loadAdminMembers() {
+  var list = document.getElementById('admin-members-list');
+  var status = document.getElementById('admin-members-status');
+  if (!list) return;
+  if (!window._isAdmin) {
+    list.innerHTML = '<p class="text-zinc-500 text-sm">Admin only.</p>';
+    return;
+  }
+  list.innerHTML = '<p class="text-zinc-500 text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading members…</p>';
+  try {
+    var res = await window.sb
+      .from('profiles')
+      .select('id, full_name, email, membership_tier, membership_status, is_admin, created_at')
+      .order('full_name', { ascending: true });
+    if (res.error) throw res.error;
+    _adminMemberCache = res.data || [];
+    if (status) status.textContent = _adminMemberCache.length + ' member' + (_adminMemberCache.length === 1 ? '' : 's');
+    renderAdminMembers(_adminMemberCache);
+  } catch (err) {
+    console.warn('[admin-members]', err);
+    list.innerHTML = '<p class="text-red-400 text-sm">' + escapeHtml(err.message || 'Could not load members') +
+      '</p><p class="text-zinc-500 text-xs mt-2">If this is an RLS error, run the admin update policy in supabase (profiles: admins can update other rows).</p>';
+  }
+}
+
+function filterAdminMembers() {
+  var q = (document.getElementById('admin-member-search')?.value || '').trim().toLowerCase();
+  var rows = !_adminMemberCache ? [] : _adminMemberCache.filter(function (p) {
+    if (!q) return true;
+    return String(p.full_name || '').toLowerCase().includes(q) ||
+      String(p.email || '').toLowerCase().includes(q);
+  });
+  renderAdminMembers(rows);
+}
+
+function renderAdminMembers(rows) {
+  var list = document.getElementById('admin-members-list');
+  if (!list) return;
+  if (!rows.length) {
+    list.innerHTML = '<p class="text-zinc-500 text-sm">No members match.</p>';
+    return;
+  }
+  list.innerHTML = rows.map(function (p) {
+    var id = String(p.id);
+    var mine = window._myId && String(window._myId) === id;
+    var tier = p.membership_tier || 'none';
+    var st = p.membership_status || 'active';
+    return (
+      '<div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4" data-uid="' + escapeAttr(id) + '">' +
+        '<div class="flex flex-wrap items-start justify-between gap-2">' +
+          '<div class="min-w-0">' +
+            '<div class="font-semibold truncate">' + escapeHtml(p.full_name || 'Member') +
+              (mine ? ' <span class="text-[10px] uppercase tracking-wider text-orange-400">you</span>' : '') +
+            '</div>' +
+            '<div class="text-xs text-zinc-500 truncate">' + escapeHtml(p.email || '') + '</div>' +
+          '</div>' +
+          (p.is_admin ? '<span class="text-[10px] uppercase tracking-wider px-2 py-1 rounded-lg border border-orange-800 text-orange-400">Admin</span>' : '') +
+        '</div>' +
+        '<div class="grid sm:grid-cols-3 gap-2 mt-3">' +
+          '<label class="text-[10px] uppercase tracking-wider text-zinc-500">Role' +
+            '<select onchange="queueMemberPerm(\'' + id + '\',\'membership_tier\',this.value)" class="mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-200">' +
+              opt('none', 'Member', tier) +
+              opt('trail_rider', 'Trail Rider', tier) +
+              opt('coulee_crusher', 'Coulee Crusher', tier) +
+              opt('youth', 'Youth / Student', tier) +
+            '</select></label>' +
+          '<label class="text-[10px] uppercase tracking-wider text-zinc-500">Status' +
+            '<select onchange="queueMemberPerm(\'' + id + '\',\'membership_status\',this.value)" class="mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-200">' +
+              opt('active', 'Active', st) +
+              opt('pending', 'Pending', st) +
+              opt('inactive', 'Inactive', st) +
+              opt('denied', 'Denied', st) +
+            '</select></label>' +
+          '<label class="text-[10px] uppercase tracking-wider text-zinc-500">Access' +
+            '<select ' + (mine ? 'disabled title="You cannot change your own admin flag"' : '') +
+              ' onchange="queueMemberPerm(\'' + id + '\',\'is_admin\',this.value)" class="mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-200">' +
+              opt('false', 'Member', p.is_admin ? 'true' : 'false') +
+              opt('true', 'Admin', p.is_admin ? 'true' : 'false') +
+            '</select></label>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function opt(value, label, current) {
+  return '<option value="' + value + '"' + (String(current) === String(value) ? ' selected' : '') + '>' + label + '</option>';
+}
+
+async function queueMemberPerm(userId, field, value) {
+  if (!window._isAdmin) {
+    if (typeof showToast === 'function') showToast('Admin only', true);
+    return;
+  }
+  if (!userId || !field) return;
+  if (field === 'is_admin' && window._myId && String(window._myId) === String(userId)) {
+    if (typeof showToast === 'function') showToast('You cannot change your own admin access', true);
+    loadAdminMembers();
+    return;
+  }
+  var patch = {};
+  if (field === 'is_admin') patch.is_admin = value === 'true' || value === true;
+  else patch[field] = value;
+  try {
+    var upd = await window.sb.from('profiles').update(patch).eq('id', userId).select('id, full_name, email, membership_tier, membership_status, is_admin, created_at').maybeSingle();
+    if (upd.error) throw upd.error;
+    _adminMemberCache = (_adminMemberCache || []).map(function (row) {
+      return String(row.id) === String(userId) && upd.data ? upd.data : row;
+    });
+    if (typeof showToast === 'function') showToast('Permissions saved');
+    filterAdminMembers();
+  } catch (err) {
+    console.error('[admin-members] save', err);
+    if (typeof showToast === 'function') showToast(err.message || 'Could not save permissions', true);
+    loadAdminMembers();
+  }
+}
+
+window.ensureAdminPermsUi = ensureAdminPermsUi;
+window.loadAdminMembers = loadAdminMembers;
+window.filterAdminMembers = filterAdminMembers;
+window.queueMemberPerm = queueMemberPerm;
 
 async function copyAppInvite(token) {
   var link = (window.SB_SITE_URL || 'https://sbracing.ca').replace(/\/$/, '') + '/accept?t=' + encodeURIComponent(token || '');
