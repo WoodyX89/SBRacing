@@ -40,6 +40,23 @@ async function submitClubApplication(e) {
     const { error } = await window.sb.from('club_applications').insert(row);
     if (error) throw error;
 
+    try {
+      await window.sb.functions.invoke('notify-event', {
+        body: {
+          title: 'New club application',
+          body: name + ' applied (' + email + ')',
+          audience: 'admins',
+          data: {
+            url: 'https://sbracing.ca/members',
+            type: 'club_application',
+            audience: 'admins'
+          }
+        }
+      });
+    } catch (pushErr) {
+      console.warn('[apply] admin push', pushErr);
+    }
+
     const form = document.getElementById('apply-form');
     const card = document.getElementById('apply-card');
     const success = document.getElementById('apply-success');
