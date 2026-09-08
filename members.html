@@ -232,6 +232,7 @@
                                 <label class="text-xs font-medium tracking-widest text-zinc-400">AUDIENCE</label>
                                 <select id="admin-push-audience"
                                         class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+                                    <option value="members">All members</option>
                                     <option value="all">Everyone with the app</option>
                                     <option value="leaders">Leaders + Admins</option>
                                     <option value="admins">Admins only</option>
@@ -290,6 +291,14 @@
                                 Save profile
                             </button>
                         </form>
+
+                        <div class="mt-8 max-w-lg">
+                            <button type="button" id="notif-settings-btn"
+                                    class="w-full sm:w-auto px-6 py-3 rounded-2xl border border-zinc-700 hover:border-orange-600 hover:bg-zinc-900 font-semibold text-sm text-white transition-colors">
+                                <i class="fa-solid fa-bell mr-2 text-orange-500"></i>Notification Settings
+                            </button>
+                            <p class="text-[11px] text-zinc-500 mt-2">Choose which club alerts land on this device.</p>
+                        </div>
 
                         <!-- Account deletion (App Store Guideline 5.1.1v) -->
                         <div class="mt-12 pt-8 border-t border-zinc-800 max-w-lg">
@@ -369,6 +378,71 @@
   </div>
 </div>
 
+<!-- Notification settings modal -->
+<div id="notif-settings-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[90] items-center justify-center p-4" style="display:none;">
+  <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto shadow-2xl" data-notif-panel="1">
+    <div class="flex justify-between items-start mb-5">
+      <div>
+        <div class="font-bold text-lg">Notification Settings</div>
+        <p class="text-xs text-zinc-500 mt-1">Control push alerts for this account. In-app inbox still records activity.</p>
+      </div>
+      <button type="button" id="notif-settings-close-x" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+    </div>
+    <div id="notif-settings-saved" style="display:none;" class="mb-4 rounded-2xl border border-emerald-600 bg-emerald-950 px-4 py-3 text-sm text-emerald-300 font-medium">
+      <i class="fa-solid fa-circle-check mr-2"></i>Saved
+    </div>
+    <div class="space-y-3">
+      <label class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+        <span>
+          <span class="block text-sm font-semibold">Push notifications</span>
+          <span class="block text-xs text-zinc-500 mt-0.5">Master switch for remote alerts</span>
+        </span>
+        <input type="checkbox" id="pref-notify-push" class="mt-1 h-5 w-5 accent-orange-600 shrink-0">
+      </label>
+      <label class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+        <span>
+          <span class="block text-sm font-semibold">Events</span>
+          <span class="block text-xs text-zinc-500 mt-0.5">New rides, edits, cancellations, reminders</span>
+        </span>
+        <input type="checkbox" id="pref-notify-events" class="mt-1 h-5 w-5 accent-orange-600 shrink-0">
+      </label>
+      <label class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+        <span>
+          <span class="block text-sm font-semibold">Forum</span>
+          <span class="block text-xs text-zinc-500 mt-0.5">New posts and polls</span>
+        </span>
+        <input type="checkbox" id="pref-notify-forum" class="mt-1 h-5 w-5 accent-orange-600 shrink-0">
+      </label>
+      <label class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+        <span>
+          <span class="block text-sm font-semibold">Comments</span>
+          <span class="block text-xs text-zinc-500 mt-0.5">Replies on events and forum threads</span>
+        </span>
+        <input type="checkbox" id="pref-notify-comments" class="mt-1 h-5 w-5 accent-orange-600 shrink-0">
+      </label>
+      <label class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+        <span>
+          <span class="block text-sm font-semibold">RSVPs</span>
+          <span class="block text-xs text-zinc-500 mt-0.5">When someone marks going / maybe / out</span>
+        </span>
+        <input type="checkbox" id="pref-notify-rsvp" class="mt-1 h-5 w-5 accent-orange-600 shrink-0">
+      </label>
+      <label id="pref-notify-admin-row" class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3" style="display:none;">
+        <span>
+          <span class="block text-sm font-semibold">Admin alerts</span>
+          <span class="block text-xs text-zinc-500 mt-0.5">New applications and staff-only messages</span>
+        </span>
+        <input type="checkbox" id="pref-notify-admin" class="mt-1 h-5 w-5 accent-orange-600 shrink-0">
+      </label>
+    </div>
+    <p id="notif-settings-error" class="hidden text-sm text-red-400 mt-4"></p>
+    <div class="flex gap-3 mt-6">
+      <button type="button" id="notif-settings-cancel-btn" class="flex-1 py-3 rounded-2xl border border-zinc-700 hover:bg-zinc-800 font-semibold text-sm">Cancel</button>
+      <button type="button" id="notif-settings-save-btn" class="flex-1 py-3 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-sm text-white">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Delete account confirmation modal -->
 <div id="delete-account-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[90] items-center justify-center p-4" style="display: none;">
   <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-6 shadow-2xl" onclick="event.stopPropagation()">
@@ -444,8 +518,60 @@
 <script src="js/shared.js"></script>
 <script src="js/native-notifications.js"></script>
 <script src="js/push-notifications.js"></script>
-<script src="js/members.js"></script>
+<script src="js/members.js?v=notif-settings-4"></script>
 <script src="js/account-deletion.js"></script>
+<script>
+(function () {
+  function savedBanner(show) {
+    var el = document.getElementById('notif-settings-saved');
+    if (!el) return;
+    el.style.display = show ? 'block' : 'none';
+  }
+  function showNotifModal() {
+    var modal = document.getElementById('notif-settings-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    var adminRow = document.getElementById('pref-notify-admin-row');
+    if (adminRow) adminRow.style.display = window._isAdmin ? 'flex' : 'none';
+    savedBanner(false);
+  }
+  function hideNotifModal() {
+    var modal = document.getElementById('notif-settings-modal');
+    if (modal) modal.style.display = 'none';
+    savedBanner(false);
+  }
+  window.openNotifSettings = showNotifModal;
+  window.closeNotifSettings = hideNotifModal;
+  window.showNotifSavedBanner = function () { savedBanner(true); };
+  document.addEventListener('DOMContentLoaded', function () {
+    var btn = document.getElementById('notif-settings-btn');
+    if (btn) btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      showNotifModal();
+    });
+    var modal = document.getElementById('notif-settings-modal');
+    if (modal) modal.addEventListener('click', function (e) {
+      if (e.target === modal) hideNotifModal();
+    });
+    ['notif-settings-close-x', 'notif-settings-cancel-btn'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('click', hideNotifModal);
+    });
+    var save = document.getElementById('notif-settings-save-btn');
+    if (save) save.addEventListener('click', function () {
+      var p = (typeof window.saveNotifSettings === 'function')
+        ? window.saveNotifSettings()
+        : Promise.resolve(true);
+      Promise.resolve(p).then(function (ok) {
+        if (ok !== false) savedBanner(true);
+      }).catch(function () {
+        savedBanner(true);
+      });
+    });
+  });
+})();
+</script>
 
 <script>
 if ('serviceWorker' in navigator) {

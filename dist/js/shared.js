@@ -31,6 +31,30 @@ function isMerchPage() {
     return path.endsWith('merch.html') || path.includes('/merch');
 }
 
+function applyNotifVisibility() {
+  var show = true;
+  var notifDesk = document.getElementById('nav-notif-desktop');
+  if (notifDesk) {
+    if (show) {
+      notifDesk.classList.remove('hidden');
+      notifDesk.style.display = '';
+    } else {
+      notifDesk.classList.add('hidden');
+      notifDesk.style.display = 'none';
+    }
+  }
+  var notifMobile = document.getElementById('nav-notif-btn-mobile');
+  if (notifMobile) {
+    if (show) {
+      notifMobile.classList.remove('hidden');
+      notifMobile.style.display = 'flex';
+    } else {
+      notifMobile.classList.add('hidden');
+      notifMobile.style.display = 'none';
+    }
+  }
+}
+
 function updateNavCartVisibility() {
   // Cart + notifications live in desktop header + mobile hamburger on ALL pages.
   var btn = document.getElementById('nav-cart-btn');
@@ -48,16 +72,7 @@ function updateNavCartVisibility() {
     mobileBtn.classList.remove('hidden');
     mobileBtn.style.display = 'flex';
   }
-  var notifDesk = document.getElementById('nav-notif-desktop');
-  if (notifDesk) {
-    notifDesk.classList.remove('hidden');
-    notifDesk.style.display = '';
-  }
-  var notifMobile = document.getElementById('nav-notif-btn-mobile');
-  if (notifMobile) {
-    notifMobile.classList.remove('hidden');
-    notifMobile.style.display = 'flex';
-  }
+  applyNotifVisibility();
   try { if (typeof updateNotifCount === 'function') updateNotifCount(); } catch (e) {}
 }
 

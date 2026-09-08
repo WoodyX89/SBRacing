@@ -135,7 +135,9 @@ async function broadcastPush(opts) {
     var title = opts.title || 'Update';
     var body = opts.body || '';
     if (body.length > 180) body = body.slice(0, 177) + '…';
-    var audience = opts.audience || 'all'; // all | admins | leaders
+    var type = (opts.type || '').toString().toLowerCase();
+    var isComment = type === 'forum_comment' || type === 'event_comment';
+    var audience = opts.audience || (isComment ? 'members' : 'all');
     var res = await window.sb.functions.invoke('notify-event', {
       body: {
         title: title,
