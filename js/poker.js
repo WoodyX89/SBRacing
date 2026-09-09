@@ -7,18 +7,71 @@ function fullDeck(){const d=[];for(const r of RANKS)for(const s of SUITS)d.push(
 function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function parseCard(c){return{code:c,rank:c.slice(0,-1),suit:c.slice(-1),val:RANK_VAL[c.slice(0,-1)]}}
 function cardLabel(c){const p=parseCard(c);return p.rank+p.suit}
-function evaluateHand(codes){
-  if(!codes||!codes.length)return{rank:0,name:'No cards',tiebreak:[]};
-  const vals=codes.map(c=>parseCard(c).val).sort((a,b)=>b-a);
-  const counts={};vals.forEach(v=>counts[v]=(counts[v]||0)+1);
-  const by=Object.entries(counts).map(([v,c])=>({val:+v,count:c})).sort((a,b)=>b.count-a.count||b.val-a.val);
-  if(by[0].count===4)return{rank:7,name:'Four of a Kind',tiebreak:[by[0].val]};
-  if(by[0].count===3&&by[1]&&by[1].count===2)return{rank:6,name:'Full House',tiebreak:[by[0].val,by[1].val]};
-  if(by[0].count===3)return{rank:3,name:'Three of a Kind',tiebreak:[by[0].val]};
-  if(by[0].count===2&&by[1]&&by[1].count===2)return{rank:2,name:'Two Pair',tiebreak:[by[0].val,by[1].val]};
-  if(by[0].count===2)return{rank:1,name:'One Pair',tiebreak:[by[0].val]};
-  return{rank:0,name:'High Card',tiebreak:vals};
+
+function combinations(arr, k) {
+  const out = [];
+  function rec(start, picked) {
+    if (picked.length === k) { out.push(picked.slice()); return; }
+    for (let i = start; i < arr.length; i++) {
+      picked.push(arr[i]);
+      rec(i + 1, picked);
+      picked.pop();
+    }
+  }
+  rec(0, []);
+  return out;
 }
+
+function scoreFive(codes) {
+  const parsed = codes.map(parseCard);
+  const vals = parsed.map(p => p.val).sort((a, b) => b - a);
+  const suits = parsed.map(p => p.suit);
+  const flush = suits.every(s => s === suits[0]);
+
+  const uniq = [...new Set(vals)].sort((a, b) => b - a);
+  const aceLow = uniq.includes(14) && [5, 4, 3, 2].every(v => uniq.includes(v));
+  let straight = false;
+  let straightHigh = 0;
+  if (uniq.length === 5) {
+    if (uniq[0] - uniq[4] === 4) {
+      straight = true;
+      straightHigh = uniq[0];
+    } else if (aceLow) {
+      straight = true;
+      straightHigh = 5;
+    }
+  }
+
+  const counts = {};
+  vals.forEach(v => { counts[v] = (counts[v] || 0) + 1; });
+  const by = Object.entries(counts)
+    .map(([v, c]) => ({ val: +v, count: c }))
+    .sort((a, b) => b.count - a.count || b.val - a.val);
+
+  const kickers = by.flatMap(b => Array(b.count).fill(b.val));
+
+  if (straight && flush) return { rank: 8, name: straightHigh === 14 ? 'Royal Flush' : 'Straight Flush', tiebreak: [straightHigh] };
+  if (by[0].count === 4) return { rank: 7, name: 'Four of a Kind', tiebreak: [by[0].val, by[1] ? by[1].val : 0] };
+  if (by[0].count === 3 && by[1] && by[1].count === 2) return { rank: 6, name: 'Full House', tiebreak: [by[0].val, by[1].val] };
+  if (flush) return { rank: 5, name: 'Flush', tiebreak: vals };
+  if (straight) return { rank: 4, name: 'Straight', tiebreak: [straightHigh] };
+  if (by[0].count === 3) return { rank: 3, name: 'Three of a Kind', tiebreak: kickers };
+  if (by[0].count === 2 && by[1] && by[1].count === 2) return { rank: 2, name: 'Two Pair', tiebreak: [by[0].val, by[1].val, by[2] ? by[2].val : 0] };
+  if (by[0].count === 2) return { rank: 1, name: 'One Pair', tiebreak: kickers };
+  return { rank: 0, name: 'High Card', tiebreak: vals };
+}
+
+function evaluateHand(codes) {
+  if (!codes || !codes.length) return { rank: 0, name: 'No cards', tiebreak: [] };
+  if (codes.length <= 5) return scoreFive(codes);
+  let best = { rank: -1, name: 'No cards', tiebreak: [] };
+  for (const five of combinations(codes, 5)) {
+    const s = scoreFive(five);
+    if (compareScores(s, best) > 0) best = s;
+  }
+  return best;
+}
+
 function compareScores(a,b){if(a.rank!==b.rank)return a.rank-b.rank;for(let i=0;i<5;i++){const d=(a.tiebreak[i]||0)-(b.tiebreak[i]||0);if(d)return d}return 0}
 function escapeHtml(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''}
 const SUIT_GLYPH = { S: '\u2660', H: '\u2665', D: '\u2666', C: '\u2663' };
