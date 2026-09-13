@@ -137,7 +137,15 @@ function parsePokerPickupMeta(desc){
     radiusFt:m?Math.max(10,parseInt(m[2],10)||20):20
   };
 }
+function parseExpireMeta(desc){
+  var m=String(desc||'').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})\]\]/i);
+  if(!m)return 0;
+  var d=new Date(m[1]+'T'+m[2]+':00');
+  return isNaN(d.getTime())?0:d.getTime();
+}
 function pokerEventCompleted(ev){
+  var exp=parseExpireMeta(ev&&ev.description);
+  if(exp)return Date.now()>exp;
   if(!ev||!ev.event_date)return false;
   var dateStr=String(ev.event_date).slice(0,10);
   var timeStr='12:00:00';
@@ -168,7 +176,7 @@ function locCoords(loc){
   return null;
 }
 
-function getQuery(){const q=new URLSearchParams(location.search);return{eventId:q.get('e')||q.get('event'),token:q.get('t')||q.get('token'),geo:q.get('geo')}}
+function getQuery(){const q=new URLSearchParams(location.search);return{eventId:q.get('e')||q.get('event'),token:q.get('t')||q.get('token'),geo:q.get('geo'),board:q.get('board')}}
 function showPokerMsg(m){const el=document.getElementById('poker-status');if(!el)return;el.textContent=m||'';el.classList.toggle('hidden',!m)}
 
 async function getPokerUser(){
@@ -269,9 +277,11 @@ async function initPokerPage(){
   const q=getQuery();
   pokerEventId=q.eventId?parseInt(q.eventId,10):null;
   pokerToken=q.token;
-  pokerWantGeo=q.geo==='1'||q.geo==='true'||!pokerToken;
+  pokerWantGeo=q.geo==='1'||q.geo==='true';
+  var boardOnly=q.board==='1'||q.board==='true';
   if(!window.sb){setTimeout(initPokerPage,150);return}
-  if(pokerEventId&&pokerToken)await loadStopMode();
+  if(pokerEventId&&boardOnly)await loadLeaderboardOnly();
+  else if(pokerEventId&&pokerToken)await loadStopMode();
   else if(pokerEventId)await loadEventPokerHub();
   else showPokerMsg('Scan a checkpoint QR code or open an event to check in by GPS.');
 }
@@ -296,7 +306,8 @@ async function loadStopMode(){
     document.getElementById('poker-stop-desc').textContent=loc.description||'Draw your card for this checkpoint.';
     await tryResumeEntry();
     await refreshMyHand();
-    await refreshLeaderboard();
+    var lbStop=document.getElementById('poker-lb-panel');
+    if(lbStop)lbStop.classList.add('hidden');
     showPokerMsg('');
   }catch(e){
     console.error(e);
@@ -318,19 +329,49 @@ function applyPokerEventSettings(ev){
   if(lb&&!pokerResultsOpen)lb.classList.add('hidden');
 }
 
+function hidePokerPlayUi(){
+  var stop=document.getElementById('poker-stop-panel');
+  var geo=document.getElementById('poker-geo-panel');
+  var hand=document.getElementById('poker-my-hand');
+  if(stop)stop.classList.add('hidden');
+  if(geo)geo.classList.add('hidden');
+  if(hand)hand.classList.add('hidden');
+}
+
+async function loadLeaderboardOnly(){
+  showPokerMsg('Loading...');
+  hidePokerPlayUi();
+  try{
+    const{data:ev}=await window.sb.from('events').select('*').eq('id',pokerEventId).single();
+    applyPokerEventSettings(ev);
+    var t=document.getElementById('poker-event-name');
+    if(t)t.textContent=((ev&&ev.title)||'Poker Run')+' · Results';
+    if(!pokerResultsOpen){
+      var exp=String(ev&&ev.description||'').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})\]\]/i);
+      showPokerMsg(exp
+        ? ('Leaderboard unlocks '+exp[1]+' at '+exp[2]+'.')
+        : 'Leaderboard unlocks after the event expire time.');
+      var lb=document.getElementById('poker-lb-panel');
+      if(lb)lb.classList.add('hidden');
+      return;
+    }
+    showPokerMsg('');
+    await refreshLeaderboard();
+  }catch(e){
+    console.error(e);
+    showPokerMsg(e.message||'Load failed');
+  }
+}
+
 async function loadEventPokerHub(){
   showPokerMsg('Loading...');
   try{
     const{data:ev}=await window.sb.from('events').select('*').eq('id',pokerEventId).single();
     applyPokerEventSettings(ev);
-    if(pokerResultsOpen){
-      document.getElementById('poker-lb-panel').classList.remove('hidden');
-    }else{
-      document.getElementById('poker-lb-panel').classList.add('hidden');
-    }
+    var lbHub=document.getElementById('poker-lb-panel');
+    if(lbHub)lbHub.classList.add('hidden');
     await tryResumeEntry();
     await refreshMyHand();
-    await refreshLeaderboard();
     if(pokerPickupMode!=='qr'){
       document.getElementById('poker-stop-panel').classList.remove('hidden');
       var geo=document.getElementById('poker-geo-panel');
@@ -647,7 +688,6 @@ async function drawCard(){
     }
     showToast('You drew '+drawn.map(cardLabel).join(', '));
     await refreshMyHand();
-    await refreshLeaderboard();
   }catch(err){
     showToast(err.message||'Draw failed',true);
   }finally{
@@ -668,30 +708,47 @@ async function refreshMyHand(){
 
 async function refreshLeaderboard(){
   const panel=document.getElementById('poker-leaderboard');
-  const lb=document.getElementById('poker-lb-panel');
+  const wrap=document.getElementById('poker-lb-panel');
   if(!panel||!pokerEventId)return;
   if(!pokerResultsOpen){
     panel.innerHTML='';
     panel.classList.add('hidden');
-    if(lb)lb.classList.add('hidden');
+    if(wrap)wrap.classList.add('hidden');
     return;
   }
-  const{data:entries}=await window.sb.from('poker_entries').select('id, rider_name, poker_draws(cards)').eq('event_id',pokerEventId);
-  const rows=(entries||[]).map(en=>{
-    const cards=[];
-    (en.poker_draws||[]).forEach(d=>(d.cards||[]).forEach(c=>cards.push(c)));
-    return{name:en.rider_name,cards,scored:evaluateHand(cards),count:cards.length};
-  });
-  rows.sort((a,b)=>compareScores(b.scored,a.scored)||b.count-a.count);
-  panel.innerHTML='<div class="text-xs text-zinc-500 mb-3">Leaderboard</div><div class="space-y-2">'+(
-    rows.length?rows.map((r,i)=>{
-      const cardsHtml=r.cards.length?r.cards.map(c=>cardHtml(c,{flipped:true})).join(''):'<span class="text-zinc-600 text-xs">No cards</span>';
-      return '<div class="bg-zinc-900 border border-zinc-800 rounded-2xl px-3 py-3"><div class="flex items-center gap-3 mb-2"><div class="text-zinc-500 font-mono w-6">'+(i+1)+'</div><div class="flex-1 min-w-0"><div class="font-semibold truncate">'+escapeHtml(r.name)+'</div><div class="text-xs text-orange-400">'+(r.count?r.scored.name:'-')+' · '+r.count+' cards</div></div></div><div class="poker-hand-row pl-6">'+cardsHtml+'</div></div>';
-    }).join(''):'<p class="text-zinc-500 text-sm">No riders yet</p>'
-  )+'</div>';
-  panel.classList.remove('hidden');
-  const lb=document.getElementById('poker-lb-panel');
-  if(lb)lb.classList.remove('hidden');
+  try{
+    const ent=await window.sb.from('poker_entries').select('id, rider_name').eq('event_id',pokerEventId);
+    if(ent.error)throw ent.error;
+    const entries=ent.data||[];
+    const ids=entries.map(function(e){return e.id;});
+    var drawsByEntry={};
+    if(ids.length){
+      const dr=await window.sb.from('poker_draws').select('entry_id, cards').in('entry_id',ids);
+      if(dr.error)console.warn('[poker] draws',dr.error);
+      (dr.data||[]).forEach(function(d){
+        if(!drawsByEntry[d.entry_id])drawsByEntry[d.entry_id]=[];
+        (d.cards||[]).forEach(function(c){drawsByEntry[d.entry_id].push(c);});
+      });
+    }
+    const rows=entries.map(function(en){
+      const cards=drawsByEntry[en.id]||[];
+      return{name:en.rider_name,cards:cards,scored:evaluateHand(cards),count:cards.length};
+    });
+    rows.sort(function(a,b){return compareScores(b.scored,a.scored)||b.count-a.count;});
+    panel.innerHTML='<div class="text-xs text-zinc-500 mb-3">Leaderboard</div><div class="space-y-2">'+(
+      rows.length?rows.map(function(r,i){
+        const cardsHtml=r.cards.length?r.cards.map(function(c){return cardHtml(c,{flipped:true});}).join(''):'<span class="text-zinc-600 text-xs">No cards</span>';
+        return '<div class="bg-zinc-900 border border-zinc-800 rounded-2xl px-3 py-3"><div class="flex items-center gap-3 mb-2"><div class="text-zinc-500 font-mono w-6">'+(i+1)+'</div><div class="flex-1 min-w-0"><div class="font-semibold truncate">'+escapeHtml(r.name)+'</div><div class="text-xs text-orange-400">'+(r.count?r.scored.name:'-')+' · '+r.count+' cards</div></div></div><div class="poker-hand-row pl-6">'+cardsHtml+'</div></div>';
+      }).join(''):'<p class="text-zinc-500 text-sm">No riders yet</p>'
+    )+'</div>';
+    panel.classList.remove('hidden');
+    if(wrap)wrap.classList.remove('hidden');
+  }catch(err){
+    console.error('[poker] leaderboard',err);
+    panel.innerHTML='<p class="text-red-400 text-sm">'+escapeHtml(err.message||'Could not load leaderboard')+'</p>';
+    panel.classList.remove('hidden');
+    if(wrap)wrap.classList.remove('hidden');
+  }
 }
 
 async function loadPokerAdmin(eventId){

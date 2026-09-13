@@ -10,19 +10,63 @@ let editingEventBaseline = null;
 /** Encoded in event.description so no schema change is required:
  *  [[poker:both|qr|geo:20]]  mode + radius in feet
  */
+function stripEventMeta(desc) {
+  return String(desc || '')
+    .replace(/\s*\[\[poker:(both|qr|geo):\d+\]\]\s*/ig, '')
+    .replace(/\s*\[\[expire:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}\]\]\s*/ig, '')
+    .trim();
+}
 function parsePokerPickupMeta(desc) {
   var m = String(desc || '').match(/\[\[poker:(both|qr|geo):(\d+)\]\]/i);
   return {
     mode: m ? String(m[1]).toLowerCase() : 'both',
     radiusFt: m ? Math.max(10, parseInt(m[2], 10) || 20) : 20,
-    clean: String(desc || '').replace(/\s*\[\[poker:(both|qr|geo):\d+\]\]\s*/ig, '').trim()
+    clean: stripEventMeta(desc)
   };
 }
+function parseExpireMeta(desc) {
+  var m = String(desc || '').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})\]\]/i);
+  return {
+    date: m ? m[1] : '',
+    time: m ? m[2] : '',
+    ms: m ? new Date(m[1] + 'T' + m[2] + ':00').getTime() : 0
+  };
+}
+function withEventMeta(desc, opts) {
+  opts = opts || {};
+  var clean = stripEventMeta(desc);
+  var out = clean;
+  if (opts.pokerMode) {
+    var mode = (opts.pokerMode === 'qr' || opts.pokerMode === 'geo') ? opts.pokerMode : 'both';
+    var ft = Math.max(10, parseInt(opts.radiusFt, 10) || 20);
+    out = (out ? out + '\n' : '') + '[[poker:' + mode + ':' + ft + ']]';
+  }
+  if (opts.expireDate) {
+    var t = opts.expireTime || '23:59';
+    if (t.length === 5) t = t;
+    out = (out ? out + '\n' : '') + '[[expire:' + opts.expireDate + 'T' + t + ']]';
+  }
+  return out;
+}
 function withPokerPickupMeta(desc, mode, radiusFt) {
-  var clean = parsePokerPickupMeta(desc).clean;
-  var m = (mode === 'qr' || mode === 'geo') ? mode : 'both';
-  var ft = Math.max(10, parseInt(radiusFt, 10) || 20);
-  return (clean ? clean + '\n' : '') + '[[poker:' + m + ':' + ft + ']]';
+  var exp = parseExpireMeta(desc);
+  return withEventMeta(desc, {
+    pokerMode: mode,
+    radiusFt: radiusFt,
+    expireDate: exp.date || '',
+    expireTime: exp.time || ''
+  });
+}
+
+function eventExpireMs(ev) {
+  var exp = parseExpireMeta(ev && ev.description);
+  if (exp.ms && !isNaN(exp.ms)) return exp.ms;
+  return 0;
+}
+function eventLeaderboardUnlocked(ev) {
+  var ms = eventExpireMs(ev);
+  if (ms) return Date.now() > ms;
+  return isEventExpired(ev);
 }
 
 /** True once the event's date + time has passed (end of that day if no time). */
@@ -331,10 +375,10 @@ function renderEvents() {
     const pokerPickup = isPoker ? parsePokerPickupMeta(ev.description) : { mode: 'both' };
     const allowQr = !isPoker || pokerPickup.mode !== 'geo';
     const allowGeo = !isPoker || pokerPickup.mode !== 'qr';
-    const showPokerBoard = isPoker && isEventExpired(ev);
+    const showPokerBoard = isPoker && eventLeaderboardUnlocked(ev);
     const pokerBtn = isPoker ? (
       (showPokerBoard
-        ? `<a href="poker.html?e=${ev.id}" class="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase px-3 py-1.5 rounded-full bg-zinc-950 border border-orange-700/70 text-orange-400 hover:bg-orange-950/50 hover:border-orange-500 transition-colors">
+        ? `<a href="poker.html?e=${ev.id}&board=1" class="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase px-3 py-1.5 rounded-full bg-zinc-950 border border-orange-700/70 text-orange-400 hover:bg-orange-950/50 hover:border-orange-500 transition-colors">
           <i class="fa-solid fa-trophy text-[10px]"></i>Leaderboard
         </a>`
         : '') +
@@ -399,7 +443,7 @@ function renderEvents() {
             <div class="font-mono text-sm">${escapeHtml(timeLabel)}</div>
           </div>
         </div>
-        ${parsePokerPickupMeta(ev.description).clean ? `<p class="text-sm text-zinc-400 mt-3 line-clamp-3">${escapeHtml(parsePokerPickupMeta(ev.description).clean)}</p>` : ''}
+        ${stripEventMeta(ev.description) ? `<p class="text-sm text-zinc-400 mt-3 line-clamp-3">${escapeHtml(stripEventMeta(ev.description))}</p>` : ''}
         ${eventMapHtml}
         <div class="mt-auto pt-4">
           <div class="flex items-center gap-x-2 text-xs mb-4 flex-wrap gap-y-1">
@@ -899,9 +943,14 @@ function openEventModal(id) {
 
   const ev = id ? allEvents.find((e) => String(e.id) === String(id)) : null;
   document.getElementById('ev-title').value = ev ? ev.title : '';
-  document.getElementById('ev-description').value = ev ? parsePokerPickupMeta(ev.description).clean : '';
+  document.getElementById('ev-description').value = ev ? stripEventMeta(ev.description) : '';
   document.getElementById('ev-date').value = ev && ev.event_date ? normalizeEventField('event_date', ev.event_date) : '';
   document.getElementById('ev-time').value = ev && ev.event_time ? String(ev.event_time).slice(0, 5) : '';
+  var expMeta = parseExpireMeta(ev && ev.description);
+  var expDateEl = document.getElementById('ev-expire-date');
+  var expTimeEl = document.getElementById('ev-expire-time');
+  if (expDateEl) expDateEl.value = expMeta.date || '';
+  if (expTimeEl) expTimeEl.value = expMeta.time || '';
   document.getElementById('ev-location').value = ev ? (ev.location || '') : '';
   document.getElementById('ev-difficulty').value = ev ? (ev.difficulty || 'all_levels') : 'all_levels';
   document.getElementById('ev-capacity').value = ev ? (ev.capacity || 40) : 40;
@@ -1251,10 +1300,17 @@ async function saveEvent(e) {
     description: (function () {
       var raw = document.getElementById('ev-description').value.trim();
       var cat = document.getElementById('ev-category').value;
-      if (cat !== 'poker_run') return raw || null;
-      var modeEl = document.getElementById('ev-poker-pickup');
-      var radEl = document.getElementById('ev-poker-radius');
-      return withPokerPickupMeta(raw, modeEl && modeEl.value, radEl && radEl.value);
+      var expD = (document.getElementById('ev-expire-date') || {}).value || '';
+      var expT = (document.getElementById('ev-expire-time') || {}).value || '';
+      var opts = { expireDate: expD, expireTime: expT };
+      if (cat === 'poker_run') {
+        var modeEl = document.getElementById('ev-poker-pickup');
+        var radEl = document.getElementById('ev-poker-radius');
+        opts.pokerMode = (modeEl && modeEl.value) || 'both';
+        opts.radiusFt = radEl && radEl.value;
+      }
+      var tagged = withEventMeta(raw, opts);
+      return tagged || null;
     })() || null,
     event_date: document.getElementById('ev-date').value,
     event_time: document.getElementById('ev-time').value || null,
