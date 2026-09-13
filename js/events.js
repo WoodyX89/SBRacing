@@ -7,6 +7,36 @@ let isLeader = false;
 let canManageEvents = false;
 let editingEventId = null;
 let editingEventBaseline = null;
+/** Encoded in event.description so no schema change is required:
+ *  [[poker:both|qr|geo:20]]  mode + radius in feet
+ */
+function parsePokerPickupMeta(desc) {
+  var m = String(desc || '').match(/\[\[poker:(both|qr|geo):(\d+)\]\]/i);
+  return {
+    mode: m ? String(m[1]).toLowerCase() : 'both',
+    radiusFt: m ? Math.max(10, parseInt(m[2], 10) || 20) : 20,
+    clean: String(desc || '').replace(/\s*\[\[poker:(both|qr|geo):\d+\]\]\s*/ig, '').trim()
+  };
+}
+function withPokerPickupMeta(desc, mode, radiusFt) {
+  var clean = parsePokerPickupMeta(desc).clean;
+  var m = (mode === 'qr' || mode === 'geo') ? mode : 'both';
+  var ft = Math.max(10, parseInt(radiusFt, 10) || 20);
+  return (clean ? clean + '\n' : '') + '[[poker:' + m + ':' + ft + ']]';
+}
+
+/** True once the event's date + time has passed (end of that day if no time). */
+function eventDateTimePassed(ev) {
+  if (!ev || !ev.event_date) return false;
+  var dateStr = normalizeEventField('event_date', ev.event_date);
+  if (ev.event_time) {
+    return Date.now() > eventStartMs(ev);
+  }
+  var end = new Date(dateStr + 'T23:59:59');
+  if (isNaN(end.getTime())) return false;
+  return Date.now() > end.getTime();
+}
+
 /** Pending QR checkpoints while creating/editing a poker run in the modal */
 let pendingCheckpoints = [];
 let pendingMapPin = null; // { lat, lng } while placing
@@ -298,23 +328,34 @@ function renderEvents() {
     var badgeText = expired ? 'COMPLETED' : (ev.is_featured ? 'FEATURED' : (ev.category === 'clinic' ? 'CLINIC' : (ev.category === 'social' ? 'SOCIAL' : (ev.category === 'poker_run' ? 'POKER RUN' : 'RIDE'))));
 
     const isPoker = ev.category === 'poker_run';
-    const pokerBtn = (canManageEvents && isPoker) ? `
-        <a href="poker.html?e=${ev.id}" class="text-xs px-3 py-1.5 rounded-xl border border-orange-700 text-orange-400 hover:bg-orange-950/40">
-          <i class="fa-solid fa-spade mr-1"></i>Poker / leaderboard
-        </a>
-        <button type="button" onclick="showPokerAdminFor(${ev.id})" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">
-          Manage checkpoints
-        </button>` : (isPoker ? `
-        <a href="poker.html?e=${ev.id}" class="text-xs px-3 py-1.5 rounded-xl border border-orange-700 text-orange-400">
-          <i class="fa-solid fa-spade mr-1"></i>Leaderboard
-        </a>` : '');
+    const pokerPickup = isPoker ? parsePokerPickupMeta(ev.description) : { mode: 'both' };
+    const allowQr = !isPoker || pokerPickup.mode !== 'geo';
+    const allowGeo = !isPoker || pokerPickup.mode !== 'qr';
+    const showPokerBoard = isPoker && isEventExpired(ev);
+    const pokerBtn = isPoker ? (
+      (showPokerBoard
+        ? `<a href="poker.html?e=${ev.id}" class="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase px-3 py-1.5 rounded-full bg-zinc-950 border border-orange-700/70 text-orange-400 hover:bg-orange-950/50 hover:border-orange-500 transition-colors">
+          <i class="fa-solid fa-trophy text-[10px]"></i>Leaderboard
+        </a>`
+        : '') +
+      (canManageEvents
+        ? `<button type="button" onclick="showPokerAdminFor(${ev.id})" class="inline-flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">
+          Checkpoints
+        </button>`
+        : '')
+    ) : '';
     const trackRideBtn = isPoker
       ? `<a href="trails.html?event=${ev.id}" class="inline-flex items-center justify-center gap-1.5 w-full mt-2 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold text-white">
-          <i class="fa-solid fa-play"></i> Track ride · checkpoints on map
-        </a>
-        <button type="button" onclick="openEventQrScanner(${ev.id})" class="inline-flex items-center justify-center gap-1.5 w-full mt-2 py-2.5 rounded-2xl border border-orange-600 text-orange-400 hover:bg-orange-950/40 text-sm font-semibold">
-          <i class="fa-solid fa-qrcode"></i> Scan QR code
-        </button>`
+          <i class="fa-solid fa-play"></i> Track Ride
+        </a>` +
+        (allowQr
+          ? `<button type="button" onclick="openEventQrScanner(${ev.id})" class="inline-flex items-center justify-center gap-1.5 w-full mt-2 py-2.5 rounded-2xl border border-orange-600 text-orange-400 hover:bg-orange-950/40 text-sm font-semibold">
+          <i class="fa-solid fa-qrcode"></i> Scan QR Code
+        </button>` : '') +
+        (allowGeo
+          ? `<a href="poker.html?e=${ev.id}&geo=1" class="inline-flex items-center justify-center gap-1.5 w-full mt-2 py-2.5 rounded-2xl border border-emerald-600 text-emerald-400 hover:bg-emerald-950/40 text-sm font-semibold">
+          <i class="fa-solid fa-location-dot"></i> Check In By Location
+        </a>` : '')
       : '';
     const eventMapHtml = isPoker
       ? `<div id="event-map-${ev.id}" class="event-cp-map" data-event-map="${ev.id}"></div>
@@ -358,7 +399,7 @@ function renderEvents() {
             <div class="font-mono text-sm">${escapeHtml(timeLabel)}</div>
           </div>
         </div>
-        ${ev.description ? `<p class="text-sm text-zinc-400 mt-3 line-clamp-3">${escapeHtml(ev.description)}</p>` : ''}
+        ${parsePokerPickupMeta(ev.description).clean ? `<p class="text-sm text-zinc-400 mt-3 line-clamp-3">${escapeHtml(parsePokerPickupMeta(ev.description).clean)}</p>` : ''}
         ${eventMapHtml}
         <div class="mt-auto pt-4">
           <div class="flex items-center gap-x-2 text-xs mb-4 flex-wrap gap-y-1">
@@ -858,7 +899,7 @@ function openEventModal(id) {
 
   const ev = id ? allEvents.find((e) => String(e.id) === String(id)) : null;
   document.getElementById('ev-title').value = ev ? ev.title : '';
-  document.getElementById('ev-description').value = ev ? (ev.description || '') : '';
+  document.getElementById('ev-description').value = ev ? parsePokerPickupMeta(ev.description).clean : '';
   document.getElementById('ev-date').value = ev && ev.event_date ? normalizeEventField('event_date', ev.event_date) : '';
   document.getElementById('ev-time').value = ev && ev.event_time ? String(ev.event_time).slice(0, 5) : '';
   document.getElementById('ev-location').value = ev ? (ev.location || '') : '';
@@ -867,6 +908,11 @@ function openEventModal(id) {
   document.getElementById('ev-category').value = ev ? (ev.category || 'ride') : 'ride';
   document.getElementById('ev-featured').checked = !!(ev && ev.is_featured);
   document.getElementById('ev-members-only').checked = !!(ev && ev.is_members_only);
+  var pickupMeta = parsePokerPickupMeta(ev && ev.description);
+  var pickupEl = document.getElementById('ev-poker-pickup');
+  var radiusEl = document.getElementById('ev-poker-radius');
+  if (pickupEl) pickupEl.value = pickupMeta.mode;
+  if (radiusEl) radiusEl.value = pickupMeta.radiusFt;
 
   var nameEl = document.getElementById('ev-cp-name');
   var descEl = document.getElementById('ev-cp-desc');
@@ -1202,7 +1248,14 @@ async function saveEvent(e) {
 
   const payload = {
     title: document.getElementById('ev-title').value.trim(),
-    description: document.getElementById('ev-description').value.trim() || null,
+    description: (function () {
+      var raw = document.getElementById('ev-description').value.trim();
+      var cat = document.getElementById('ev-category').value;
+      if (cat !== 'poker_run') return raw || null;
+      var modeEl = document.getElementById('ev-poker-pickup');
+      var radEl = document.getElementById('ev-poker-radius');
+      return withPokerPickupMeta(raw, modeEl && modeEl.value, radEl && radEl.value);
+    })() || null,
     event_date: document.getElementById('ev-date').value,
     event_time: document.getElementById('ev-time').value || null,
     location: document.getElementById('ev-location').value.trim() || null,
