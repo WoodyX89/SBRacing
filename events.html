@@ -12,14 +12,43 @@
 <meta name="theme-color" content="#000000">
 <style>
   #ev-checkpoint-map {
-    height: 180px;
+    height: 168px;
     width: 100%;
     border-radius: 12px;
     background: #18181b;
     border: 1px solid #3f3f46;
   }
   @media (min-width: 640px) {
-    #ev-checkpoint-map { height: 240px; }
+    #ev-checkpoint-map { height: 220px; }
+  }
+  #event-edit-form input[type="date"],
+  #event-edit-form input[type="time"] {
+    color-scheme: dark;
+    min-width: 0;
+    width: 100%;
+    font-size: 16px;
+    line-height: 1.2;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  #event-edit-form input,
+  #event-edit-form select,
+  #event-edit-form textarea {
+    font-size: 16px;
+  }
+  .ev-when-card {
+    background: #09090b;
+    border: 1px solid #3f3f46;
+    border-radius: 16px;
+    padding: 10px 12px;
+  }
+  .ev-when-card label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #a1a1aa;
+    margin-bottom: 6px;
+    display: block;
   }
   #ev-cp-map-wrap.cp-map-fs {
     position: fixed;
@@ -52,7 +81,8 @@
     #event-modal { align-items: center; }
   }
   #event-modal-sheet {
-    max-height: min(92dvh, calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px));
+    max-height: min(94dvh, calc(100svh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 8px));
+    width: 100%;
   }
   .leaflet-container { font-family: inherit; background: #18181b; }
   .cp-flag-row {
@@ -181,44 +211,42 @@
         <div class="font-bold text-lg sm:text-xl" id="event-modal-title">Add Event</div>
         <button type="button" onclick="closeEventModal()" class="w-9 h-9 rounded-full border border-zinc-700 text-zinc-400 hover:text-white"><i class="fa-solid fa-times"></i></button>
       </div>
-      <form id="event-edit-form" onsubmit="saveEvent(event)" class="flex-1 overflow-y-auto px-4 py-4 space-y-3 text-sm" style="-webkit-overflow-scrolling:touch;">
+      <form id="event-edit-form" onsubmit="saveEvent(event)" class="flex-1 overflow-y-auto px-4 py-3 space-y-3 text-sm" style="-webkit-overflow-scrolling:touch;">
         <div>
-          <label class="block text-zinc-400 mb-1">Title *</label>
-          <input id="ev-title" required class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 focus:border-orange-600 outline-none">
+          <label class="block text-zinc-400 mb-1 text-xs uppercase tracking-wider">Title *</label>
+          <input id="ev-title" required class="w-full px-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 focus:border-orange-600 outline-none">
         </div>
         <div>
-          <label class="block text-zinc-400 mb-1">Description</label>
-          <textarea id="ev-description" rows="3" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 focus:border-orange-600 outline-none"></textarea>
+          <label class="block text-zinc-400 mb-1 text-xs uppercase tracking-wider">Description</label>
+          <textarea id="ev-description" rows="2" class="w-full px-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 focus:border-orange-600 outline-none resize-none"></textarea>
         </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-zinc-400 mb-1">Date *</label>
-            <input type="date" id="ev-date" required class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none">
+
+        <div class="grid grid-cols-1 gap-2">
+          <div class="ev-when-card">
+            <label><i class="fa-regular fa-calendar mr-1 text-orange-500"></i> Starts</label>
+            <div class="grid grid-cols-2 gap-2">
+              <input type="date" id="ev-date" required class="px-2 py-2 rounded-lg bg-zinc-950 border border-zinc-700 outline-none">
+              <input type="time" id="ev-time" class="px-2 py-2 rounded-lg bg-zinc-950 border border-zinc-700 outline-none">
+            </div>
           </div>
-          <div>
-            <label class="block text-zinc-400 mb-1">Time</label>
-            <input type="time" id="ev-time" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none">
-          </div>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-zinc-400 mb-1">Expire date</label>
-            <input type="date" id="ev-expire-date" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none">
-          </div>
-          <div>
-            <label class="block text-zinc-400 mb-1">Expire time</label>
-            <input type="time" id="ev-expire-time" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none">
+          <div class="ev-when-card">
+            <label><i class="fa-solid fa-eye mr-1 text-orange-500"></i> Reveal cards</label>
+            <div class="grid grid-cols-2 gap-2">
+              <input type="date" id="ev-expire-date" class="px-2 py-2 rounded-lg bg-zinc-950 border border-zinc-700 outline-none">
+              <input type="time" id="ev-expire-time" class="px-2 py-2 rounded-lg bg-zinc-950 border border-zinc-700 outline-none">
+            </div>
+            <p class="text-[10px] text-zinc-500 mt-2">Leaderboard stays face-down until this moment.</p>
           </div>
         </div>
-        <p class="text-[11px] text-zinc-500 -mt-1">After this date and time, leaderboard cards flip face up.</p>
+
         <div>
-          <label class="block text-zinc-400 mb-1">Location</label>
-          <input id="ev-location" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none" placeholder="e.g. Echo Dale Park">
+          <label class="block text-zinc-400 mb-1 text-xs uppercase tracking-wider">Location</label>
+          <input id="ev-location" class="w-full px-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 outline-none" placeholder="e.g. Echo Dale Park">
         </div>
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="block text-zinc-400 mb-1">Difficulty</label>
-            <select id="ev-difficulty" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none">
+            <label class="block text-zinc-400 mb-1 text-xs uppercase tracking-wider">Difficulty</label>
+            <select id="ev-difficulty" class="w-full px-2 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 outline-none">
               <option value="all_levels">All levels</option>
               <option value="easy">Easy</option>
               <option value="intermediate">Intermediate</option>
@@ -226,8 +254,8 @@
             </select>
           </div>
           <div>
-            <label class="block text-zinc-400 mb-1">Category</label>
-            <select id="ev-category" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none">
+            <label class="block text-zinc-400 mb-1 text-xs uppercase tracking-wider">Category</label>
+            <select id="ev-category" class="w-full px-2 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 outline-none">
               <option value="ride">Ride</option>
               <option value="clinic">Clinic</option>
               <option value="social">Social</option>
@@ -235,13 +263,15 @@
             </select>
           </div>
         </div>
-        <div>
-          <label class="block text-zinc-400 mb-1">Capacity</label>
-          <input type="number" id="ev-capacity" min="1" value="40" class="w-full px-4 py-3 rounded-2xl bg-zinc-950 border border-zinc-700 outline-none">
-        </div>
-        <div class="flex flex-wrap gap-4">
-          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="ev-featured" class="accent-orange-600"> Featured</label>
-          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="ev-members-only" class="accent-orange-600"> Members only</label>
+        <div class="grid grid-cols-2 gap-2 items-end">
+          <div>
+            <label class="block text-zinc-400 mb-1 text-xs uppercase tracking-wider">Capacity</label>
+            <input type="number" id="ev-capacity" min="1" value="40" class="w-full px-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-700 outline-none">
+          </div>
+          <div class="flex flex-col gap-2 pb-1">
+            <label class="flex items-center gap-2 cursor-pointer text-xs"><input type="checkbox" id="ev-featured" class="accent-orange-600"> Featured</label>
+            <label class="flex items-center gap-2 cursor-pointer text-xs"><input type="checkbox" id="ev-members-only" class="accent-orange-600"> Members only</label>
+          </div>
         </div>
 
         <!-- Poker run QR checkpoints (shown when category = poker_run) -->
@@ -272,7 +302,7 @@
               <div class="text-sm font-semibold">Place checkpoints</div>
               <button type="button" onclick="toggleCheckpointMapFullscreen(false)" class="px-3 py-1.5 rounded-xl bg-orange-600 text-sm font-semibold">Done</button>
             </div>
-            <button type="button" onclick="toggleCheckpointMapFullscreen(true)" class="cp-map-expand-btn absolute top-2 left-2 z-[500] px-2.5 py-1.5 rounded-xl bg-zinc-950/90 border border-zinc-600 text-xs font-semibold">
+            <button type="button" onclick="toggleCheckpointMapFullscreen(true)" class="cp-map-expand-btn absolute bottom-2 right-2 z-[500] px-2.5 py-1.5 rounded-xl bg-zinc-950/90 border border-zinc-600 text-xs font-semibold shadow-lg">
               <i class="fa-solid fa-expand mr-1"></i>Full screen
             </button>
             <div id="ev-checkpoint-map"></div>
