@@ -7,18 +7,71 @@ function fullDeck(){const d=[];for(const r of RANKS)for(const s of SUITS)d.push(
 function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function parseCard(c){return{code:c,rank:c.slice(0,-1),suit:c.slice(-1),val:RANK_VAL[c.slice(0,-1)]}}
 function cardLabel(c){const p=parseCard(c);return p.rank+p.suit}
-function evaluateHand(codes){
-  if(!codes||!codes.length)return{rank:0,name:'No cards',tiebreak:[]};
-  const vals=codes.map(c=>parseCard(c).val).sort((a,b)=>b-a);
-  const counts={};vals.forEach(v=>counts[v]=(counts[v]||0)+1);
-  const by=Object.entries(counts).map(([v,c])=>({val:+v,count:c})).sort((a,b)=>b.count-a.count||b.val-a.val);
-  if(by[0].count===4)return{rank:7,name:'Four of a Kind',tiebreak:[by[0].val]};
-  if(by[0].count===3&&by[1]&&by[1].count===2)return{rank:6,name:'Full House',tiebreak:[by[0].val,by[1].val]};
-  if(by[0].count===3)return{rank:3,name:'Three of a Kind',tiebreak:[by[0].val]};
-  if(by[0].count===2&&by[1]&&by[1].count===2)return{rank:2,name:'Two Pair',tiebreak:[by[0].val,by[1].val]};
-  if(by[0].count===2)return{rank:1,name:'One Pair',tiebreak:[by[0].val]};
-  return{rank:0,name:'High Card',tiebreak:vals};
+
+function combinations(arr, k) {
+  const out = [];
+  function rec(start, picked) {
+    if (picked.length === k) { out.push(picked.slice()); return; }
+    for (let i = start; i < arr.length; i++) {
+      picked.push(arr[i]);
+      rec(i + 1, picked);
+      picked.pop();
+    }
+  }
+  rec(0, []);
+  return out;
 }
+
+function scoreFive(codes) {
+  const parsed = codes.map(parseCard);
+  const vals = parsed.map(p => p.val).sort((a, b) => b - a);
+  const suits = parsed.map(p => p.suit);
+  const flush = codes.length >= 5 && suits.every(s => s === suits[0]);
+
+  const uniq = [...new Set(vals)].sort((a, b) => b - a);
+  const aceLow = uniq.includes(14) && [5, 4, 3, 2].every(v => uniq.includes(v));
+  let straight = false;
+  let straightHigh = 0;
+  if (uniq.length === 5) {
+    if (uniq[0] - uniq[4] === 4) {
+      straight = true;
+      straightHigh = uniq[0];
+    } else if (aceLow) {
+      straight = true;
+      straightHigh = 5;
+    }
+  }
+
+  const counts = {};
+  vals.forEach(v => { counts[v] = (counts[v] || 0) + 1; });
+  const by = Object.entries(counts)
+    .map(([v, c]) => ({ val: +v, count: c }))
+    .sort((a, b) => b.count - a.count || b.val - a.val);
+
+  const kickers = by.flatMap(b => Array(b.count).fill(b.val));
+
+  if (straight && flush) return { rank: 8, name: straightHigh === 14 ? 'Royal Flush' : 'Straight Flush', tiebreak: [straightHigh] };
+  if (by[0].count === 4) return { rank: 7, name: 'Four of a Kind', tiebreak: [by[0].val, by[1] ? by[1].val : 0] };
+  if (by[0].count === 3 && by[1] && by[1].count === 2) return { rank: 6, name: 'Full House', tiebreak: [by[0].val, by[1].val] };
+  if (flush) return { rank: 5, name: 'Flush', tiebreak: vals };
+  if (straight) return { rank: 4, name: 'Straight', tiebreak: [straightHigh] };
+  if (by[0].count === 3) return { rank: 3, name: 'Three of a Kind', tiebreak: kickers };
+  if (by[0].count === 2 && by[1] && by[1].count === 2) return { rank: 2, name: 'Two Pair', tiebreak: [by[0].val, by[1].val, by[2] ? by[2].val : 0] };
+  if (by[0].count === 2) return { rank: 1, name: 'One Pair', tiebreak: kickers };
+  return { rank: 0, name: 'High Card', tiebreak: vals };
+}
+
+function evaluateHand(codes) {
+  if (!codes || !codes.length) return { rank: 0, name: 'No cards', tiebreak: [] };
+  if (codes.length <= 5) return scoreFive(codes);
+  let best = { rank: -1, name: 'No cards', tiebreak: [] };
+  for (const five of combinations(codes, 5)) {
+    const s = scoreFive(five);
+    if (compareScores(s, best) > 0) best = s;
+  }
+  return best;
+}
+
 function compareScores(a,b){if(a.rank!==b.rank)return a.rank-b.rank;for(let i=0;i<5;i++){const d=(a.tiebreak[i]||0)-(b.tiebreak[i]||0);if(d)return d}return 0}
 function escapeHtml(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''}
 const SUIT_GLYPH = { S: '\u2660', H: '\u2665', D: '\u2666', C: '\u2663' };
@@ -49,6 +102,15 @@ function cardHtml(code, opts) {
 function renderCardFaceOnly(code) {
   return cardHtml(code, { large: false, flipped: true, deal: false });
 }
+function cardBackHtml() {
+  return (
+    '<div class="poker-card">' +
+      '<div class="poker-card-inner">' +
+        '<div class="poker-card-face poker-card-back"></div>' +
+      '</div>' +
+    '</div>'
+  );
+}
 
 function animateCardReveal(container, code) {
   if (!container) return Promise.resolve();
@@ -75,8 +137,56 @@ function animateCardReveal(container, code) {
 }
 
 let pokerEventId=null,pokerToken=null,pokerLocation=null,currentEntry=null,pokerLockedMember=false;
+let pokerPickupMode='both',pokerRadiusFt=20,pokerAllLocations=[],pokerGpsWatch=null,pokerLastGps=null,pokerWantGeo=false,pokerEventRow=null,pokerResultsOpen=false;
 
-function getQuery(){const q=new URLSearchParams(location.search);return{eventId:q.get('e')||q.get('event'),token:q.get('t')||q.get('token')}}
+function parsePokerPickupMeta(desc){
+  var m=String(desc||'').match(/\[\[poker:(both|qr|geo):(\d+)\]\]/i);
+  return{
+    mode:m?String(m[1]).toLowerCase():'both',
+    radiusFt:m?Math.max(10,parseInt(m[2],10)||20):20
+  };
+}
+function parseExpireMeta(desc){
+  var m=String(desc||'').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{1,2}:\d{2})(?::\d{2})?\]\]/i);
+  if(!m)return 0;
+  var hh=m[2].length===4?'0'+m[2]:m[2];
+  var d=new Date(m[1]+'T'+hh+':00');
+  return isNaN(d.getTime())?0:d.getTime();
+}
+function pokerEventCompleted(ev){
+  var exp=parseExpireMeta(ev&&ev.description);
+  if(exp)return Date.now()>exp;
+  if(!ev||!ev.event_date)return false;
+  var dateStr=String(ev.event_date).slice(0,10);
+  var timeStr='12:00:00';
+  if(ev.event_time){
+    var tm=String(ev.event_time);
+    var m=tm.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if(m)timeStr=(m[1].length===1?'0'+m[1]:m[1])+':'+m[2]+':'+(m[3]||'00');
+  }
+  var d=new Date(dateStr+'T'+timeStr);
+  if(isNaN(d.getTime()))d=new Date(dateStr+'T12:00:00');
+  if(isNaN(d.getTime()))return false;
+  return Date.now()>(d.getTime()+24*60*60*1000);
+}
+function haversineFeet(aLat,aLng,bLat,bLng){
+  var R=20902231; // earth radius in feet
+  var toR=Math.PI/180;
+  var dLat=(bLat-aLat)*toR,dLng=(bLng-aLng)*toR;
+  var s=Math.sin(dLat/2),s2=Math.sin(dLng/2);
+  var h=s*s+Math.cos(aLat*toR)*Math.cos(bLat*toR)*s2*s2;
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));
+}
+function locCoords(loc){
+  if(!loc)return null;
+  if(loc.lat!=null&&loc.lng!=null&&!isNaN(Number(loc.lat))&&!isNaN(Number(loc.lng)))
+    return{lat:Number(loc.lat),lng:Number(loc.lng)};
+  var m=String(loc.description||'').match(/📍\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)/);
+  if(m)return{lat:parseFloat(m[1]),lng:parseFloat(m[2])};
+  return null;
+}
+
+function getQuery(){const q=new URLSearchParams(location.search);return{eventId:q.get('e')||q.get('event'),token:q.get('t')||q.get('token'),geo:q.get('geo'),board:q.get('board')}}
 function showPokerMsg(m){const el=document.getElementById('poker-status');if(!el)return;el.textContent=m||'';el.classList.toggle('hidden',!m)}
 
 async function getPokerUser(){
@@ -177,10 +287,13 @@ async function initPokerPage(){
   const q=getQuery();
   pokerEventId=q.eventId?parseInt(q.eventId,10):null;
   pokerToken=q.token;
+  pokerWantGeo=q.geo==='1'||q.geo==='true';
+  var boardOnly=q.board==='1'||q.board==='true';
   if(!window.sb){setTimeout(initPokerPage,150);return}
-  if(pokerEventId&&pokerToken)await loadStopMode();
-  else if(pokerEventId)await loadLeaderboardOnly();
-  else showPokerMsg('Scan a checkpoint QR code to draw a card.');
+  if(pokerEventId&&boardOnly)await loadLeaderboardOnly();
+  else if(pokerEventId&&pokerToken)await loadStopMode();
+  else if(pokerEventId)await loadEventPokerHub();
+  else showPokerMsg('Scan a checkpoint QR code or open an event to check in by GPS.');
 }
 
 async function loadStopMode(){
@@ -191,13 +304,20 @@ async function loadStopMode(){
     if(!loc||!loc.is_active){showPokerMsg('Invalid checkpoint QR.');return}
     pokerLocation=loc;
     const{data:ev}=await window.sb.from('events').select('*').eq('id',pokerEventId).single();
+    applyPokerEventSettings(ev);
+    if(pokerPickupMode==='geo'){
+      showPokerMsg('This event uses GPS check-in, not QR. Opening nearby stops…');
+      await loadEventPokerHub();
+      return;
+    }
     document.getElementById('poker-stop-panel').classList.remove('hidden');
     document.getElementById('poker-stop-name').textContent=loc.name;
     document.getElementById('poker-event-name').textContent=(ev&&ev.title)||'Poker Run';
     document.getElementById('poker-stop-desc').textContent=loc.description||'Draw your card for this checkpoint.';
     await tryResumeEntry();
     await refreshMyHand();
-    await refreshLeaderboard();
+    var lbStop=document.getElementById('poker-lb-panel');
+    if(lbStop)lbStop.classList.add('hidden');
     showPokerMsg('');
   }catch(e){
     console.error(e);
@@ -205,15 +325,179 @@ async function loadStopMode(){
   }
 }
 
-async function loadLeaderboardOnly(){
-  document.getElementById('poker-stop-panel').classList.add('hidden');
-  document.getElementById('poker-lb-panel').classList.remove('hidden');
-  const{data:ev}=await window.sb.from('events').select('*').eq('id',pokerEventId).single();
-  const t=document.getElementById('poker-event-name');
+function applyPokerEventSettings(ev){
+  pokerEventRow=ev||null;
+  var meta=parsePokerPickupMeta(ev&&ev.description);
+  pokerPickupMode=meta.mode;
+  pokerRadiusFt=meta.radiusFt;
+  pokerResultsOpen=pokerEventCompleted(ev);
+  var t=document.getElementById('poker-event-name');
   if(t)t.textContent=(ev&&ev.title)||'Poker Run';
-  await refreshLeaderboard();
-  showPokerMsg('');
+  var r=document.getElementById('poker-geo-radius');
+  if(r)r.textContent='Pickup: '+(pokerPickupMode==='qr'?'QR only':pokerPickupMode==='geo'?'GPS only':'QR or GPS')+' · radius '+pokerRadiusFt+' ft';
 }
+
+function hidePokerPlayUi(){
+  var stop=document.getElementById('poker-stop-panel');
+  var geo=document.getElementById('poker-geo-panel');
+  var hand=document.getElementById('poker-my-hand');
+  if(stop)stop.classList.add('hidden');
+  if(geo)geo.classList.add('hidden');
+  if(hand)hand.classList.add('hidden');
+}
+
+async function loadLeaderboardOnly(){
+  showPokerMsg('Loading...');
+  hidePokerPlayUi();
+  try{
+    const{data:ev}=await window.sb.from('events').select('*').eq('id',pokerEventId).single();
+    applyPokerEventSettings(ev);
+    var t=document.getElementById('poker-event-name');
+    if(t)t.textContent=((ev&&ev.title)||'Poker Run')+' · Leaderboard';
+    var exp=String(ev&&ev.description||'').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{1,2}:\d{2})(?::\d{2})?\]\]/i);
+    showPokerMsg(pokerResultsOpen
+      ? 'Final hands are face up.'
+      : (exp ? ('Cards stay face down until '+exp[1]+' at '+exp[2]+'.') : 'Cards stay face down until the event is over.'));
+    await refreshLeaderboard();
+  }catch(e){
+    console.error(e);
+    showPokerMsg(e.message||'Load failed');
+  }
+}
+
+async function loadEventPokerHub(){
+  showPokerMsg('Loading...');
+  try{
+    const{data:ev}=await window.sb.from('events').select('*').eq('id',pokerEventId).single();
+    applyPokerEventSettings(ev);
+    var lbHub=document.getElementById('poker-lb-panel');
+    if(lbHub)lbHub.classList.add('hidden');
+    await tryResumeEntry();
+    await refreshMyHand();
+    if(pokerPickupMode!=='qr'){
+      document.getElementById('poker-stop-panel').classList.remove('hidden');
+      var geo=document.getElementById('poker-geo-panel');
+      if(geo)geo.classList.remove('hidden');
+      var stopName=document.getElementById('poker-stop-name');
+      if(stopName)stopName.textContent='Nearest checkpoint';
+      var stopDesc=document.getElementById('poker-stop-desc');
+      if(stopDesc)stopDesc.textContent='Stay within '+pokerRadiusFt+' ft of a flag, then draw. One card per stop.';
+      await loadPokerLocations();
+      await refreshPokerGps(false);
+    }else{
+      var geoOff=document.getElementById('poker-geo-panel');
+      if(geoOff)geoOff.classList.add('hidden');
+      document.getElementById('poker-stop-panel').classList.add('hidden');
+    }
+    showPokerMsg('');
+  }catch(e){
+    console.error(e);
+    showPokerMsg(e.message||'Load failed');
+  }
+}
+
+async function loadPokerLocations(){
+  var result=await window.sb.from('poker_locations').select('*').eq('event_id',pokerEventId).eq('is_active',true).order('sort_order',{ascending:true});
+  if(result.error){
+    result=await window.sb.from('poker_locations').select('*').eq('event_id',pokerEventId).order('sort_order',{ascending:true});
+  }
+  pokerAllLocations=result.data||[];
+}
+
+function setGeoStatus(msg){
+  var el=document.getElementById('poker-geo-status');
+  if(el)el.textContent=msg||'';
+}
+
+async function refreshPokerGps(forcePrompt){
+  if(!navigator.geolocation){
+    setGeoStatus('This device has no GPS.');
+    renderGeoList(null);
+    return;
+  }
+  setGeoStatus(forcePrompt?'Getting a fresh fix…':'Getting your location…');
+  try{
+    var pos=await new Promise(function(resolve,reject){
+      navigator.geolocation.getCurrentPosition(resolve,reject,{
+        enableHighAccuracy:true,
+        timeout:15000,
+        maximumAge:forcePrompt?0:15000
+      });
+    });
+    pokerLastGps={lat:pos.coords.latitude,lng:pos.coords.longitude,accFt:pos.coords.accuracy*3.28084};
+    setGeoStatus('GPS ±'+Math.round(pokerLastGps.accFt)+' ft');
+    renderGeoList(pokerLastGps);
+    startPokerGpsWatch();
+  }catch(err){
+    var code=err&&err.code;
+    setGeoStatus(code===1?'Location permission denied — enable it for this site.':'Could not get GPS. Try Refresh outdoors.');
+    renderGeoList(null);
+  }
+}
+
+function startPokerGpsWatch(){
+  if(pokerGpsWatch!=null||!navigator.geolocation)return;
+  pokerGpsWatch=navigator.geolocation.watchPosition(function(pos){
+    pokerLastGps={lat:pos.coords.latitude,lng:pos.coords.longitude,accFt:pos.coords.accuracy*3.28084};
+    setGeoStatus('GPS ±'+Math.round(pokerLastGps.accFt)+' ft');
+    renderGeoList(pokerLastGps);
+  },function(){},{enableHighAccuracy:true,maximumAge:5000});
+}
+
+function renderGeoList(gps){
+  var list=document.getElementById('poker-geo-list');
+  if(!list)return;
+  if(!pokerAllLocations.length){
+    list.innerHTML='<p class="text-sm text-zinc-500">No checkpoints with map flags yet.</p>';
+    return;
+  }
+  var rows=pokerAllLocations.map(function(loc){
+    var c=locCoords(loc);
+    var dist=null;
+    if(gps&&c)dist=haversineFeet(gps.lat,gps.lng,c.lat,c.lng);
+    var inRange=dist!=null&&dist<=pokerRadiusFt;
+    return{loc:loc,coords:c,dist:dist,inRange:inRange};
+  }).sort(function(a,b){
+    if(a.dist==null&&b.dist==null)return 0;
+    if(a.dist==null)return 1;
+    if(b.dist==null)return -1;
+    return a.dist-b.dist;
+  });
+  var nearestIn=rows.find(function(r){return r.inRange;});
+  if(nearestIn)pokerLocation=nearestIn.loc;
+  else if(!pokerToken)pokerLocation=null;
+  list.innerHTML=rows.map(function(r){
+    var distLabel=r.dist==null?'No coords on this flag':(r.dist<10?Math.round(r.dist)+' ft':Math.round(r.dist)+' ft away');
+    var badge=r.inRange?'<span class="text-emerald-400 text-[11px] font-semibold">IN RANGE</span>':'<span class="text-zinc-500 text-[11px]">Out of range</span>';
+    return '<button type="button" onclick="selectGeoCheckpoint('+r.loc.id+')" class="w-full text-left bg-zinc-900 border '+(r.inRange?'border-emerald-700':'border-zinc-800')+' rounded-2xl px-4 py-3 flex items-center gap-3">'
+      +'<i class="fa-solid fa-flag '+(r.inRange?'text-emerald-400':'text-orange-500')+'"></i>'
+      +'<div class="flex-1 min-w-0"><div class="font-semibold truncate">'+escapeHtml(r.loc.name)+'</div>'
+      +'<div class="text-[11px] text-zinc-500">'+distLabel+'</div></div>'+badge+'</button>';
+  }).join('');
+  var drawBtn=document.getElementById('btn-draw-card');
+  if(drawBtn){
+    drawBtn.disabled=!pokerLocation;
+    drawBtn.textContent=pokerLocation?('Draw card · '+pokerLocation.name):'Get within range to draw';
+  }
+}
+
+window.selectGeoCheckpoint=function(id){
+  var row=pokerAllLocations.find(function(l){return Number(l.id)===Number(id);});
+  if(!row)return;
+  var c=locCoords(row);
+  if(!pokerLastGps||!c){showToast('Need GPS and a mapped flag',true);return;}
+  var dist=haversineFeet(pokerLastGps.lat,pokerLastGps.lng,c.lat,c.lng);
+  if(dist>pokerRadiusFt){
+    showToast('You are '+Math.round(dist)+' ft away — need '+pokerRadiusFt+' ft',true);
+    return;
+  }
+  pokerLocation=row;
+  var stop=document.getElementById('poker-stop-name');
+  if(stop)stop.textContent=row.name;
+  showToast('Locked onto '+row.name);
+};
+
+window.refreshPokerGps=refreshPokerGps;
 
 function persistEntryId(entry){
   if(!entry||!entry.id||!pokerEventId)return;
@@ -363,7 +647,20 @@ async function joinPokerRun(ev){
 
 async function drawCard(){
   if(!currentEntry){showToast('Join with your name first',true);return}
-  if(!pokerLocation)return;
+  if(!pokerLocation){
+    showToast(pokerPickupMode==='qr'?'Scan a checkpoint QR first':'Get within range of a checkpoint first',true);
+    return;
+  }
+  if(!pokerToken && pokerPickupMode!=='qr'){
+    var c=locCoords(pokerLocation);
+    if(!c){showToast('This checkpoint has no map coordinates',true);return;}
+    if(!pokerLastGps){showToast('Turn on location and tap Refresh',true);return;}
+    var dist=haversineFeet(pokerLastGps.lat,pokerLastGps.lng,c.lat,c.lng);
+    if(dist>pokerRadiusFt){
+      showToast('Too far — '+Math.round(dist)+' ft from '+pokerLocation.name+' (need '+pokerRadiusFt+' ft)',true);
+      return;
+    }
+  }
   const btn=document.getElementById('btn-draw-card');
   if(btn)btn.disabled=true;
   try{
@@ -393,7 +690,6 @@ async function drawCard(){
     }
     showToast('You drew '+drawn.map(cardLabel).join(', '));
     await refreshMyHand();
-    await refreshLeaderboard();
   }catch(err){
     showToast(err.message||'Draw failed',true);
   }finally{
@@ -414,23 +710,51 @@ async function refreshMyHand(){
 
 async function refreshLeaderboard(){
   const panel=document.getElementById('poker-leaderboard');
+  const wrap=document.getElementById('poker-lb-panel');
   if(!panel||!pokerEventId)return;
-  const{data:entries}=await window.sb.from('poker_entries').select('id, rider_name, poker_draws(cards)').eq('event_id',pokerEventId);
-  const rows=(entries||[]).map(en=>{
-    const cards=[];
-    (en.poker_draws||[]).forEach(d=>(d.cards||[]).forEach(c=>cards.push(c)));
-    return{name:en.rider_name,cards,scored:evaluateHand(cards),count:cards.length};
-  });
-  rows.sort((a,b)=>compareScores(b.scored,a.scored)||b.count-a.count);
-  panel.innerHTML='<div class="text-xs text-zinc-500 mb-3">Leaderboard</div><div class="space-y-2">'+(
-    rows.length?rows.map((r,i)=>{
-      const cardsHtml=r.cards.length?r.cards.map(c=>cardHtml(c,{flipped:true})).join(''):'<span class="text-zinc-600 text-xs">No cards</span>';
-      return '<div class="bg-zinc-900 border border-zinc-800 rounded-2xl px-3 py-3"><div class="flex items-center gap-3 mb-2"><div class="text-zinc-500 font-mono w-6">'+(i+1)+'</div><div class="flex-1 min-w-0"><div class="font-semibold truncate">'+escapeHtml(r.name)+'</div><div class="text-xs text-orange-400">'+(r.count?r.scored.name:'-')+' · '+r.count+' cards</div></div></div><div class="poker-hand-row pl-6">'+cardsHtml+'</div></div>';
-    }).join(''):'<p class="text-zinc-500 text-sm">No riders yet</p>'
-  )+'</div>';
-  panel.classList.remove('hidden');
-  const lb=document.getElementById('poker-lb-panel');
-  if(lb)lb.classList.remove('hidden');
+  try{
+    const ent=await window.sb.from('poker_entries').select('id, rider_name').eq('event_id',pokerEventId);
+    if(ent.error)throw ent.error;
+    const entries=ent.data||[];
+    const ids=entries.map(function(e){return e.id;});
+    var drawsByEntry={};
+    if(ids.length){
+      const dr=await window.sb.from('poker_draws').select('entry_id, cards').in('entry_id',ids);
+      if(dr.error)console.warn('[poker] draws',dr.error);
+      (dr.data||[]).forEach(function(d){
+        if(!drawsByEntry[d.entry_id])drawsByEntry[d.entry_id]=[];
+        (d.cards||[]).forEach(function(c){drawsByEntry[d.entry_id].push(c);});
+      });
+    }
+    const reveal=!!pokerResultsOpen;
+    const rows=entries.map(function(en){
+      const cards=drawsByEntry[en.id]||[];
+      return{name:en.rider_name,cards:cards,scored:evaluateHand(cards),count:cards.length};
+    });
+    rows.sort(function(a,b){
+      if(reveal)return compareScores(b.scored,a.scored)||b.count-a.count;
+      return b.count-a.count||String(a.name||'').localeCompare(String(b.name||''));
+    });
+    var heading='<div class="flex items-baseline justify-between gap-3 mb-3"><div class="text-xs text-zinc-500">'+rows.length+' rider'+(rows.length===1?'':'s')+'</div>'+(reveal?'<div class="text-xs text-orange-400">Hands revealed</div>':'<div class="text-xs text-zinc-500">Face down until expire</div>')+'</div>';
+    panel.innerHTML=heading+'<div class="space-y-2">'+(
+      rows.length?rows.map(function(r,i){
+        const cardsHtml=r.cards.length
+          ? r.cards.map(function(c){return reveal?cardHtml(c,{flipped:true}):cardBackHtml();}).join('')
+          : '<span class="text-zinc-600 text-xs">No cards</span>';
+        var sub=reveal
+          ? ((r.count?r.scored.name:'-')+' · '+r.count+' card'+(r.count===1?'':'s'))
+          : (r.count+' card'+(r.count===1?'':'s'));
+        return '<div class="bg-zinc-900 border border-zinc-800 rounded-2xl px-3 py-3"><div class="flex items-center gap-3 mb-2"><div class="text-zinc-500 font-mono w-6">'+(i+1)+'</div><div class="flex-1 min-w-0"><div class="font-semibold truncate">'+escapeHtml(r.name)+'</div><div class="text-xs text-orange-400">'+sub+'</div></div></div><div class="poker-hand-row pl-6">'+cardsHtml+'</div></div>';
+      }).join(''):'<p class="text-zinc-500 text-sm">No riders yet</p>'
+    )+'</div>';
+    panel.classList.remove('hidden');
+    if(wrap)wrap.classList.remove('hidden');
+  }catch(err){
+    console.error('[poker] leaderboard',err);
+    panel.innerHTML='<p class="text-red-400 text-sm">'+escapeHtml(err.message||'Could not load leaderboard')+'</p>';
+    panel.classList.remove('hidden');
+    if(wrap)wrap.classList.remove('hidden');
+  }
 }
 
 async function loadPokerAdmin(eventId){
@@ -476,7 +800,7 @@ async function loadPokerAdmin(eventId){
         </div>`;
       }).join('') || '<p class="text-zinc-500 text-sm">No checkpoints yet</p>'
     }</div>
-    <div class="mt-4"><a class="text-orange-500 text-sm" href="poker.html?e=${eventId}">Leaderboard →</a></div>`;
+    <div class="mt-4 text-xs text-zinc-500">Leaderboard posts when the event is marked completed.</div>`;
 }
 
 async function addPokerLocation(eventId){

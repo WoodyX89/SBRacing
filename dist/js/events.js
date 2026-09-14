@@ -7,6 +7,89 @@ let isLeader = false;
 let canManageEvents = false;
 let editingEventId = null;
 let editingEventBaseline = null;
+/** Encoded in event.description so no schema change is required:
+ *  [[poker:both|qr|geo:20]]  mode + radius in feet
+ */
+function normalizeClock(val) {
+  var s = String(val || '').trim();
+  var m = s.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return '';
+  var h = m[1].length === 1 ? '0' + m[1] : m[1];
+  return h + ':' + m[2];
+}
+function stripEventMeta(desc) {
+  return String(desc || '')
+    .replace(/\s*\[\[poker:(both|qr|geo):\d+\]\]\s*/ig, '')
+    .replace(/\s*\[\[expire:\d{4}-\d{2}-\d{2}T\d{1,2}:\d{2}(?::\d{2})?\]\]\s*/ig, '')
+    .trim();
+}
+function parsePokerPickupMeta(desc) {
+  var m = String(desc || '').match(/\[\[poker:(both|qr|geo):(\d+)\]\]/i);
+  return {
+    mode: m ? String(m[1]).toLowerCase() : 'both',
+    radiusFt: m ? Math.max(10, parseInt(m[2], 10) || 20) : 20,
+    clean: stripEventMeta(desc)
+  };
+}
+function parseExpireMeta(desc) {
+  var m = String(desc || '').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{1,2}:\d{2})(?::\d{2})?\]\]/i);
+  var date = m ? m[1] : '';
+  var time = m ? normalizeClock(m[2]) : '';
+  var ms = 0;
+  if (date && time) {
+    var d = new Date(date + 'T' + time + ':00');
+    if (!isNaN(d.getTime())) ms = d.getTime();
+  }
+  return { date: date, time: time, ms: ms };
+}
+function withEventMeta(desc, opts) {
+  opts = opts || {};
+  var clean = stripEventMeta(desc);
+  var out = clean;
+  if (opts.pokerMode) {
+    var mode = (opts.pokerMode === 'qr' || opts.pokerMode === 'geo') ? opts.pokerMode : 'both';
+    var ft = Math.max(10, parseInt(opts.radiusFt, 10) || 20);
+    out = (out ? out + '\n' : '') + '[[poker:' + mode + ':' + ft + ']]';
+  }
+  if (opts.expireDate) {
+    var t = normalizeClock(opts.expireTime) || '23:59';
+    out = (out ? out + '\n' : '') + '[[expire:' + opts.expireDate + 'T' + t + ']]';
+  }
+  return out;
+}
+function withPokerPickupMeta(desc, mode, radiusFt) {
+  var exp = parseExpireMeta(desc);
+  return withEventMeta(desc, {
+    pokerMode: mode,
+    radiusFt: radiusFt,
+    expireDate: exp.date || '',
+    expireTime: exp.time || ''
+  });
+}
+
+function eventExpireMs(ev) {
+  var exp = parseExpireMeta(ev && ev.description);
+  if (exp.ms && !isNaN(exp.ms)) return exp.ms;
+  return 0;
+}
+function eventLeaderboardUnlocked(ev) {
+  var ms = eventExpireMs(ev);
+  if (ms) return Date.now() > ms;
+  return isEventExpired(ev);
+}
+
+/** True once the event's date + time has passed (end of that day if no time). */
+function eventDateTimePassed(ev) {
+  if (!ev || !ev.event_date) return false;
+  var dateStr = normalizeEventField('event_date', ev.event_date);
+  if (ev.event_time) {
+    return Date.now() > eventStartMs(ev);
+  }
+  var end = new Date(dateStr + 'T23:59:59');
+  if (isNaN(end.getTime())) return false;
+  return Date.now() > end.getTime();
+}
+
 /** Pending QR checkpoints while creating/editing a poker run in the modal */
 let pendingCheckpoints = [];
 let pendingMapPin = null; // { lat, lng } while placing
@@ -298,23 +381,31 @@ function renderEvents() {
     var badgeText = expired ? 'COMPLETED' : (ev.is_featured ? 'FEATURED' : (ev.category === 'clinic' ? 'CLINIC' : (ev.category === 'social' ? 'SOCIAL' : (ev.category === 'poker_run' ? 'POKER RUN' : 'RIDE'))));
 
     const isPoker = ev.category === 'poker_run';
-    const pokerBtn = (canManageEvents && isPoker) ? `
-        <a href="poker.html?e=${ev.id}" class="text-xs px-3 py-1.5 rounded-xl border border-orange-700 text-orange-400 hover:bg-orange-950/40">
-          <i class="fa-solid fa-spade mr-1"></i>Poker / leaderboard
-        </a>
-        <button type="button" onclick="showPokerAdminFor(${ev.id})" class="text-xs px-3 py-1.5 rounded-xl border border-zinc-600 hover:bg-zinc-800">
-          Manage checkpoints
-        </button>` : (isPoker ? `
-        <a href="poker.html?e=${ev.id}" class="text-xs px-3 py-1.5 rounded-xl border border-orange-700 text-orange-400">
-          <i class="fa-solid fa-spade mr-1"></i>Leaderboard
-        </a>` : '');
+    const pokerPickup = isPoker ? parsePokerPickupMeta(ev.description) : { mode: 'both' };
+    const allowQr = !isPoker || pokerPickup.mode !== 'geo';
+    const allowGeo = !isPoker || pokerPickup.mode !== 'qr';
+    const pokerBtn = isPoker ? (
+      (`<a href="poker.html?e=${ev.id}&board=1" class="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase px-3 py-1.5 rounded-full bg-zinc-950 border border-orange-700/70 text-orange-400 hover:bg-orange-950/50 hover:border-orange-500 transition-colors">
+          <i class="fa-solid fa-trophy text-[10px]"></i>Leaderboard
+        </a>`) +
+      (canManageEvents
+        ? `<button type="button" onclick="showPokerAdminFor(${ev.id})" class="inline-flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">
+          Checkpoints
+        </button>`
+        : '')
+    ) : '';
     const trackRideBtn = isPoker
       ? `<a href="trails.html?event=${ev.id}" class="inline-flex items-center justify-center gap-1.5 w-full mt-2 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold text-white">
-          <i class="fa-solid fa-play"></i> Track ride · checkpoints on map
-        </a>
-        <button type="button" onclick="openEventQrScanner(${ev.id})" class="inline-flex items-center justify-center gap-1.5 w-full mt-2 py-2.5 rounded-2xl border border-orange-600 text-orange-400 hover:bg-orange-950/40 text-sm font-semibold">
-          <i class="fa-solid fa-qrcode"></i> Scan QR code
-        </button>`
+          <i class="fa-solid fa-play"></i> Track Ride
+        </a>` +
+        (allowQr
+          ? `<button type="button" onclick="openEventQrScanner(${ev.id})" class="inline-flex items-center justify-center gap-1.5 w-full mt-2 py-2.5 rounded-2xl border border-orange-600 text-orange-400 hover:bg-orange-950/40 text-sm font-semibold">
+          <i class="fa-solid fa-qrcode"></i> Scan QR Code
+        </button>` : '') +
+        (allowGeo
+          ? `<a href="poker.html?e=${ev.id}&geo=1" class="inline-flex items-center justify-center gap-1.5 w-full mt-2 py-2.5 rounded-2xl border border-emerald-600 text-emerald-400 hover:bg-emerald-950/40 text-sm font-semibold">
+          <i class="fa-solid fa-location-dot"></i> Check In By Location
+        </a>` : '')
       : '';
     const eventMapHtml = isPoker
       ? `<div id="event-map-${ev.id}" class="event-cp-map" data-event-map="${ev.id}"></div>
@@ -358,7 +449,7 @@ function renderEvents() {
             <div class="font-mono text-sm">${escapeHtml(timeLabel)}</div>
           </div>
         </div>
-        ${ev.description ? `<p class="text-sm text-zinc-400 mt-3 line-clamp-3">${escapeHtml(ev.description)}</p>` : ''}
+        ${stripEventMeta(ev.description) ? `<p class="text-sm text-zinc-400 mt-3 line-clamp-3">${escapeHtml(stripEventMeta(ev.description))}</p>` : ''}
         ${eventMapHtml}
         <div class="mt-auto pt-4">
           <div class="flex items-center gap-x-2 text-xs mb-4 flex-wrap gap-y-1">
@@ -858,15 +949,25 @@ function openEventModal(id) {
 
   const ev = id ? allEvents.find((e) => String(e.id) === String(id)) : null;
   document.getElementById('ev-title').value = ev ? ev.title : '';
-  document.getElementById('ev-description').value = ev ? (ev.description || '') : '';
+  document.getElementById('ev-description').value = ev ? stripEventMeta(ev.description) : '';
   document.getElementById('ev-date').value = ev && ev.event_date ? normalizeEventField('event_date', ev.event_date) : '';
   document.getElementById('ev-time').value = ev && ev.event_time ? String(ev.event_time).slice(0, 5) : '';
+  var expMeta = parseExpireMeta(ev && ev.description);
+  var expDateEl = document.getElementById('ev-expire-date');
+  var expTimeEl = document.getElementById('ev-expire-time');
+  if (expDateEl) expDateEl.value = expMeta.date || '';
+  if (expTimeEl) expTimeEl.value = expMeta.time || '';
   document.getElementById('ev-location').value = ev ? (ev.location || '') : '';
   document.getElementById('ev-difficulty').value = ev ? (ev.difficulty || 'all_levels') : 'all_levels';
   document.getElementById('ev-capacity').value = ev ? (ev.capacity || 40) : 40;
   document.getElementById('ev-category').value = ev ? (ev.category || 'ride') : 'ride';
   document.getElementById('ev-featured').checked = !!(ev && ev.is_featured);
   document.getElementById('ev-members-only').checked = !!(ev && ev.is_members_only);
+  var pickupMeta = parsePokerPickupMeta(ev && ev.description);
+  var pickupEl = document.getElementById('ev-poker-pickup');
+  var radiusEl = document.getElementById('ev-poker-radius');
+  if (pickupEl) pickupEl.value = pickupMeta.mode;
+  if (radiusEl) radiusEl.value = pickupMeta.radiusFt;
 
   var nameEl = document.getElementById('ev-cp-name');
   var descEl = document.getElementById('ev-cp-desc');
@@ -900,9 +1001,25 @@ function openEventModal(id) {
     cat._pokerBound = true;
   }
   onEventCategoryChange();
+
+  if (ev && ev.id && window.sb) {
+    window.sb.from('events').select('description').eq('id', ev.id).maybeSingle().then(function (res) {
+      if (!res || !res.data) return;
+      var live = res.data.description || '';
+      ev.description = live;
+      document.getElementById('ev-description').value = stripEventMeta(live);
+      var liveExp = parseExpireMeta(live);
+      if (expDateEl) expDateEl.value = liveExp.date || '';
+      if (expTimeEl) expTimeEl.value = liveExp.time || '';
+      var livePick = parsePokerPickupMeta(live);
+      if (pickupEl) pickupEl.value = livePick.mode;
+      if (radiusEl) radiusEl.value = livePick.radiusFt;
+    }).catch(function () {});
+  }
 }
 
 function closeEventModal() {
+  if (typeof toggleCheckpointMapFullscreen === 'function') toggleCheckpointMapFullscreen(false);
   const modal = document.getElementById('event-modal');
   if (!modal) return;
   modal.classList.add('hidden');
@@ -917,6 +1034,41 @@ function closeEventModal() {
     evPendingMarker = null;
   }
 }
+
+function syncCpName(el) {
+  var a = document.getElementById('ev-cp-name');
+  var b = document.getElementById('ev-cp-name-fs');
+  var v = el ? el.value : (a && a.value) || '';
+  if (a && a !== el) a.value = v;
+  if (b && b !== el) b.value = v;
+}
+function syncCpDesc(el) {
+  var a = document.getElementById('ev-cp-desc');
+  var b = document.getElementById('ev-cp-desc-fs');
+  var v = el ? el.value : (a && a.value) || '';
+  if (a && a !== el) a.value = v;
+  if (b && b !== el) b.value = v;
+}
+function toggleCheckpointMapFullscreen(on) {
+  var wrap = document.getElementById('ev-cp-map-wrap');
+  if (!wrap) return;
+  var enable = (on === true || on === false) ? on : !wrap.classList.contains('cp-map-fs');
+  wrap.classList.toggle('cp-map-fs', enable);
+  document.body.style.overflow = enable ? 'hidden' : '';
+  setTimeout(function () {
+    if (evCheckpointMap) {
+      try { evCheckpointMap.invalidateSize(); } catch (e) {}
+    }
+  }, 80);
+  setTimeout(function () {
+    if (evCheckpointMap) {
+      try { evCheckpointMap.invalidateSize(); } catch (e) {}
+    }
+  }, 250);
+}
+window.toggleCheckpointMapFullscreen = toggleCheckpointMapFullscreen;
+window.syncCpName = syncCpName;
+window.syncCpDesc = syncCpDesc;
 
 function onEventCategoryChange() {
   var cat = document.getElementById('ev-category');
@@ -958,6 +1110,7 @@ function placeEvCheckpointPin(latlng, trailName) {
   var nameEl = document.getElementById('ev-cp-name');
   if (trailName && nameEl && !nameEl.value.trim()) {
     nameEl.value = trailName;
+    if (typeof syncCpName === 'function') syncCpName(nameEl);
   }
   showToast(trailName
     ? 'Pin on “' + trailName + '” — name it and tap Add flag'
@@ -1041,7 +1194,10 @@ function clearPendingMapPin() {
 function confirmPendingCheckpoint() {
   var nameEl = document.getElementById('ev-cp-name');
   var descEl = document.getElementById('ev-cp-desc');
-  var name = (nameEl && nameEl.value || '').trim();
+  var nameFs = document.getElementById('ev-cp-name-fs');
+  var descFs = document.getElementById('ev-cp-desc-fs');
+  var name = ((nameEl && nameEl.value) || (nameFs && nameFs.value) || '').trim();
+  var note = ((descEl && descEl.value) || (descFs && descFs.value) || '').trim();
   if (!name) {
     showToast('Enter a checkpoint name', true);
     return;
@@ -1052,12 +1208,14 @@ function confirmPendingCheckpoint() {
   }
   pendingCheckpoints.push({
     name: name,
-    description: (descEl && descEl.value || '').trim() || null,
+    description: note || null,
     lat: pendingMapPin.lat,
     lng: pendingMapPin.lng
   });
   if (nameEl) nameEl.value = '';
   if (descEl) descEl.value = '';
+  if (nameFs) nameFs.value = '';
+  if (descFs) descFs.value = '';
   clearPendingMapPin();
   renderPendingCheckpointList();
   showToast('Checkpoint added (' + pendingCheckpoints.length + ')');
@@ -1202,7 +1360,21 @@ async function saveEvent(e) {
 
   const payload = {
     title: document.getElementById('ev-title').value.trim(),
-    description: document.getElementById('ev-description').value.trim() || null,
+    description: (function () {
+      var raw = document.getElementById('ev-description').value.trim();
+      var cat = document.getElementById('ev-category').value;
+      var expD = (document.getElementById('ev-expire-date') || {}).value || '';
+      var expT = normalizeClock((document.getElementById('ev-expire-time') || {}).value || '');
+      var opts = { expireDate: expD, expireTime: expT };
+      if (cat === 'poker_run') {
+        var modeEl = document.getElementById('ev-poker-pickup');
+        var radEl = document.getElementById('ev-poker-radius');
+        opts.pokerMode = (modeEl && modeEl.value) || 'both';
+        opts.radiusFt = radEl && radEl.value;
+      }
+      var tagged = withEventMeta(raw, opts);
+      return tagged || null;
+    })() || null,
     event_date: document.getElementById('ev-date').value,
     event_time: document.getElementById('ev-time').value || null,
     location: document.getElementById('ev-location').value.trim() || null,

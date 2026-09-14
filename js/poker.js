@@ -26,7 +26,7 @@ function scoreFive(codes) {
   const parsed = codes.map(parseCard);
   const vals = parsed.map(p => p.val).sort((a, b) => b - a);
   const suits = parsed.map(p => p.suit);
-  const flush = suits.every(s => s === suits[0]);
+  const flush = codes.length >= 5 && suits.every(s => s === suits[0]);
 
   const uniq = [...new Set(vals)].sort((a, b) => b - a);
   const aceLow = uniq.includes(14) && [5, 4, 3, 2].every(v => uniq.includes(v));
@@ -102,6 +102,15 @@ function cardHtml(code, opts) {
 function renderCardFaceOnly(code) {
   return cardHtml(code, { large: false, flipped: true, deal: false });
 }
+function cardBackHtml() {
+  return (
+    '<div class="poker-card">' +
+      '<div class="poker-card-inner">' +
+        '<div class="poker-card-face poker-card-back"></div>' +
+      '</div>' +
+    '</div>'
+  );
+}
 
 function animateCardReveal(container, code) {
   if (!container) return Promise.resolve();
@@ -138,9 +147,10 @@ function parsePokerPickupMeta(desc){
   };
 }
 function parseExpireMeta(desc){
-  var m=String(desc||'').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})\]\]/i);
+  var m=String(desc||'').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{1,2}:\d{2})(?::\d{2})?\]\]/i);
   if(!m)return 0;
-  var d=new Date(m[1]+'T'+m[2]+':00');
+  var hh=m[2].length===4?'0'+m[2]:m[2];
+  var d=new Date(m[1]+'T'+hh+':00');
   return isNaN(d.getTime())?0:d.getTime();
 }
 function pokerEventCompleted(ev){
@@ -325,8 +335,6 @@ function applyPokerEventSettings(ev){
   if(t)t.textContent=(ev&&ev.title)||'Poker Run';
   var r=document.getElementById('poker-geo-radius');
   if(r)r.textContent='Pickup: '+(pokerPickupMode==='qr'?'QR only':pokerPickupMode==='geo'?'GPS only':'QR or GPS')+' · radius '+pokerRadiusFt+' ft';
-  var lb=document.getElementById('poker-lb-panel');
-  if(lb&&!pokerResultsOpen)lb.classList.add('hidden');
 }
 
 function hidePokerPlayUi(){
@@ -345,17 +353,11 @@ async function loadLeaderboardOnly(){
     const{data:ev}=await window.sb.from('events').select('*').eq('id',pokerEventId).single();
     applyPokerEventSettings(ev);
     var t=document.getElementById('poker-event-name');
-    if(t)t.textContent=((ev&&ev.title)||'Poker Run')+' · Results';
-    if(!pokerResultsOpen){
-      var exp=String(ev&&ev.description||'').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})\]\]/i);
-      showPokerMsg(exp
-        ? ('Leaderboard unlocks '+exp[1]+' at '+exp[2]+'.')
-        : 'Leaderboard unlocks after the event expire time.');
-      var lb=document.getElementById('poker-lb-panel');
-      if(lb)lb.classList.add('hidden');
-      return;
-    }
-    showPokerMsg('');
+    if(t)t.textContent=((ev&&ev.title)||'Poker Run')+' · Leaderboard';
+    var exp=String(ev&&ev.description||'').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{1,2}:\d{2})(?::\d{2})?\]\]/i);
+    showPokerMsg(pokerResultsOpen
+      ? 'Final hands are face up.'
+      : (exp ? ('Cards stay face down until '+exp[1]+' at '+exp[2]+'.') : 'Cards stay face down until the event is over.'));
     await refreshLeaderboard();
   }catch(e){
     console.error(e);
@@ -710,12 +712,6 @@ async function refreshLeaderboard(){
   const panel=document.getElementById('poker-leaderboard');
   const wrap=document.getElementById('poker-lb-panel');
   if(!panel||!pokerEventId)return;
-  if(!pokerResultsOpen){
-    panel.innerHTML='';
-    panel.classList.add('hidden');
-    if(wrap)wrap.classList.add('hidden');
-    return;
-  }
   try{
     const ent=await window.sb.from('poker_entries').select('id, rider_name').eq('event_id',pokerEventId);
     if(ent.error)throw ent.error;
@@ -730,15 +726,25 @@ async function refreshLeaderboard(){
         (d.cards||[]).forEach(function(c){drawsByEntry[d.entry_id].push(c);});
       });
     }
+    const reveal=!!pokerResultsOpen;
     const rows=entries.map(function(en){
       const cards=drawsByEntry[en.id]||[];
       return{name:en.rider_name,cards:cards,scored:evaluateHand(cards),count:cards.length};
     });
-    rows.sort(function(a,b){return compareScores(b.scored,a.scored)||b.count-a.count;});
-    panel.innerHTML='<div class="text-xs text-zinc-500 mb-3">Leaderboard</div><div class="space-y-2">'+(
+    rows.sort(function(a,b){
+      if(reveal)return compareScores(b.scored,a.scored)||b.count-a.count;
+      return b.count-a.count||String(a.name||'').localeCompare(String(b.name||''));
+    });
+    var heading='<div class="flex items-baseline justify-between gap-3 mb-3"><div class="text-xs text-zinc-500">'+rows.length+' rider'+(rows.length===1?'':'s')+'</div>'+(reveal?'<div class="text-xs text-orange-400">Hands revealed</div>':'<div class="text-xs text-zinc-500">Face down until expire</div>')+'</div>';
+    panel.innerHTML=heading+'<div class="space-y-2">'+(
       rows.length?rows.map(function(r,i){
-        const cardsHtml=r.cards.length?r.cards.map(function(c){return cardHtml(c,{flipped:true});}).join(''):'<span class="text-zinc-600 text-xs">No cards</span>';
-        return '<div class="bg-zinc-900 border border-zinc-800 rounded-2xl px-3 py-3"><div class="flex items-center gap-3 mb-2"><div class="text-zinc-500 font-mono w-6">'+(i+1)+'</div><div class="flex-1 min-w-0"><div class="font-semibold truncate">'+escapeHtml(r.name)+'</div><div class="text-xs text-orange-400">'+(r.count?r.scored.name:'-')+' · '+r.count+' cards</div></div></div><div class="poker-hand-row pl-6">'+cardsHtml+'</div></div>';
+        const cardsHtml=r.cards.length
+          ? r.cards.map(function(c){return reveal?cardHtml(c,{flipped:true}):cardBackHtml();}).join('')
+          : '<span class="text-zinc-600 text-xs">No cards</span>';
+        var sub=reveal
+          ? ((r.count?r.scored.name:'-')+' · '+r.count+' card'+(r.count===1?'':'s'))
+          : (r.count+' card'+(r.count===1?'':'s'));
+        return '<div class="bg-zinc-900 border border-zinc-800 rounded-2xl px-3 py-3"><div class="flex items-center gap-3 mb-2"><div class="text-zinc-500 font-mono w-6">'+(i+1)+'</div><div class="flex-1 min-w-0"><div class="font-semibold truncate">'+escapeHtml(r.name)+'</div><div class="text-xs text-orange-400">'+sub+'</div></div></div><div class="poker-hand-row pl-6">'+cardsHtml+'</div></div>';
       }).join(''):'<p class="text-zinc-500 text-sm">No riders yet</p>'
     )+'</div>';
     panel.classList.remove('hidden');

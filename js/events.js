@@ -10,10 +10,17 @@ let editingEventBaseline = null;
 /** Encoded in event.description so no schema change is required:
  *  [[poker:both|qr|geo:20]]  mode + radius in feet
  */
+function normalizeClock(val) {
+  var s = String(val || '').trim();
+  var m = s.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return '';
+  var h = m[1].length === 1 ? '0' + m[1] : m[1];
+  return h + ':' + m[2];
+}
 function stripEventMeta(desc) {
   return String(desc || '')
     .replace(/\s*\[\[poker:(both|qr|geo):\d+\]\]\s*/ig, '')
-    .replace(/\s*\[\[expire:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}\]\]\s*/ig, '')
+    .replace(/\s*\[\[expire:\d{4}-\d{2}-\d{2}T\d{1,2}:\d{2}(?::\d{2})?\]\]\s*/ig, '')
     .trim();
 }
 function parsePokerPickupMeta(desc) {
@@ -25,12 +32,15 @@ function parsePokerPickupMeta(desc) {
   };
 }
 function parseExpireMeta(desc) {
-  var m = String(desc || '').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})\]\]/i);
-  return {
-    date: m ? m[1] : '',
-    time: m ? m[2] : '',
-    ms: m ? new Date(m[1] + 'T' + m[2] + ':00').getTime() : 0
-  };
+  var m = String(desc || '').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{1,2}:\d{2})(?::\d{2})?\]\]/i);
+  var date = m ? m[1] : '';
+  var time = m ? normalizeClock(m[2]) : '';
+  var ms = 0;
+  if (date && time) {
+    var d = new Date(date + 'T' + time + ':00');
+    if (!isNaN(d.getTime())) ms = d.getTime();
+  }
+  return { date: date, time: time, ms: ms };
 }
 function withEventMeta(desc, opts) {
   opts = opts || {};
@@ -42,8 +52,7 @@ function withEventMeta(desc, opts) {
     out = (out ? out + '\n' : '') + '[[poker:' + mode + ':' + ft + ']]';
   }
   if (opts.expireDate) {
-    var t = opts.expireTime || '23:59';
-    if (t.length === 5) t = t;
+    var t = normalizeClock(opts.expireTime) || '23:59';
     out = (out ? out + '\n' : '') + '[[expire:' + opts.expireDate + 'T' + t + ']]';
   }
   return out;
@@ -375,13 +384,10 @@ function renderEvents() {
     const pokerPickup = isPoker ? parsePokerPickupMeta(ev.description) : { mode: 'both' };
     const allowQr = !isPoker || pokerPickup.mode !== 'geo';
     const allowGeo = !isPoker || pokerPickup.mode !== 'qr';
-    const showPokerBoard = isPoker && eventLeaderboardUnlocked(ev);
     const pokerBtn = isPoker ? (
-      (showPokerBoard
-        ? `<a href="poker.html?e=${ev.id}&board=1" class="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase px-3 py-1.5 rounded-full bg-zinc-950 border border-orange-700/70 text-orange-400 hover:bg-orange-950/50 hover:border-orange-500 transition-colors">
+      (`<a href="poker.html?e=${ev.id}&board=1" class="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase px-3 py-1.5 rounded-full bg-zinc-950 border border-orange-700/70 text-orange-400 hover:bg-orange-950/50 hover:border-orange-500 transition-colors">
           <i class="fa-solid fa-trophy text-[10px]"></i>Leaderboard
-        </a>`
-        : '') +
+        </a>`) +
       (canManageEvents
         ? `<button type="button" onclick="showPokerAdminFor(${ev.id})" class="inline-flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">
           Checkpoints
@@ -995,9 +1001,25 @@ function openEventModal(id) {
     cat._pokerBound = true;
   }
   onEventCategoryChange();
+
+  if (ev && ev.id && window.sb) {
+    window.sb.from('events').select('description').eq('id', ev.id).maybeSingle().then(function (res) {
+      if (!res || !res.data) return;
+      var live = res.data.description || '';
+      ev.description = live;
+      document.getElementById('ev-description').value = stripEventMeta(live);
+      var liveExp = parseExpireMeta(live);
+      if (expDateEl) expDateEl.value = liveExp.date || '';
+      if (expTimeEl) expTimeEl.value = liveExp.time || '';
+      var livePick = parsePokerPickupMeta(live);
+      if (pickupEl) pickupEl.value = livePick.mode;
+      if (radiusEl) radiusEl.value = livePick.radiusFt;
+    }).catch(function () {});
+  }
 }
 
 function closeEventModal() {
+  if (typeof toggleCheckpointMapFullscreen === 'function') toggleCheckpointMapFullscreen(false);
   const modal = document.getElementById('event-modal');
   if (!modal) return;
   modal.classList.add('hidden');
@@ -1012,6 +1034,41 @@ function closeEventModal() {
     evPendingMarker = null;
   }
 }
+
+function syncCpName(el) {
+  var a = document.getElementById('ev-cp-name');
+  var b = document.getElementById('ev-cp-name-fs');
+  var v = el ? el.value : (a && a.value) || '';
+  if (a && a !== el) a.value = v;
+  if (b && b !== el) b.value = v;
+}
+function syncCpDesc(el) {
+  var a = document.getElementById('ev-cp-desc');
+  var b = document.getElementById('ev-cp-desc-fs');
+  var v = el ? el.value : (a && a.value) || '';
+  if (a && a !== el) a.value = v;
+  if (b && b !== el) b.value = v;
+}
+function toggleCheckpointMapFullscreen(on) {
+  var wrap = document.getElementById('ev-cp-map-wrap');
+  if (!wrap) return;
+  var enable = (on === true || on === false) ? on : !wrap.classList.contains('cp-map-fs');
+  wrap.classList.toggle('cp-map-fs', enable);
+  document.body.style.overflow = enable ? 'hidden' : '';
+  setTimeout(function () {
+    if (evCheckpointMap) {
+      try { evCheckpointMap.invalidateSize(); } catch (e) {}
+    }
+  }, 80);
+  setTimeout(function () {
+    if (evCheckpointMap) {
+      try { evCheckpointMap.invalidateSize(); } catch (e) {}
+    }
+  }, 250);
+}
+window.toggleCheckpointMapFullscreen = toggleCheckpointMapFullscreen;
+window.syncCpName = syncCpName;
+window.syncCpDesc = syncCpDesc;
 
 function onEventCategoryChange() {
   var cat = document.getElementById('ev-category');
@@ -1053,6 +1110,7 @@ function placeEvCheckpointPin(latlng, trailName) {
   var nameEl = document.getElementById('ev-cp-name');
   if (trailName && nameEl && !nameEl.value.trim()) {
     nameEl.value = trailName;
+    if (typeof syncCpName === 'function') syncCpName(nameEl);
   }
   showToast(trailName
     ? 'Pin on “' + trailName + '” — name it and tap Add flag'
@@ -1136,7 +1194,10 @@ function clearPendingMapPin() {
 function confirmPendingCheckpoint() {
   var nameEl = document.getElementById('ev-cp-name');
   var descEl = document.getElementById('ev-cp-desc');
-  var name = (nameEl && nameEl.value || '').trim();
+  var nameFs = document.getElementById('ev-cp-name-fs');
+  var descFs = document.getElementById('ev-cp-desc-fs');
+  var name = ((nameEl && nameEl.value) || (nameFs && nameFs.value) || '').trim();
+  var note = ((descEl && descEl.value) || (descFs && descFs.value) || '').trim();
   if (!name) {
     showToast('Enter a checkpoint name', true);
     return;
@@ -1147,12 +1208,14 @@ function confirmPendingCheckpoint() {
   }
   pendingCheckpoints.push({
     name: name,
-    description: (descEl && descEl.value || '').trim() || null,
+    description: note || null,
     lat: pendingMapPin.lat,
     lng: pendingMapPin.lng
   });
   if (nameEl) nameEl.value = '';
   if (descEl) descEl.value = '';
+  if (nameFs) nameFs.value = '';
+  if (descFs) descFs.value = '';
   clearPendingMapPin();
   renderPendingCheckpointList();
   showToast('Checkpoint added (' + pendingCheckpoints.length + ')');
@@ -1301,7 +1364,7 @@ async function saveEvent(e) {
       var raw = document.getElementById('ev-description').value.trim();
       var cat = document.getElementById('ev-category').value;
       var expD = (document.getElementById('ev-expire-date') || {}).value || '';
-      var expT = (document.getElementById('ev-expire-time') || {}).value || '';
+      var expT = normalizeClock((document.getElementById('ev-expire-time') || {}).value || '');
       var opts = { expireDate: expD, expireTime: expT };
       if (cat === 'poker_run') {
         var modeEl = document.getElementById('ev-poker-pickup');
