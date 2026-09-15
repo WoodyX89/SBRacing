@@ -16,13 +16,13 @@
     <link rel="apple-touch-icon" href="/assets/logo.png">
     <link rel="icon" type="image/png" href="/assets/favicon-32x32.png">   
 </head>
-<body class="bg-zinc-950 text-zinc-200">
+<body class="bg-black text-zinc-200">
 <!-- Shared nav (edit partials/nav.html only) -->
 <div id="site-nav"></div>
 <div class="page-top-spacer" aria-hidden="true"></div>
 <div class="page-body">
     <!-- MERCHANDISE -->
-    <section id="merch" class="bg-zinc-900 py-16 border-y border-zinc-800 min-h-[60vh]">
+    <section id="merch" class="bg-black py-16 min-h-[60vh]">
         <div class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12">
             <div class="flex flex-wrap items-end justify-between gap-4 mb-10 mt-10">
                 <div>
@@ -49,81 +49,105 @@
 
             <p class="text-center text-xs text-zinc-500 mt-8">Members get <span class="font-semibold text-orange-500">15-20% off</span> all merchandise. Free shipping on orders over $75.</p>
 
-            <!-- Admin panel (visible only to admins) -->
-            <div id="admin-panel" class="hidden mt-14 border-t border-zinc-800 pt-10 space-y-10">
-                <div>
-                    <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <div class="text-xs uppercase tracking-widest text-orange-600 font-semibold">Dashboard</div>
-                            <h3 class="text-xl font-semibold">Sales overview</h3>
+            <!-- Admin tools (visible only to admins) -->
+            <div id="admin-panel" class="hidden mt-14 border-t border-zinc-800 pt-10">
+                <div class="font-semibold mb-1">Merch admin</div>
+                <p class="text-xs text-zinc-500 mb-5">Open a tool. Each one opens in its own window.</p>
+                <div class="grid sm:grid-cols-3 gap-3 max-w-3xl">
+                    <button type="button" onclick="openMerchAdminTool('dashboard')" class="text-left bg-zinc-950 border border-zinc-800 hover:border-orange-600 rounded-3xl p-5 transition-colors">
+                        <div class="w-10 h-10 rounded-2xl bg-orange-950/60 border border-orange-800 flex items-center justify-center text-orange-400 mb-3">
+                            <i class="fa-solid fa-chart-column"></i>
                         </div>
-                        <button type="button" onclick="loadSalesDashboard(); loadAdminOrders();" class="text-xs text-zinc-400 hover:text-white">
-                            <i class="fa-solid fa-rotate-right mr-1"></i> Refresh
-                        </button>
-                    </div>
-                    <div id="sales-stats" class="max-w-4xl">
-                        <p class="text-sm text-zinc-500">Loading…</p>
-                    </div>
-                    <div id="sales-chart-wrap" class="mt-6 max-w-4xl">
-                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-                            <div class="text-xs uppercase tracking-widest text-zinc-500">Sales over time</div>
-                            <div class="flex gap-2">
-                                <button type="button" data-sales-range="day" onclick="setSalesChartRange('day')"
-                                        class="px-3 py-1.5 rounded-xl border border-zinc-700 text-xs text-zinc-400">Day</button>
-                                <button type="button" data-sales-range="month" onclick="setSalesChartRange('month')"
-                                        class="px-3 py-1.5 rounded-xl bg-orange-600 text-white text-xs">Month</button>
-                                <button type="button" data-sales-range="year" onclick="setSalesChartRange('year')"
-                                        class="px-3 py-1.5 rounded-xl border border-zinc-700 text-xs text-zinc-400">Year</button>
-                            </div>
+                        <div class="font-semibold">Dashboard</div>
+                        <p class="text-xs text-zinc-500 mt-1">Sales overview and charts.</p>
+                    </button>
+                    <button type="button" onclick="openMerchAdminTool('inventory')" class="text-left bg-zinc-950 border border-zinc-800 hover:border-orange-600 rounded-3xl p-5 transition-colors">
+                        <div class="w-10 h-10 rounded-2xl bg-orange-950/60 border border-orange-800 flex items-center justify-center text-orange-400 mb-3">
+                            <i class="fa-solid fa-boxes-stacked"></i>
                         </div>
-                        <div class="bg-zinc-950 border border-zinc-800 rounded-3xl p-4" style="height: 280px; position: relative;">
-                            <canvas id="sales-chart" aria-label="Sales chart"></canvas>
-                            <p id="sales-chart-msg" class="absolute inset-0 flex items-center justify-center text-sm text-zinc-500 pointer-events-none"></p>
+                        <div class="font-semibold">Inventory</div>
+                        <p class="text-xs text-zinc-500 mt-1">Stock by colour and size.</p>
+                    </button>
+                    <button type="button" onclick="openMerchAdminTool('orders')" class="text-left bg-zinc-950 border border-zinc-800 hover:border-orange-600 rounded-3xl p-5 transition-colors">
+                        <div class="w-10 h-10 rounded-2xl bg-orange-950/60 border border-orange-800 flex items-center justify-center text-orange-400 mb-3">
+                            <i class="fa-solid fa-receipt"></i>
                         </div>
-                        <p class="text-[11px] text-zinc-500 mt-2">Bars = revenue &amp; pending · Line = paid/shipped order count. Touch-friendly on iOS.</p>
-                    </div>
-                </div>
-                <div>
-                    <div class="mb-4">
-                        <div class="text-xs uppercase tracking-widest text-orange-600 font-semibold">Inventory</div>
-                        <h3 class="text-xl font-semibold">Stock by colour &amp; size</h3>
-                        <p class="text-sm text-zinc-400 mt-1">Select a size to load its quantity, edit the number, then press Save. 0 = sold out.</p>
-                    </div>
-                    <div id="stock-table" class="max-w-3xl"></div>
-                </div>
-                <div>
-                    <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <div class="text-xs uppercase tracking-widest text-orange-600 font-semibold">Admin</div>
-                            <h3 class="text-xl font-semibold">Manage merchandise</h3>
-                        </div>
-                        <button type="button" onclick="openProductModal()" class="px-5 py-2.5 rounded-2xl border border-orange-600 text-orange-500 hover:bg-orange-950 text-sm font-semibold">
-                            <i class="fa-solid fa-plus mr-1.5"></i> New item
-                        </button>
-                    </div>
-                    <p class="text-sm text-zinc-400 max-w-2xl">
-                        Same <strong>Name</strong> = one shop product. Add a row per <strong>colour + size</strong> with its own stock and image.
-                    </p>
-                </div>
-                <div>
-                    <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <div class="text-xs uppercase tracking-widest text-orange-600 font-semibold">Orders</div>
-                            <h3 class="text-xl font-semibold">Recent orders</h3>
-                        </div>
-                        <button type="button" onclick="loadAdminOrders()" class="text-xs text-zinc-400 hover:text-white">
-                            <i class="fa-solid fa-rotate-right mr-1"></i> Refresh
-                        </button>
-                    </div>
-                    <div id="admin-orders-list"
-                         class="max-w-3xl max-h-[28rem] overflow-y-auto overscroll-contain rounded-3xl border border-zinc-800 bg-zinc-950/40"
-                         style="-webkit-overflow-scrolling: touch;">
-                        <p class="text-sm text-zinc-500 p-3">Loading…</p>
-                    </div>
+                        <div class="font-semibold">Orders</div>
+                        <p class="text-xs text-zinc-500 mt-1">Recent customer orders.</p>
+                    </button>
                 </div>
             </div>
         </div>
     </section>
+
+    <!-- Merch admin: Dashboard -->
+    <div id="merch-dash-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100000] items-center justify-center p-4" style="display:none; padding-top:max(16px, env(safe-area-inset-top, 0px)); padding-bottom:max(16px, env(safe-area-inset-bottom, 0px));" onclick="if(event.target.id==='merch-dash-modal')closeMerchAdminTool('dashboard')">
+      <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-start gap-3 px-5 pt-5 pb-3 border-b border-zinc-800 shrink-0">
+          <div>
+            <div class="font-bold text-lg">Dashboard</div>
+            <p class="text-xs text-zinc-500 mt-0.5">Sales overview</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button type="button" onclick="loadSalesDashboard(); loadAdminOrders();" class="text-xs text-zinc-400 hover:text-white"><i class="fa-solid fa-rotate-right mr-1"></i>Refresh</button>
+            <button type="button" onclick="closeMerchAdminTool('dashboard')" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+          </div>
+        </div>
+        <div class="flex-1 min-h-0 overflow-y-auto px-5 py-4" style="-webkit-overflow-scrolling:touch;">
+          <div id="sales-stats"><p class="text-sm text-zinc-500">Loading…</p></div>
+          <div id="sales-chart-wrap" class="mt-6">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+              <div class="text-xs uppercase tracking-widest text-zinc-500">Sales over time</div>
+              <div class="flex gap-2">
+                <button type="button" data-sales-range="day" onclick="setSalesChartRange('day')" class="px-3 py-1.5 rounded-xl border border-zinc-700 text-xs text-zinc-400">Day</button>
+                <button type="button" data-sales-range="month" onclick="setSalesChartRange('month')" class="px-3 py-1.5 rounded-xl bg-orange-600 text-white text-xs">Month</button>
+                <button type="button" data-sales-range="year" onclick="setSalesChartRange('year')" class="px-3 py-1.5 rounded-xl border border-zinc-700 text-xs text-zinc-400">Year</button>
+              </div>
+            </div>
+            <div class="bg-zinc-950 border border-zinc-800 rounded-3xl p-4" style="height: 280px; position: relative;">
+              <canvas id="sales-chart" aria-label="Sales chart"></canvas>
+              <p id="sales-chart-msg" class="absolute inset-0 flex items-center justify-center text-sm text-zinc-500 pointer-events-none"></p>
+            </div>
+            <p class="text-[11px] text-zinc-500 mt-2">Bars = revenue &amp; pending · Line = paid/shipped order count.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Merch admin: Inventory -->
+    <div id="merch-inv-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100000] items-center justify-center p-4" style="display:none; padding-top:max(16px, env(safe-area-inset-top, 0px)); padding-bottom:max(16px, env(safe-area-inset-bottom, 0px));" onclick="if(event.target.id==='merch-inv-modal')closeMerchAdminTool('inventory')">
+      <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-start gap-3 px-5 pt-5 pb-3 border-b border-zinc-800 shrink-0">
+          <div>
+            <div class="font-bold text-lg">Inventory</div>
+            <p class="text-xs text-zinc-500 mt-0.5">Stock by colour &amp; size. 0 = sold out.</p>
+          </div>
+          <button type="button" onclick="closeMerchAdminTool('inventory')" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        <div class="flex-1 min-h-0 overflow-y-auto px-5 py-4" style="-webkit-overflow-scrolling:touch;">
+          <div id="stock-table"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Merch admin: Orders -->
+    <div id="merch-orders-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100000] items-center justify-center p-4" style="display:none; padding-top:max(16px, env(safe-area-inset-top, 0px)); padding-bottom:max(16px, env(safe-area-inset-bottom, 0px));" onclick="if(event.target.id==='merch-orders-modal')closeMerchAdminTool('orders')">
+      <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-start gap-3 px-5 pt-5 pb-3 border-b border-zinc-800 shrink-0">
+          <div>
+            <div class="font-bold text-lg">Orders</div>
+            <p class="text-xs text-zinc-500 mt-0.5">Recent customer orders</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button type="button" onclick="loadAdminOrders()" class="text-xs text-zinc-400 hover:text-white"><i class="fa-solid fa-rotate-right mr-1"></i>Refresh</button>
+            <button type="button" onclick="closeMerchAdminTool('orders')" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+          </div>
+        </div>
+        <div id="admin-orders-list" class="flex-1 min-h-0 overflow-y-auto px-5 py-4" style="-webkit-overflow-scrolling:touch;">
+          <p class="text-sm text-zinc-500">Loading…</p>
+        </div>
+      </div>
+    </div>
 
     <!-- Product add/edit modal -->
     <div id="product-modal" onclick="if (event.target.id === 'product-modal') closeProductModal()"
@@ -336,7 +360,7 @@
 <script src="js/supabase-config.js"></script>
 <script src="js/shared.js"></script>
 <script src="js/push-notifications.js"></script>
-<script src="js/merch.js"></script>
+<script src="js/merch.js?v=admin-tools-1"></script>
 
 <script>
 if ('serviceWorker' in navigator) {

@@ -94,8 +94,9 @@
                         <button onclick="switchMemberTab(2)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="2">Perks &amp; Resources</button>
                         <button onclick="switchMemberTab(4)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="4">Profile</button>
                         <button onclick="switchMemberTab(5)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="5">Members</button>
-                        <button id="admin-tab-btn" onclick="switchMemberTab(6)" class="member-tab hidden shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="6">
+                        <button id="admin-tab-btn" onclick="switchMemberTab(6)" class="member-tab hidden relative shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="6">
                             <i class="fa-solid fa-shield-halved mr-1.5 text-orange-500"></i>Admin
+                            <span id="admin-tab-badge" class="hidden absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-orange-600 text-white text-[10px] font-bold leading-[18px] text-center">0</span>
                         </button>
                     </div>
                 </div>
@@ -134,22 +135,15 @@
 
                     <!-- Private Events Tab -->
                     <div id="tab-1" class="member-tab-content hidden">
-                        <div class="font-semibold mb-4">Members-Only Events</div>
-                        <div class="space-y-3">
-                            <div class="flex items-center justify-between bg-zinc-950 border border-zinc-700 rounded-2xl p-4">
-                                <div>
-                                    <div class="font-medium">Full Moon Night Ride — Jan 29</div>
-                                    <div class="text-xs text-zinc-400">Cypress Hills • 25km • Advanced</div>
-                                </div>
-                                <button onclick="rsvpEvent(99, 'Full Moon Night Ride', 'Jan 29')" class="px-4 py-1.5 text-xs font-semibold rounded-2xl border border-orange-600 text-orange-500">RSVP</button>
+                        <div class="flex items-end justify-between gap-3 mb-4">
+                            <div>
+                                <div class="font-semibold">Members-Only Events</div>
+                                <p class="text-xs text-zinc-500 mt-1">Rides and club events marked Members only.</p>
                             </div>
-                            <div class="flex items-center justify-between bg-zinc-950 border border-zinc-700 rounded-2xl p-4">
-                                <div>
-                                    <div class="font-medium">SB Racing Wind-Up BBQ &amp; Awards</div>
-                                    <div class="text-xs text-zinc-400">Aug 15 • Elkwater • All welcome</div>
-                                </div>
-                                <button onclick="rsvpEvent(100, 'SB Racing Wind-Up', 'Aug 15')" class="px-4 py-1.5 text-xs font-semibold rounded-2xl border border-orange-600 text-orange-500">RSVP</button>
-                            </div>
+                            <a href="events.html" class="text-xs font-semibold text-orange-500 hover:text-orange-400">All events</a>
+                        </div>
+                        <div id="private-events-list" class="space-y-3">
+                            <div class="text-center text-zinc-500 py-8"><i class="fa-solid fa-spinner fa-spin"></i></div>
                         </div>
                     </div>
 
@@ -190,64 +184,30 @@
 
                     <!-- Admin tab (visible only to is_admin) -->
                     <div id="tab-6" class="member-tab-content hidden">
-                        <div class="flex flex-wrap items-start justify-between gap-3 mb-5">
-                            <div>
-                                <div class="font-semibold">Club applications</div>
-                                <p class="text-xs text-zinc-500 mt-0.5">Approve or deny people who applied from the join form. You do not need to open Supabase.</p>
-                            </div>
-                            <div class="flex flex-wrap gap-2 text-xs font-semibold" id="app-filter-btns">
-                                <button type="button" class="app-filter px-3 py-1.5 rounded-xl border border-orange-600 text-orange-500" data-filter="pending" onclick="loadClubApplications('pending')">Pending</button>
-                                <button type="button" class="app-filter px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-filter="approved" onclick="loadClubApplications('approved')">Approved</button>
-                                <button type="button" class="app-filter px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-filter="denied" onclick="loadClubApplications('denied')">Denied</button>
-                                <button type="button" class="app-filter px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-filter="all" onclick="loadClubApplications('all')">All</button>
-                                <button type="button" onclick="loadClubApplications()" class="px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400 hover:text-white" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
-                            </div>
-                        </div>
-                        <p id="admin-apps-status" class="text-sm text-zinc-500 mb-3"></p>
-                        <div id="admin-apps-list" class="space-y-3 mb-10">
-                            <p class="text-zinc-500 text-sm">Open this tab to load applications.</p>
-                        </div>
-
-                        <div class="flex items-center gap-x-2 mb-5 pt-6 border-t border-zinc-800">
-                            <i class="fa-solid fa-bullhorn text-orange-500"></i>
-                            <div>
-                                <div class="font-semibold">Send Push Notification</div>
-                                <p class="text-xs text-zinc-500 mt-0.5">Broadcast a custom message to member devices</p>
-                            </div>
-                        </div>
-                        <div class="max-w-lg space-y-4">
-                            <div>
-                                <label class="text-xs font-medium tracking-widest text-zinc-400">TITLE</label>
-                                <input type="text" id="admin-push-title" maxlength="80" value="Update"
-                                       placeholder="Notification title"
-                                       class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
-                            </div>
-                            <div>
-                                <label class="text-xs font-medium tracking-widest text-zinc-400">MESSAGE</label>
-                                <textarea id="admin-push-body" rows="3" maxlength="200" placeholder="What do you want everyone to know?"
-                                          class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600 resize-none"></textarea>
-                                <p class="text-[11px] text-zinc-500 mt-1"><span id="admin-push-body-count">0</span>/200</p>
-                            </div>
-                            <div>
-                                <label class="text-xs font-medium tracking-widest text-zinc-400">AUDIENCE</label>
-                                <select id="admin-push-audience"
-                                        class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
-                                    <option value="members">All members</option>
-                                    <option value="all">Everyone with the app</option>
-                                    <option value="leaders">Leaders + Admins</option>
-                                    <option value="admins">Admins only</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="text-xs font-medium tracking-widest text-zinc-400">OPEN URL (optional)</label>
-                                <input type="text" id="admin-push-url" value="events.html" placeholder="events.html"
-                                       class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
-                            </div>
-                            <button type="button" id="admin-push-send-btn" onclick="sendAdminPush()"
-                                    class="w-full py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 active:bg-orange-800 font-semibold text-sm tracking-wider transition-all disabled:opacity-50 disabled:pointer-events-none">
-                                <i class="fa-solid fa-paper-plane mr-2"></i>SEND PUSH
+                        <div class="font-semibold mb-1">Admin</div>
+                        <p class="text-xs text-zinc-500 mb-5">Open a tool. Each one opens in its own window.</p>
+                        <div class="grid sm:grid-cols-3 gap-3 max-w-3xl">
+                            <button type="button" onclick="openAdminTool('apps')" class="text-left bg-zinc-950 border border-zinc-800 hover:border-orange-600 rounded-3xl p-5 transition-colors">
+                                <div class="w-10 h-10 rounded-2xl bg-orange-950/60 border border-orange-800 flex items-center justify-center text-orange-400 mb-3">
+                                    <i class="fa-solid fa-inbox"></i>
+                                </div>
+                                <div class="font-semibold">Club Applications</div>
+                                <p class="text-xs text-zinc-500 mt-1">Approve or deny join requests.</p>
                             </button>
-                            <p id="admin-push-status" class="text-sm text-zinc-400 hidden"></p>
+                            <button type="button" onclick="openAdminTool('perms')" class="text-left bg-zinc-950 border border-zinc-800 hover:border-orange-600 rounded-3xl p-5 transition-colors">
+                                <div class="w-10 h-10 rounded-2xl bg-orange-950/60 border border-orange-800 flex items-center justify-center text-orange-400 mb-3">
+                                    <i class="fa-solid fa-user-shield"></i>
+                                </div>
+                                <div class="font-semibold">Member Permissions</div>
+                                <p class="text-xs text-zinc-500 mt-1">Roles, leader flag, admin access.</p>
+                            </button>
+                            <button type="button" onclick="openAdminTool('push')" class="text-left bg-zinc-950 border border-zinc-800 hover:border-orange-600 rounded-3xl p-5 transition-colors">
+                                <div class="w-10 h-10 rounded-2xl bg-orange-950/60 border border-orange-800 flex items-center justify-center text-orange-400 mb-3">
+                                    <i class="fa-solid fa-bullhorn"></i>
+                                </div>
+                                <div class="font-semibold">Send Push Notification</div>
+                                <p class="text-xs text-zinc-500 mt-1">Broadcast to member devices.</p>
+                            </button>
                         </div>
                     </div>
 
@@ -378,8 +338,96 @@
   </div>
 </div>
 
+<!-- Admin: Club applications -->
+<div id="admin-apps-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100000] items-center justify-center p-4" style="display:none; padding-top:max(16px, env(safe-area-inset-top, 0px)); padding-bottom:max(16px, env(safe-area-inset-bottom, 0px));" onclick="if(event.target.id==='admin-apps-modal')closeAdminTool('apps')">
+  <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-start gap-3 px-5 pt-5 pb-3 border-b border-zinc-800 shrink-0">
+      <div>
+        <div class="font-bold text-lg">Club Applications</div>
+        <p class="text-xs text-zinc-500 mt-0.5">Approve or deny people who applied from the join form.</p>
+      </div>
+      <button type="button" onclick="closeAdminTool('apps')" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+    </div>
+    <div class="px-5 py-3 flex flex-wrap gap-2 text-xs font-semibold shrink-0" id="app-filter-btns">
+      <button type="button" class="app-filter px-3 py-1.5 rounded-xl border border-orange-600 text-orange-500" data-filter="pending" onclick="loadClubApplications('pending')">Pending</button>
+      <button type="button" class="app-filter px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-filter="approved" onclick="loadClubApplications('approved')">Approved</button>
+      <button type="button" class="app-filter px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-filter="denied" onclick="loadClubApplications('denied')">Denied</button>
+      <button type="button" class="app-filter px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-filter="all" onclick="loadClubApplications('all')">All</button>
+      <button type="button" onclick="loadClubApplications()" class="px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400 hover:text-white" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+    </div>
+    <p id="admin-apps-status" class="px-5 text-sm text-zinc-500 shrink-0"></p>
+    <div id="admin-apps-list" class="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-3" style="-webkit-overflow-scrolling:touch;">
+      <p class="text-zinc-500 text-sm">Open this tool to load applications.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Admin: Member permissions -->
+<div id="admin-perms-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100000] items-center justify-center p-4" style="display:none; padding-top:max(16px, env(safe-area-inset-top, 0px)); padding-bottom:max(16px, env(safe-area-inset-bottom, 0px));" onclick="if(event.target.id==='admin-perms-modal')closeAdminTool('perms')">
+  <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-start gap-3 px-5 pt-5 pb-3 border-b border-zinc-800 shrink-0">
+      <div>
+        <div class="font-bold text-lg">Member Permissions</div>
+        <p class="text-xs text-zinc-500 mt-0.5">Change role, leader flag, status, and admin access. You cannot remove your own admin flag.</p>
+      </div>
+      <button type="button" onclick="closeAdminTool('perms')" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+    </div>
+    <div class="px-5 pt-4 shrink-0">
+      <input id="admin-member-search" type="search" placeholder="Search name or email" oninput="filterAdminMembers()" class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm outline-none focus:border-orange-600">
+      <p id="admin-members-status" class="text-sm text-zinc-500 mt-3"></p>
+    </div>
+    <div id="admin-members-list" class="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-3" style="-webkit-overflow-scrolling:touch;"></div>
+  </div>
+</div>
+
+<!-- Admin: Send push -->
+<div id="admin-push-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100000] items-center justify-center p-4" style="display:none; padding-top:max(16px, env(safe-area-inset-top, 0px)); padding-bottom:max(16px, env(safe-area-inset-bottom, 0px));" onclick="if(event.target.id==='admin-push-modal')closeAdminTool('push')">
+  <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 shadow-2xl" onclick="event.stopPropagation()" style="-webkit-overflow-scrolling:touch;">
+    <div class="flex justify-between items-start gap-3 mb-5">
+      <div>
+        <div class="font-bold text-lg">Send Push Notification</div>
+        <p class="text-xs text-zinc-500 mt-0.5">Broadcast a custom message to member devices.</p>
+      </div>
+      <button type="button" onclick="closeAdminTool('push')" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+    </div>
+    <div class="space-y-4">
+      <div>
+        <label class="text-xs font-medium tracking-widest text-zinc-400">TITLE</label>
+        <input type="text" id="admin-push-title" maxlength="80" value="Update" placeholder="Notification title"
+               class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+      </div>
+      <div>
+        <label class="text-xs font-medium tracking-widest text-zinc-400">MESSAGE</label>
+        <textarea id="admin-push-body" rows="3" maxlength="200" placeholder="What do you want everyone to know?"
+                  class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600 resize-none"></textarea>
+        <p class="text-[11px] text-zinc-500 mt-1"><span id="admin-push-body-count">0</span>/200</p>
+      </div>
+      <div>
+        <label class="text-xs font-medium tracking-widest text-zinc-400">AUDIENCE</label>
+        <select id="admin-push-audience"
+                class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+          <option value="members">All members</option>
+          <option value="all">Everyone with the app</option>
+          <option value="leaders">Leaders + Admins</option>
+          <option value="admins">Admins only</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-medium tracking-widest text-zinc-400">OPEN URL (optional)</label>
+        <input type="text" id="admin-push-url" value="events.html" placeholder="events.html"
+               class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+      </div>
+      <button type="button" id="admin-push-send-btn" onclick="sendAdminPush()"
+              class="w-full py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-700 active:bg-orange-800 font-semibold text-sm tracking-wider transition-all disabled:opacity-50 disabled:pointer-events-none">
+        <i class="fa-solid fa-paper-plane mr-2"></i>SEND PUSH
+      </button>
+      <p id="admin-push-status" class="text-sm text-zinc-400 hidden"></p>
+    </div>
+  </div>
+</div>
+
 <!-- Notification settings modal -->
-<div id="notif-settings-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[90] items-center justify-center p-4" style="display:none;">
+<div id="notif-settings-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100000] items-center justify-center p-4" style="display:none; padding-top:max(16px, env(safe-area-inset-top, 0px)); padding-bottom:max(16px, env(safe-area-inset-bottom, 0px));">
   <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto shadow-2xl" data-notif-panel="1">
     <div class="flex justify-between items-start mb-5">
       <div>
@@ -392,48 +440,60 @@
       <i class="fa-solid fa-circle-check mr-2"></i>Saved
     </div>
     <div class="space-y-3">
-      <label class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+      <div class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
         <span>
           <span class="block text-sm font-semibold">Push notifications</span>
           <span class="block text-xs text-zinc-500 mt-0.5">Master switch for remote alerts</span>
         </span>
-        <input type="checkbox" id="pref-notify-push" class="mt-1 h-5 w-5 accent-orange-600 shrink-0">
-      </label>
-      <label class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+        <button type="button" id="pref-notify-push" class="sb-switch" role="switch" aria-checked="true" data-pref="notify_push" aria-label="Push notifications">
+          <span class="sb-switch-knob"></span>
+        </button>
+      </div>
+      <div class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
         <span>
           <span class="block text-sm font-semibold">Events</span>
           <span class="block text-xs text-zinc-500 mt-0.5">New rides, edits, cancellations, reminders</span>
         </span>
-        <input type="checkbox" id="pref-notify-events" class="mt-1 h-5 w-5 accent-orange-600 shrink-0">
-      </label>
-      <label class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+        <button type="button" id="pref-notify-events" class="sb-switch" role="switch" aria-checked="true" data-pref="notify_events" aria-label="Event notifications">
+          <span class="sb-switch-knob"></span>
+        </button>
+      </div>
+      <div class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
         <span>
           <span class="block text-sm font-semibold">Forum</span>
           <span class="block text-xs text-zinc-500 mt-0.5">New posts and polls</span>
         </span>
-        <input type="checkbox" id="pref-notify-forum" class="mt-1 h-5 w-5 accent-orange-600 shrink-0">
-      </label>
-      <label class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+        <button type="button" id="pref-notify-forum" class="sb-switch" role="switch" aria-checked="true" data-pref="notify_forum" aria-label="Forum notifications">
+          <span class="sb-switch-knob"></span>
+        </button>
+      </div>
+      <div class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
         <span>
           <span class="block text-sm font-semibold">Comments</span>
           <span class="block text-xs text-zinc-500 mt-0.5">Replies on events and forum threads</span>
         </span>
-        <input type="checkbox" id="pref-notify-comments" class="mt-1 h-5 w-5 accent-orange-600 shrink-0">
-      </label>
-      <label class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
+        <button type="button" id="pref-notify-comments" class="sb-switch" role="switch" aria-checked="true" data-pref="notify_comments" aria-label="Comment notifications">
+          <span class="sb-switch-knob"></span>
+        </button>
+      </div>
+      <div class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3">
         <span>
           <span class="block text-sm font-semibold">RSVPs</span>
           <span class="block text-xs text-zinc-500 mt-0.5">When someone marks going / maybe / out</span>
         </span>
-        <input type="checkbox" id="pref-notify-rsvp" class="mt-1 h-5 w-5 accent-orange-600 shrink-0">
-      </label>
-      <label id="pref-notify-admin-row" class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3" style="display:none;">
+        <button type="button" id="pref-notify-rsvp" class="sb-switch" role="switch" aria-checked="true" data-pref="notify_rsvp" aria-label="RSVP notifications">
+          <span class="sb-switch-knob"></span>
+        </button>
+      </div>
+      <div id="pref-notify-admin-row" class="flex items-start justify-between gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3" style="display:none;">
         <span>
           <span class="block text-sm font-semibold">Admin alerts</span>
           <span class="block text-xs text-zinc-500 mt-0.5">New applications and staff-only messages</span>
         </span>
-        <input type="checkbox" id="pref-notify-admin" class="mt-1 h-5 w-5 accent-orange-600 shrink-0">
-      </label>
+        <button type="button" id="pref-notify-admin" class="sb-switch" role="switch" aria-checked="true" data-pref="notify_admin" aria-label="Admin notifications">
+          <span class="sb-switch-knob"></span>
+        </button>
+      </div>
     </div>
     <p id="notif-settings-error" class="hidden text-sm text-red-400 mt-4"></p>
     <div class="flex gap-3 mt-6">
@@ -518,7 +578,7 @@
 <script src="js/shared.js"></script>
 <script src="js/native-notifications.js"></script>
 <script src="js/push-notifications.js"></script>
-<script src="js/members.js?v=notif-settings-4"></script>
+<script src="js/members.js?v=admin-modals-2"></script>
 <script src="js/account-deletion.js"></script>
 <script>
 (function () {
@@ -531,13 +591,18 @@
     var modal = document.getElementById('notif-settings-modal');
     if (!modal) return;
     modal.style.display = 'flex';
+    if (typeof window.lockPageForModal === 'function') window.lockPageForModal(true);
     var adminRow = document.getElementById('pref-notify-admin-row');
     if (adminRow) adminRow.style.display = window._isAdmin ? 'flex' : 'none';
     savedBanner(false);
+    if (typeof window.loadNotifSettings === 'function') {
+      window.loadNotifSettings();
+    }
   }
   function hideNotifModal() {
     var modal = document.getElementById('notif-settings-modal');
     if (modal) modal.style.display = 'none';
+    if (typeof window.lockPageForModal === 'function') window.lockPageForModal(false);
     savedBanner(false);
   }
   window.openNotifSettings = showNotifModal;

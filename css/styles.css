@@ -934,3 +934,102 @@ body.is-native-app #password-modal {
   display: none !important;
 }
 
+/* Lock background page while add/edit event modal is open (web + iOS WKWebView) */
+html.sb-event-modal-open,
+body.sb-event-modal-open {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+html.sb-event-modal-open {
+  height: 100% !important;
+}
+body.sb-event-modal-open {
+  height: 100% !important;
+  max-height: 100% !important;
+}
+
+#event-modal {
+  overscroll-behavior: none;
+}
+#event-modal-sheet {
+  max-height: min(94dvh, calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 8px));
+  min-height: 0;
+  overflow: hidden;
+}
+#event-edit-form {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+html.is-native-app #event-modal,
+body.is-native-app #event-modal {
+  z-index: 100000 !important;
+  padding-top: env(safe-area-inset-top, 0px) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+}
+html.is-native-app #event-modal-sheet,
+body.is-native-app #event-modal-sheet {
+  max-height: calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+  height: calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 8px) !important;
+  overflow: hidden !important;
+}
+html.is-native-app #event-edit-form,
+body.is-native-app #event-edit-form {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Admin / merch / settings overlays sit above the fixed navbar */
+#admin-apps-modal,
+#admin-perms-modal,
+#admin-push-modal,
+#notif-settings-modal,
+#delete-account-modal,
+#member-profile-modal,
+#merch-dash-modal,
+#merch-inv-modal,
+#merch-orders-modal,
+#product-modal {
+  z-index: 100000 !important;
+  padding-top: max(16px, env(safe-area-inset-top, 0px)) !important;
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)) !important;
+}
+
+/* iOS-style notification preference toggles */
+.sb-switch {
+  position: relative;
+  width: 52px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #3f3f46;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  padding: 0;
+}
+.sb-switch[aria-checked="true"] {
+  background: #ea580c;
+}
+.sb-switch .sb-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35);
+  transition: transform 0.2s ease;
+}
+.sb-switch[aria-checked="true"] .sb-switch-knob {
+  transform: translateX(20px);
+}
+.sb-switch:focus-visible {
+  outline: 2px solid #fb923c;
+  outline-offset: 2px;
+}
+

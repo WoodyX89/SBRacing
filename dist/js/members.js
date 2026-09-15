@@ -86,12 +86,14 @@ async function showDashboard(user) {
     if (adminBtn) {
         if (window._isAdmin) {
             adminBtn.classList.remove('hidden');
+            refreshAdminAppBadge();
         } else {
             adminBtn.classList.add('hidden');
         }
     }
 
     await loadMemberDirectory();
+    loadPrivateEvents();
     switchMemberTab(7);
 }
 
@@ -147,12 +149,48 @@ function renderMemberDirectory(list) {
   }).join('');
 }
 
+function lockPageForModal(lock) {
+  var html = document.documentElement;
+  var body = document.body;
+  if (!body) return;
+  if (lock) {
+    if (!window._sbModalLockCount) {
+      window._sbModalScrollY = window.scrollY || window.pageYOffset || 0;
+    }
+    window._sbModalLockCount = (window._sbModalLockCount || 0) + 1;
+    html.classList.add('sb-page-lock');
+    body.classList.add('sb-page-lock');
+    body.style.position = 'fixed';
+    body.style.width = '100%';
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.top = '-' + (window._sbModalScrollY || 0) + 'px';
+    body.style.overflow = 'hidden';
+    html.style.overflow = 'hidden';
+  } else {
+    window._sbModalLockCount = Math.max(0, (window._sbModalLockCount || 1) - 1);
+    if (window._sbModalLockCount > 0) return;
+    html.classList.remove('sb-page-lock');
+    body.classList.remove('sb-page-lock');
+    body.style.position = '';
+    body.style.width = '';
+    body.style.left = '';
+    body.style.right = '';
+    body.style.top = '';
+    body.style.overflow = '';
+    html.style.overflow = '';
+    if (window._sbModalScrollY != null) window.scrollTo(0, window._sbModalScrollY);
+  }
+}
+window.lockPageForModal = lockPageForModal;
+
 async function openMemberProfile(userId) {
   const modal = document.getElementById('member-profile-modal');
   const body = document.getElementById('member-profile-body');
   if (!modal || !body) return;
   modal.classList.remove('hidden');
   modal.classList.add('flex');
+  lockPageForModal(true);
   body.innerHTML = '<div class="text-zinc-500 text-sm">Loading…</div>';
   try {
     const { data: p, error } = await window.sb
@@ -200,6 +238,7 @@ function closeMemberProfile() {
   if (!modal) return;
   modal.classList.add('hidden');
   modal.classList.remove('flex');
+  lockPageForModal(false);
 }
 
 function escapeAttr(str) {
@@ -378,6 +417,7 @@ function closeSignupRequestModal() {
   if (!modal) return;
   modal.classList.add('hidden');
   modal.style.display = 'none';
+  lockPageForModal(false);
 }
 
 async function submitSignupRequest(e) {
@@ -487,11 +527,10 @@ function switchMemberTab(tabIndex) {
             btn.classList.add('text-zinc-400');
         }
     });
+    if (String(tabIndex) === '1') loadPrivateEvents();
     if (String(tabIndex) === '5') loadMemberDirectory();
     if (String(tabIndex) === '6') {
-        loadClubApplications(window._appFilter || 'pending');
-        ensureAdminPermsUi();
-        loadAdminMembers();
+        // Tools open in their own modals
     }
     if (String(tabIndex) === '7') loadRideLeaderboard(window._lbPeriod || 'weekly');
 }
@@ -787,15 +826,93 @@ async function likePost(postId, element) {
     await window.sb.from('posts').update({ likes: count }).eq('id', postId);
 }
 
-async function rsvpEvent(eventIndex, title, dateStr) {
-    // Simple RSVP from members private events tab
-    const user = await getCurrentUser();
-    if (!user) {
-        showToast('Log in to RSVP', true);
-        return;
+function privateEventImageUrl(ev) {
+    if (!ev) return '';
+    if (ev.image_url) return String(ev.image_url);
+    var m = String(ev.description || '').match(/\[\[image:([^\]]+)\]\]/i);
+    return m ? m[1].trim() : '';
+}
+
+function privateEventExpired(ev) {
+    if (!ev) return false;
+    var exp = String(ev.description || '').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{1,2}:\d{2})(?::\d{2})?\]\]/i);
+    if (exp) {
+        var hh = exp[2].length === 4 ? '0' + exp[2] : exp[2];
+        var d = new Date(exp[1] + 'T' + hh + ':00');
+        if (!isNaN(d.getTime())) return Date.now() > d.getTime();
     }
-    const profile = await getProfile(user.id);
-    showToast(`RSVP interest recorded for ${title}. Check Events page for full RSVP.`);
+    if (!ev.event_date) return false;
+    var dateStr = String(ev.event_date).slice(0, 10);
+    var timeStr = '23:59:59';
+    if (ev.event_time) {
+        var tm = String(ev.event_time).match(/(\d{1,2}):(\d{2})/);
+        if (tm) timeStr = (tm[1].length === 1 ? '0' + tm[1] : tm[1]) + ':' + tm[2] + ':00';
+    }
+    var start = new Date(dateStr + 'T' + timeStr);
+    if (isNaN(start.getTime())) return false;
+    return Date.now() > start.getTime();
+}
+
+async function loadPrivateEvents() {
+    var list = document.getElementById('private-events-list');
+    if (!list || !window.sb) return;
+    list.innerHTML = '<div class="text-center text-zinc-500 py-8"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+    try {
+        var res = await window.sb
+            .from('events')
+            .select('*')
+            .eq('is_members_only', true)
+            .order('event_date', { ascending: true })
+            .limit(40);
+        if (res.error) throw res.error;
+        var rows = res.data || [];
+        rows.sort(function (a, b) {
+            var aDone = privateEventExpired(a) ? 1 : 0;
+            var bDone = privateEventExpired(b) ? 1 : 0;
+            if (aDone !== bDone) return aDone - bDone;
+            return String(a.event_date || '').localeCompare(String(b.event_date || ''));
+        });
+        if (!rows.length) {
+            list.innerHTML =
+                '<div class="text-center text-zinc-500 py-10 border border-zinc-800 rounded-2xl bg-zinc-950">' +
+                '<p class="font-medium text-zinc-300">No members-only events yet.</p>' +
+                '<p class="text-xs mt-2">When a leader checks <span class="text-orange-400">Members only</span> on an event, it shows up here.</p>' +
+                '<a href="events.html" class="inline-block mt-4 text-sm font-semibold text-orange-500">Open Events</a>' +
+                '</div>';
+            return;
+        }
+        list.innerHTML = rows.map(function (ev) {
+            var expired = privateEventExpired(ev);
+            var dateObj = ev.event_date ? new Date(String(ev.event_date).slice(0, 10) + 'T12:00:00') : null;
+            var dateLabel = dateObj && !isNaN(dateObj.getTime())
+                ? dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : '';
+            var timeLabel = ev.event_time ? String(ev.event_time).slice(0, 5) : '';
+            var img = privateEventImageUrl(ev);
+            var imgHtml = img
+                ? '<img src="' + escapeHtml(img) + '" alt="" class="w-16 h-16 rounded-2xl object-cover bg-zinc-800 shrink-0">'
+                : '<div class="w-16 h-16 rounded-2xl bg-zinc-800 flex items-center justify-center text-orange-500 shrink-0"><i class="fa-solid fa-lock"></i></div>';
+            var sub = [dateLabel, timeLabel, ev.location].filter(Boolean).join(' · ');
+            var cta = expired
+                ? '<span class="px-3 py-1.5 text-xs font-semibold rounded-2xl border border-zinc-700 text-zinc-500">Completed</span>'
+                : '<a href="events.html" class="px-4 py-1.5 text-xs font-semibold rounded-2xl border border-orange-600 text-orange-500 hover:bg-orange-950/40">View / RSVP</a>';
+            return (
+                '<div class="flex items-center gap-3 bg-zinc-950 border border-zinc-700 rounded-2xl p-4">' +
+                imgHtml +
+                '<div class="min-w-0 flex-1">' +
+                '<div class="font-medium truncate">' + escapeHtml(ev.title || 'Event') + '</div>' +
+                '<div class="text-xs text-zinc-400 mt-0.5 truncate">' + escapeHtml(sub || 'Members only') + '</div>' +
+                '</div>' + cta + '</div>'
+            );
+        }).join('');
+    } catch (e) {
+        console.error('[members] private events', e);
+        list.innerHTML = '<p class="text-center text-red-400 py-8 text-sm">Could not load members-only events.</p>';
+    }
+}
+
+async function rsvpEvent(eventId) {
+    location.href = 'events.html';
 }
 
 function escapeHtml(str) {
@@ -957,6 +1074,27 @@ function setAppFilterButtons(filter) {
   });
 }
 
+async function refreshAdminAppBadge() {
+  var badge = document.getElementById('admin-tab-badge');
+  if (!badge || !window._isAdmin || !window.sb) return;
+  try {
+    var res = await window.sb
+      .from('club_applications')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending');
+    var count = typeof res.count === 'number' ? res.count : ((res.data && res.data.length) || 0);
+    if (res.error) throw res.error;
+    if (count > 0) {
+      badge.textContent = count > 99 ? '99+' : String(count);
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  } catch (e) {
+    console.warn('[apps] badge', e);
+  }
+}
+
 async function loadClubApplications(filter) {
   if (filter) _appFilter = filter;
   window._appFilter = _appFilter;
@@ -980,6 +1118,7 @@ async function loadClubApplications(filter) {
       var n = _appCache.length;
       status.textContent = n ? (n + ' ' + (_appFilter === 'all' ? 'application' : _appFilter) + (n === 1 ? '' : 's')) : 'No applications in this view.';
     }
+    refreshAdminAppBadge();
   } catch (err) {
     console.warn('[apps]', err);
     var msg = (err && err.message) || 'Could not load applications';
@@ -1149,31 +1288,38 @@ async function reviewClubApplication(id, action) {
 }
 
 function ensureAdminPermsUi() {
-  var tab = document.getElementById('tab-6');
-  if (!tab || document.getElementById('admin-members-list')) return;
-  var wrap = document.createElement('div');
-  wrap.id = 'admin-perms-wrap';
-  wrap.className = 'pt-8 mt-8 border-t border-zinc-800';
-  wrap.innerHTML =
-    '<div class="flex items-center gap-x-2 mb-2">' +
-      '<i class="fa-solid fa-user-shield text-orange-500"></i>' +
-      '<div>' +
-        '<div class="font-semibold">Member permissions</div>' +
-        '<p class="text-xs text-zinc-500 mt-0.5">Change role, membership status, and admin access. You cannot remove your own admin flag.</p>' +
-      '</div>' +
-    '</div>' +
-    '<input id="admin-member-search" type="search" placeholder="Search name or email" oninput="filterAdminMembers()" class="mt-4 w-full max-w-lg bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm outline-none focus:border-orange-600">' +
-    '<p id="admin-members-status" class="text-sm text-zinc-500 mt-3 mb-3"></p>' +
-    '<div id="admin-members-list" class="space-y-3"></div>';
-  var pushTitle = tab.querySelector('#admin-push-title');
-  if (pushTitle) {
-    var section = pushTitle.closest('.max-w-lg') || pushTitle.parentElement;
-    var header = section && section.previousElementSibling;
-    tab.insertBefore(wrap, header || section || tab.firstChild);
-  } else {
-    tab.appendChild(wrap);
-  }
+  return;
 }
+
+function adminToolModalId(which) {
+  if (which === 'apps') return 'admin-apps-modal';
+  if (which === 'perms') return 'admin-perms-modal';
+  if (which === 'push') return 'admin-push-modal';
+  return '';
+}
+
+function openAdminTool(which) {
+  var id = adminToolModalId(which);
+  var modal = document.getElementById(id);
+  if (!modal) return;
+  modal.style.display = 'flex';
+  lockPageForModal(true);
+  if (which === 'apps') loadClubApplications(window._appFilter || 'pending');
+  if (which === 'perms') loadAdminMembers();
+}
+
+function closeAdminTool(which) {
+  var id = which ? adminToolModalId(which) : '';
+  var ids = id ? [id] : ['admin-apps-modal', 'admin-perms-modal', 'admin-push-modal'];
+  ids.forEach(function (mid) {
+    var modal = document.getElementById(mid);
+    if (modal) modal.style.display = 'none';
+  });
+  lockPageForModal(false);
+}
+
+window.openAdminTool = openAdminTool;
+window.closeAdminTool = closeAdminTool;
 
 var _adminMemberCache = [];
 
@@ -1189,8 +1335,14 @@ async function loadAdminMembers() {
   try {
     var res = await window.sb
       .from('profiles')
-      .select('id, full_name, email, membership_tier, membership_status, is_admin, created_at')
+      .select('id, full_name, email, membership_tier, membership_status, is_admin, is_leader, created_at')
       .order('full_name', { ascending: true });
+    if (res.error && /is_leader|column|schema cache/i.test(String(res.error.message || ''))) {
+      res = await window.sb
+        .from('profiles')
+        .select('id, full_name, email, membership_tier, membership_status, is_admin, created_at')
+        .order('full_name', { ascending: true });
+    }
     if (res.error) throw res.error;
     _adminMemberCache = res.data || [];
     if (status) status.textContent = _adminMemberCache.length + ' member' + (_adminMemberCache.length === 1 ? '' : 's');
@@ -1233,9 +1385,12 @@ function renderAdminMembers(rows) {
             '</div>' +
             '<div class="text-xs text-zinc-500 truncate">' + escapeHtml(p.email || '') + '</div>' +
           '</div>' +
-          (p.is_admin ? '<span class="text-[10px] uppercase tracking-wider px-2 py-1 rounded-lg border border-orange-800 text-orange-400">Admin</span>' : '') +
+          '<div class="flex flex-wrap gap-1">' +
+            (p.is_admin ? '<span class="text-[10px] uppercase tracking-wider px-2 py-1 rounded-lg border border-orange-800 text-orange-400">Admin</span>' : '') +
+            (p.is_leader ? '<span class="text-[10px] uppercase tracking-wider px-2 py-1 rounded-lg border border-emerald-800 text-emerald-400">Leader</span>' : '') +
+          '</div>' +
         '</div>' +
-        '<div class="grid sm:grid-cols-3 gap-2 mt-3">' +
+        '<div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-3">' +
           '<label class="text-[10px] uppercase tracking-wider text-zinc-500">Role' +
             '<select onchange="queueMemberPerm(\'' + id + '\',\'membership_tier\',this.value)" class="mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-200">' +
               opt('none', 'Member', tier) +
@@ -1249,6 +1404,11 @@ function renderAdminMembers(rows) {
               opt('pending', 'Pending', st) +
               opt('inactive', 'Inactive', st) +
               opt('denied', 'Denied', st) +
+            '</select></label>' +
+          '<label class="text-[10px] uppercase tracking-wider text-zinc-500">Leader' +
+            '<select onchange="queueMemberPerm(\'' + id + '\',\'is_leader\',this.value)" class="mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-200">' +
+              opt('false', 'No', p.is_leader ? 'true' : 'false') +
+              opt('true', 'Yes', p.is_leader ? 'true' : 'false') +
             '</select></label>' +
           '<label class="text-[10px] uppercase tracking-wider text-zinc-500">Access' +
             '<select ' + (mine ? 'disabled title="You cannot change your own admin flag"' : '') +
@@ -1279,9 +1439,19 @@ async function queueMemberPerm(userId, field, value) {
   }
   var patch = {};
   if (field === 'is_admin') patch.is_admin = value === 'true' || value === true;
-  else patch[field] = value;
+  else if (field === 'is_leader') {
+    patch.is_leader = value === 'true' || value === true;
+  } else patch[field] = value;
   try {
-    var upd = await window.sb.from('profiles').update(patch).eq('id', userId).select('id, full_name, email, membership_tier, membership_status, is_admin, created_at').maybeSingle();
+    var upd = await window.sb.from('profiles').update(patch).eq('id', userId).select('id, full_name, email, membership_tier, membership_status, is_admin, is_leader, created_at').maybeSingle();
+    if (upd.error && /is_leader|column|schema cache/i.test(String(upd.error.message || ''))) {
+      if (field === 'is_leader') {
+        throw new Error('Add is_leader to profiles (SQL: alter table profiles add column if not exists is_leader boolean default false)');
+      }
+      var fallback = Object.assign({}, patch);
+      delete fallback.is_leader;
+      upd = await window.sb.from('profiles').update(fallback).eq('id', userId).select('id, full_name, email, membership_tier, membership_status, is_admin, created_at').maybeSingle();
+    }
     if (upd.error) throw upd.error;
     _adminMemberCache = (_adminMemberCache || []).map(function (row) {
       return String(row.id) === String(userId) && upd.data ? upd.data : row;
@@ -1329,4 +1499,167 @@ if (document.readyState === 'loading') {
 } else {
   bootMembers();
 }
+
+// ─── Notification preference toggles ───────────────────────────────────────
+var NOTIF_PREF_KEY = 'sb_notif_prefs';
+var NOTIF_PREF_IDS = {
+  notify_push: 'pref-notify-push',
+  notify_events: 'pref-notify-events',
+  notify_forum: 'pref-notify-forum',
+  notify_comments: 'pref-notify-comments',
+  notify_rsvp: 'pref-notify-rsvp',
+  notify_admin: 'pref-notify-admin'
+};
+
+function defaultNotifPrefs() {
+  return {
+    notify_push: true,
+    notify_events: true,
+    notify_forum: true,
+    notify_comments: true,
+    notify_rsvp: true,
+    notify_admin: true
+  };
+}
+
+function readLocalNotifPrefs() {
+  try {
+    var raw = localStorage.getItem(NOTIF_PREF_KEY);
+    if (!raw) return null;
+    var parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeLocalNotifPrefs(prefs) {
+  try {
+    localStorage.setItem(NOTIF_PREF_KEY, JSON.stringify(prefs));
+  } catch (e) {}
+}
+
+function setSwitchOn(el, on) {
+  if (!el) return;
+  el.setAttribute('aria-checked', on ? 'true' : 'false');
+}
+
+function isSwitchOn(el) {
+  return !!(el && el.getAttribute('aria-checked') === 'true');
+}
+
+function applyNotifPrefsToUI(prefs) {
+  Object.keys(NOTIF_PREF_IDS).forEach(function (key) {
+    var el = document.getElementById(NOTIF_PREF_IDS[key]);
+    if (!el) return;
+    var val = prefs[key];
+    setSwitchOn(el, val !== false);
+  });
+}
+
+function collectNotifPrefsFromUI() {
+  var prefs = defaultNotifPrefs();
+  Object.keys(NOTIF_PREF_IDS).forEach(function (key) {
+    var el = document.getElementById(NOTIF_PREF_IDS[key]);
+    prefs[key] = isSwitchOn(el);
+  });
+  return prefs;
+}
+
+function prefsFromProfile(profile) {
+  var prefs = defaultNotifPrefs();
+  if (!profile) return prefs;
+  Object.keys(NOTIF_PREF_IDS).forEach(function (key) {
+    if (typeof profile[key] === 'boolean') prefs[key] = profile[key];
+  });
+  return prefs;
+}
+
+async function loadNotifSettings() {
+  var local = readLocalNotifPrefs();
+  if (local) applyNotifPrefsToUI(Object.assign(defaultNotifPrefs(), local));
+  else applyNotifPrefsToUI(defaultNotifPrefs());
+
+  try {
+    var user = await getCurrentUser();
+    if (!user) return collectNotifPrefsFromUI();
+    var profile = await getProfile(user.id);
+    if (profile) {
+      var fromServer = prefsFromProfile(profile);
+      // Server wins when columns exist; otherwise keep local/defaults
+      var merged = Object.assign(defaultNotifPrefs(), local || {}, fromServer);
+      applyNotifPrefsToUI(merged);
+      writeLocalNotifPrefs(merged);
+      return merged;
+    }
+  } catch (e) {
+    console.warn('[notif prefs] load', e);
+  }
+  return collectNotifPrefsFromUI();
+}
+
+async function persistNotifPrefs(prefs) {
+  writeLocalNotifPrefs(prefs);
+  var errEl = document.getElementById('notif-settings-error');
+  if (errEl) {
+    errEl.classList.add('hidden');
+    errEl.textContent = '';
+  }
+  try {
+    var user = await getCurrentUser();
+    if (!user || !window.sb) return true;
+    var patch = {
+      notify_push: !!prefs.notify_push,
+      notify_events: !!prefs.notify_events,
+      notify_forum: !!prefs.notify_forum,
+      notify_comments: !!prefs.notify_comments,
+      notify_rsvp: !!prefs.notify_rsvp,
+      notify_admin: !!prefs.notify_admin,
+      updated_at: new Date().toISOString()
+    };
+    var { error } = await window.sb.from('profiles').update(patch).eq('id', user.id);
+    if (error) {
+      console.warn('[notif prefs] supabase update', error);
+      // Local save still succeeded — columns may not exist yet
+      return true;
+    }
+    return true;
+  } catch (e) {
+    console.warn('[notif prefs] persist', e);
+    return true;
+  }
+}
+
+async function saveNotifSettings() {
+  var prefs = collectNotifPrefsFromUI();
+  var ok = await persistNotifPrefs(prefs);
+  if (typeof window.showNotifSavedBanner === 'function') window.showNotifSavedBanner();
+  if (typeof showToast === 'function') showToast('Notification settings saved');
+  return ok;
+}
+
+function bindNotifToggles() {
+  Object.keys(NOTIF_PREF_IDS).forEach(function (key) {
+    var el = document.getElementById(NOTIF_PREF_IDS[key]);
+    if (!el || el._sbBound) return;
+    el._sbBound = true;
+    el.addEventListener('click', function () {
+      var next = !isSwitchOn(el);
+      setSwitchOn(el, next);
+      var prefs = collectNotifPrefsFromUI();
+      persistNotifPrefs(prefs);
+      if (typeof window.showNotifSavedBanner === 'function') window.showNotifSavedBanner();
+    });
+  });
+}
+
+window.loadNotifSettings = loadNotifSettings;
+window.saveNotifSettings = saveNotifSettings;
+
+document.addEventListener('DOMContentLoaded', function () {
+  bindNotifToggles();
+  loadNotifSettings();
+});
+
 

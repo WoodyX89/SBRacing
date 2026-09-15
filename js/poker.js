@@ -148,14 +148,20 @@ function parsePokerPickupMeta(desc){
 }
 function parseExpireMeta(desc){
   var m=String(desc||'').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{1,2}:\d{2})(?::\d{2})?\]\]/i);
-  if(!m)return 0;
-  var hh=m[2].length===4?'0'+m[2]:m[2];
-  var d=new Date(m[1]+'T'+hh+':00');
-  return isNaN(d.getTime())?0:d.getTime();
+  var date=m?m[1]:'';
+  var raw=m?m[2]:'';
+  var time=raw?(raw.length===4?'0'+raw:raw):'';
+  var ms=0;
+  if(date&&time){
+    var d=new Date(date+'T'+time+':00');
+    if(!isNaN(d.getTime()))ms=d.getTime();
+  }
+  return{date:date,time:time,ms:ms};
 }
 function pokerEventCompleted(ev){
   var exp=parseExpireMeta(ev&&ev.description);
-  if(exp)return Date.now()>exp;
+  if(exp&&exp.ms)return Date.now()>exp.ms;
+  if(typeof isEventExpired==='function')return isEventExpired(ev);
   if(!ev||!ev.event_date)return false;
   var dateStr=String(ev.event_date).slice(0,10);
   var timeStr='12:00:00';
@@ -168,6 +174,16 @@ function pokerEventCompleted(ev){
   if(isNaN(d.getTime()))d=new Date(dateStr+'T12:00:00');
   if(isNaN(d.getTime()))return false;
   return Date.now()>(d.getTime()+24*60*60*1000);
+}
+function lockPokerPlayAfterComplete(){
+  hidePokerPlayUi();
+  var btn=document.getElementById('btn-draw-card');
+  if(btn){
+    btn.disabled=true;
+    btn.textContent='Event completed — hands closed';
+  }
+  var lb=document.getElementById('poker-lb-panel');
+  if(lb)lb.classList.remove('hidden');
 }
 function haversineFeet(aLat,aLng,bLat,bLng){
   var R=20902231; // earth radius in feet
@@ -305,6 +321,12 @@ async function loadStopMode(){
     pokerLocation=loc;
     const{data:ev}=await window.sb.from('events').select('*').eq('id',pokerEventId).single();
     applyPokerEventSettings(ev);
+    if(pokerResultsOpen){
+      lockPokerPlayAfterComplete();
+      showPokerMsg('Reveal time has passed. No more hands — leaderboard is live.');
+      await refreshLeaderboard();
+      return;
+    }
     if(pokerPickupMode==='geo'){
       showPokerMsg('This event uses GPS check-in, not QR. Opening nearby stops…');
       await loadEventPokerHub();
@@ -354,10 +376,10 @@ async function loadLeaderboardOnly(){
     applyPokerEventSettings(ev);
     var t=document.getElementById('poker-event-name');
     if(t)t.textContent=((ev&&ev.title)||'Poker Run')+' · Leaderboard';
-    var exp=String(ev&&ev.description||'').match(/\[\[expire:(\d{4}-\d{2}-\d{2})T(\d{1,2}:\d{2})(?::\d{2})?\]\]/i);
+    var exp=parseExpireMeta(ev&&ev.description);
     showPokerMsg(pokerResultsOpen
-      ? 'Final hands are face up.'
-      : (exp ? ('Cards stay face down until '+exp[1]+' at '+exp[2]+'.') : 'Cards stay face down until the event is over.'));
+      ? 'Final hands are face up. Event completed.'
+      : (exp.date ? ('Cards stay face down until '+exp.date+' at '+exp.time+'.') : 'Cards stay face down until the event is over.'));
     await refreshLeaderboard();
   }catch(e){
     console.error(e);
@@ -371,6 +393,14 @@ async function loadEventPokerHub(){
     const{data:ev}=await window.sb.from('events').select('*').eq('id',pokerEventId).single();
     applyPokerEventSettings(ev);
     var lbHub=document.getElementById('poker-lb-panel');
+    if(pokerResultsOpen){
+      lockPokerPlayAfterComplete();
+      showPokerMsg('Reveal time has passed. No more hands — leaderboard is live.');
+      await tryResumeEntry();
+      await refreshMyHand();
+      await refreshLeaderboard();
+      return;
+    }
     if(lbHub)lbHub.classList.add('hidden');
     await tryResumeEntry();
     await refreshMyHand();
@@ -679,6 +709,12 @@ async function joinPokerRun(ev){
 }
 
 async function drawCard(){
+  if(pokerResultsOpen||pokerEventCompleted(pokerEventRow)){
+    pokerResultsOpen=true;
+    lockPokerPlayAfterComplete();
+    showToast('Reveal time has passed — no more hands',true);
+    return;
+  }
   if(!currentEntry){showToast('Join with your name first',true);return}
   if(!pokerLocation){
     showToast(pokerPickupMode==='qr'?'Scan a checkpoint QR first':'Get within range of a checkpoint first',true);

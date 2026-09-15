@@ -24,7 +24,8 @@ var AREAS = {
   hat: { center: [50.04, -110.68], zoom: 12 },
   redcliff: { center: [50.08, -110.80], zoom: 12 },
   elkwater: { center: [49.66, -110.29], zoom: 13 },
-  cypress: { center: [49.65, -110.26], zoom: 12 }
+  cypress: { center: [49.65, -110.26], zoom: 12 },
+  fernie: { center: [49.50, -115.07], zoom: 12 }
 };
 
 function normalizeDifficulty(raw) {
@@ -384,6 +385,15 @@ function setAreaFilter(area) {
     btn.classList.toggle('text-zinc-400', !active);
   });
   filterTrailBrowser();
+  if (map && currentAreaFilter === 'Fernie' && AREAS.fernie) {
+    map.setView(AREAS.fernie.center, AREAS.fernie.zoom);
+  } else if (map && currentAreaFilter === 'Cypress Hills / Elkwater' && AREAS.elkwater) {
+    map.setView(AREAS.elkwater.center, AREAS.elkwater.zoom);
+  } else if (map && currentAreaFilter === 'Redcliff' && AREAS.redcliff) {
+    map.setView(AREAS.redcliff.center, AREAS.redcliff.zoom);
+  } else if (map && currentAreaFilter === 'Medicine Hat' && AREAS.hat) {
+    map.setView(AREAS.hat.center, AREAS.hat.zoom);
+  }
 }
 
 function filterTrailBrowser() {
@@ -397,6 +407,8 @@ function filterTrailBrowser() {
       var area = (tf.area || '').toLowerCase();
       if (currentAreaFilter === 'Cypress Hills / Elkwater') {
         if (area.indexOf('cypress') === -1 && area.indexOf('elkwater') === -1) return false;
+      } else if (currentAreaFilter === 'Fernie') {
+        if (area.indexOf('fernie') === -1) return false;
       } else if (area.indexOf(currentAreaFilter.toLowerCase()) === -1) {
         return false;
       }

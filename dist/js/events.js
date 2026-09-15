@@ -21,7 +21,16 @@ function stripEventMeta(desc) {
   return String(desc || '')
     .replace(/\s*\[\[poker:(both|qr|geo):\d+\]\]\s*/ig, '')
     .replace(/\s*\[\[expire:\d{4}-\d{2}-\d{2}T\d{1,2}:\d{2}(?::\d{2})?\]\]\s*/ig, '')
+    .replace(/\s*\[\[image:[^\]]+\]\]\s*/ig, '')
     .trim();
+}
+function parseEventImageMeta(desc) {
+  var m = String(desc || '').match(/\[\[image:([^\]]+)\]\]/i);
+  return m ? String(m[1]).trim() : '';
+}
+function eventImageUrl(ev) {
+  if (!ev) return '';
+  return String(ev.image_url || ev.cover_url || parseEventImageMeta(ev.description) || '').trim();
 }
 function parsePokerPickupMeta(desc) {
   var m = String(desc || '').match(/\[\[poker:(both|qr|geo):(\d+)\]\]/i);
@@ -55,6 +64,9 @@ function withEventMeta(desc, opts) {
     var t = normalizeClock(opts.expireTime) || '23:59';
     out = (out ? out + '\n' : '') + '[[expire:' + opts.expireDate + 'T' + t + ']]';
   }
+  if (opts.imageUrl) {
+    out = (out ? out + '\n' : '') + '[[image:' + String(opts.imageUrl).replace(/\]/g, '') + ']]';
+  }
   return out;
 }
 function withPokerPickupMeta(desc, mode, radiusFt) {
@@ -63,8 +75,57 @@ function withPokerPickupMeta(desc, mode, radiusFt) {
     pokerMode: mode,
     radiusFt: radiusFt,
     expireDate: exp.date || '',
-    expireTime: exp.time || ''
+    expireTime: exp.time || '',
+    imageUrl: parseEventImageMeta(desc) || ''
   });
+}
+
+function setEventImagePreview(url) {
+  var wrap = document.getElementById('ev-image-preview-wrap');
+  var img = document.getElementById('ev-image-preview');
+  var hidden = document.getElementById('ev-image-url');
+  var clear = document.getElementById('ev-image-clear');
+  if (hidden) hidden.value = url || '';
+  if (url && img && wrap) {
+    img.src = url;
+    wrap.classList.remove('hidden');
+    if (clear) clear.classList.remove('hidden');
+  } else {
+    if (img) img.removeAttribute('src');
+    if (wrap) wrap.classList.add('hidden');
+    if (clear) clear.classList.add('hidden');
+  }
+}
+
+function clearEventImage() {
+  var file = document.getElementById('ev-image-file');
+  if (file) file.value = '';
+  setEventImagePreview('');
+}
+window.clearEventImage = clearEventImage;
+
+async function uploadEventImageFile(file) {
+  if (!file || !window.sb) return '';
+  if (!file.type || file.type.indexOf('image/') !== 0) throw new Error('Choose an image file');
+  if (file.size > 5 * 1024 * 1024) throw new Error('Image must be under 5 MB');
+  var ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/jpeg/, 'jpg');
+  if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic'].indexOf(ext) === -1) ext = 'jpg';
+  var path = 'events/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+  var buckets = ['event-images', 'merch', 'avatars', 'trail-photos'];
+  var lastErr = null;
+  for (var i = 0; i < buckets.length; i++) {
+    var { error } = await window.sb.storage.from(buckets[i]).upload(path, file, {
+      cacheControl: '3600',
+      upsert: true,
+      contentType: file.type || 'image/jpeg'
+    });
+    if (!error) {
+      var { data: pub } = window.sb.storage.from(buckets[i]).getPublicUrl(path);
+      if (pub && pub.publicUrl) return pub.publicUrl + '?t=' + Date.now();
+    }
+    lastErr = error;
+  }
+  throw lastErr || new Error('Upload failed');
 }
 
 function eventExpireMs(ev) {
@@ -149,8 +210,13 @@ function eventStartMs(ev) {
   return d.getTime();
 }
 
-/** True once 24 hours have passed since event start. */
+/**
+ * Event is completed when the Reveal cards date/time has elapsed.
+ * If no reveal time was set, fall back to 24 hours after start.
+ */
 function isEventExpired(ev) {
+  var reveal = eventExpireMs(ev);
+  if (reveal) return Date.now() > reveal;
   var start = eventStartMs(ev);
   if (!start) return false;
   return Date.now() > (start + 24 * 60 * 60 * 1000);
@@ -279,6 +345,15 @@ async function loadEvents() {
     }
 
     allEvents = data || [];
+    // Members-only events live on the Members → Private Events tab.
+    // Guests on the public Events page should not see them.
+    var sessionUser = null;
+    try {
+      if (typeof getCurrentUser === 'function') sessionUser = await getCurrentUser();
+    } catch (e) {}
+    if (!sessionUser) {
+      allEvents = allEvents.filter(function (ev) { return !ev.is_members_only; });
+    }
     sortEventsByDate();
     await loadEventSocial();
     await loadMyRsvps();
@@ -339,11 +414,6 @@ function renderEvents() {
       rsvpBtnHtml =
         '<button type="button" disabled class="w-full py-3 rounded-2xl border border-zinc-800 text-zinc-600 font-semibold text-sm cursor-not-allowed">' +
         '<i class="fa-solid fa-flag-checkered mr-1"></i> Completed</button>';
-      if (canManageEvents) {
-        rsvpBtnHtml +=
-          '<button type="button" onclick="openRsvpList(' + ev.id + ')" class="mt-2 w-full py-2 rounded-2xl border border-zinc-700 text-xs text-zinc-400 hover:text-white">' +
-          '<i class="fa-solid fa-users mr-1"></i> View RSVPs (' + taken + ')</button>';
-      }
     } else if (myRsvp && myRsvp.status !== 'cancelled') {
       rsvpBtnHtml =
         '<div class="space-y-2">' +
@@ -382,8 +452,8 @@ function renderEvents() {
 
     const isPoker = ev.category === 'poker_run';
     const pokerPickup = isPoker ? parsePokerPickupMeta(ev.description) : { mode: 'both' };
-    const allowQr = !isPoker || pokerPickup.mode !== 'geo';
-    const allowGeo = !isPoker || pokerPickup.mode !== 'qr';
+    const allowQr = !expired && (!isPoker || pokerPickup.mode !== 'geo');
+    const allowGeo = !expired && (!isPoker || pokerPickup.mode !== 'qr');
     const pokerBtn = isPoker ? (
       (`<a href="poker.html?e=${ev.id}&board=1" class="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase px-3 py-1.5 rounded-full bg-zinc-950 border border-orange-700/70 text-orange-400 hover:bg-orange-950/50 hover:border-orange-500 transition-colors">
           <i class="fa-solid fa-trophy text-[10px]"></i>Leaderboard
@@ -435,9 +505,15 @@ function renderEvents() {
          'class="px-10 py-4 border-4 border-zinc-400 bg-zinc-950 text-zinc-300 text-2xl sm:text-3xl font-black uppercase shadow-2xl whitespace-nowrap">COMPLETED</span>' +
          '</div>')
       : '';
+    var cover = eventImageUrl(ev);
+    var coverHtml = cover
+      ? ('<div class="rounded-2xl overflow-hidden border border-zinc-800 mb-4 bg-zinc-950">' +
+         '<img src="' + escapeHtml(cover) + '" alt="" class="w-full h-40 object-cover"></div>')
+      : '';
     const cardBody = `
         ${webDeleteX}
         ${completedStamp}
+        ${coverHtml}
         <div class="flex justify-between items-start gap-3 ${showCornerX ? 'pr-10' : ''}">
           <div class="min-w-0">
             <div class="text-xs font-mono tracking-widest ${badgeColor}">${badgeText}</div>
@@ -963,6 +1039,22 @@ function openEventModal(id) {
   document.getElementById('ev-category').value = ev ? (ev.category || 'ride') : 'ride';
   document.getElementById('ev-featured').checked = !!(ev && ev.is_featured);
   document.getElementById('ev-members-only').checked = !!(ev && ev.is_members_only);
+  var imgFile = document.getElementById('ev-image-file');
+  if (imgFile) imgFile.value = '';
+  setEventImagePreview(eventImageUrl(ev));
+  if (imgFile && !imgFile._sbBound) {
+    imgFile._sbBound = true;
+    imgFile.addEventListener('change', function () {
+      var f = imgFile.files && imgFile.files[0];
+      if (!f) return;
+      if (f.type && f.type.indexOf('image/') === 0) {
+        try {
+          var local = URL.createObjectURL(f);
+          setEventImagePreview(local);
+        } catch (e) {}
+      }
+    });
+  }
   var pickupMeta = parsePokerPickupMeta(ev && ev.description);
   var pickupEl = document.getElementById('ev-poker-pickup');
   var radiusEl = document.getElementById('ev-poker-radius');
@@ -993,6 +1085,8 @@ function openEventModal(id) {
   }
   modal.classList.remove('hidden');
   modal.classList.add('flex');
+  lockEventModalPageScroll(true);
+  bindEventModalScrollGuard(modal);
 
   // Wire category toggle + map after modal is visible
   var cat = document.getElementById('ev-category');
@@ -1018,12 +1112,65 @@ function openEventModal(id) {
   }
 }
 
+function lockEventModalPageScroll(lock) {
+  var html = document.documentElement;
+  var body = document.body;
+  if (lock) {
+    if (!window._sbEventModalScrollLocked) {
+      window._sbEventModalScrollY = window.scrollY || window.pageYOffset || 0;
+    }
+    window._sbEventModalScrollLocked = true;
+    html.classList.add('sb-event-modal-open');
+    body.classList.add('sb-event-modal-open');
+    body.style.position = 'fixed';
+    body.style.width = '100%';
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.top = '-' + (window._sbEventModalScrollY || 0) + 'px';
+    body.style.overflow = 'hidden';
+  } else {
+    window._sbEventModalScrollLocked = false;
+    html.classList.remove('sb-event-modal-open');
+    body.classList.remove('sb-event-modal-open');
+    body.style.position = '';
+    body.style.width = '';
+    body.style.left = '';
+    body.style.right = '';
+    body.style.top = '';
+    body.style.overflow = '';
+    if (window._sbEventModalScrollY != null) {
+      window.scrollTo(0, window._sbEventModalScrollY);
+    }
+  }
+}
+
+function bindEventModalScrollGuard(modal) {
+  if (!modal || modal._sbScrollGuard) return;
+  modal._sbScrollGuard = true;
+  modal.addEventListener('touchmove', function (e) {
+    var form = document.getElementById('event-edit-form');
+    if (e.target === modal) {
+      e.preventDefault();
+      return;
+    }
+    if (form && form.contains(e.target)) return;
+    var sheet = document.getElementById('event-modal-sheet');
+    if (sheet && !form.contains(e.target)) {
+      // allow map / buttons; only block the dimmed backdrop
+    }
+  }, { passive: false });
+  modal.addEventListener('wheel', function (e) {
+    if (e.target === modal) e.preventDefault();
+  }, { passive: false });
+}
+
 function closeEventModal() {
   if (typeof toggleCheckpointMapFullscreen === 'function') toggleCheckpointMapFullscreen(false);
   const modal = document.getElementById('event-modal');
   if (!modal) return;
   modal.classList.add('hidden');
   modal.classList.remove('flex');
+  lockEventModalPageScroll(false);
   editingEventId = null;
   editingEventBaseline = null;
   pendingCheckpoints = [];
@@ -1367,7 +1514,7 @@ async function saveEvent(e) {
       var cat = document.getElementById('ev-category').value;
       var expD = (document.getElementById('ev-expire-date') || {}).value || '';
       var expT = normalizeClock((document.getElementById('ev-expire-time') || {}).value || '');
-      var opts = { expireDate: expD, expireTime: expT };
+      var opts = { expireDate: expD, expireTime: expT, imageUrl: (document.getElementById('ev-image-url') || {}).value || '' };
       if (cat === 'poker_run') {
         var modeEl = document.getElementById('ev-poker-pickup');
         var radEl = document.getElementById('ev-poker-radius');
@@ -1386,6 +1533,9 @@ async function saveEvent(e) {
     is_featured: document.getElementById('ev-featured').checked,
     is_members_only: document.getElementById('ev-members-only').checked
   };
+  var pendingImageUrl = (document.getElementById('ev-image-url') || {}).value || '';
+  var imageFileEl = document.getElementById('ev-image-file');
+  var imageFile = imageFileEl && imageFileEl.files && imageFileEl.files[0];
 
   if (!payload.title || !payload.event_date) {
     showToast('Title and date are required', true);
@@ -1401,6 +1551,20 @@ async function saveEvent(e) {
   }
 
   try {
+    if (imageFile) {
+      pendingImageUrl = await uploadEventImageFile(imageFile);
+      setEventImagePreview(pendingImageUrl);
+    }
+    payload.description = withEventMeta(document.getElementById('ev-description').value.trim(), {
+      expireDate: (document.getElementById('ev-expire-date') || {}).value || '',
+      expireTime: normalizeClock((document.getElementById('ev-expire-time') || {}).value || ''),
+      pokerMode: payload.category === 'poker_run' ? ((document.getElementById('ev-poker-pickup') || {}).value || 'both') : '',
+      radiusFt: (document.getElementById('ev-poker-radius') || {}).value,
+      imageUrl: pendingImageUrl
+    }) || null;
+    if (pendingImageUrl) payload.image_url = pendingImageUrl;
+    else payload.image_url = null;
+
     let error;
     let savedEventId = editingEventId;
     if (editingEventId) {
@@ -1409,6 +1573,16 @@ async function saveEvent(e) {
       var ins = await window.sb.from('events').insert(payload).select('id').single();
       error = ins.error;
       if (!error && ins.data) savedEventId = ins.data.id;
+    }
+    if (error && /image_url|schema cache|column/i.test(String(error.message || ''))) {
+      delete payload.image_url;
+      if (editingEventId) {
+        ({ error } = await window.sb.from('events').update(payload).eq('id', editingEventId));
+      } else {
+        var ins2 = await window.sb.from('events').insert(payload).select('id').single();
+        error = ins2.error;
+        if (!error && ins2.data) savedEventId = ins2.data.id;
+      }
     }
     if (error) throw error;
 
@@ -2098,6 +2272,11 @@ function parsePokerQrPayload(raw) {
 }
 
 async function openEventQrScanner(eventId) {
+  var evRow = allEvents && allEvents.find(function (e) { return String(e.id) === String(eventId); });
+  if (evRow && isEventExpired(evRow)) {
+    showToast('This poker run is completed — no more hands', true);
+    return;
+  }
   eventQrExpectedEventId = eventId || null;
   var modal = document.getElementById('qr-scan-modal');
   if (!modal) {

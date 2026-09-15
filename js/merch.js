@@ -664,9 +664,77 @@ function showAdminUI() {
   if (badge) badge.classList.remove('hidden');
   const addBtn = document.getElementById('admin-add-btn');
   if (addBtn) addBtn.classList.remove('hidden');
-  loadAdminOrders();
-  loadSalesDashboard();
 }
+
+function lockPageForModal(lock) {
+  var html = document.documentElement;
+  var body = document.body;
+  if (!body) return;
+  if (lock) {
+    if (!window._sbModalLockCount) {
+      window._sbModalScrollY = window.scrollY || window.pageYOffset || 0;
+    }
+    window._sbModalLockCount = (window._sbModalLockCount || 0) + 1;
+    body.style.position = 'fixed';
+    body.style.width = '100%';
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.top = '-' + (window._sbModalScrollY || 0) + 'px';
+    body.style.overflow = 'hidden';
+    html.style.overflow = 'hidden';
+  } else {
+    window._sbModalLockCount = Math.max(0, (window._sbModalLockCount || 1) - 1);
+    if (window._sbModalLockCount > 0) return;
+    body.style.position = '';
+    body.style.width = '';
+    body.style.left = '';
+    body.style.right = '';
+    body.style.top = '';
+    body.style.overflow = '';
+    html.style.overflow = '';
+    if (window._sbModalScrollY != null) window.scrollTo(0, window._sbModalScrollY);
+  }
+}
+
+function merchAdminModalId(which) {
+  if (which === 'dashboard') return 'merch-dash-modal';
+  if (which === 'inventory') return 'merch-inv-modal';
+  if (which === 'orders') return 'merch-orders-modal';
+  return '';
+}
+
+function openMerchAdminTool(which) {
+  if (!isAdmin) {
+    if (typeof showToast === 'function') showToast('Admin only', true);
+    return;
+  }
+  var id = merchAdminModalId(which);
+  var modal = document.getElementById(id);
+  if (!modal) return;
+  modal.style.display = 'flex';
+  lockPageForModal(true);
+  if (which === 'dashboard') {
+    loadSalesDashboard();
+    setTimeout(function () {
+      if (_salesChart && typeof _salesChart.resize === 'function') _salesChart.resize();
+    }, 80);
+  }
+  if (which === 'inventory') loadSalesDashboard();
+  if (which === 'orders') loadAdminOrders();
+}
+
+function closeMerchAdminTool(which) {
+  var id = which ? merchAdminModalId(which) : '';
+  var ids = id ? [id] : ['merch-dash-modal', 'merch-inv-modal', 'merch-orders-modal'];
+  ids.forEach(function (mid) {
+    var modal = document.getElementById(mid);
+    if (modal) modal.style.display = 'none';
+  });
+  lockPageForModal(false);
+}
+
+window.openMerchAdminTool = openMerchAdminTool;
+window.closeMerchAdminTool = closeMerchAdminTool;
 
 function openProductModal(product = null) {
   editingProductId = product ? product.id : null;
@@ -696,6 +764,7 @@ function openProductModal(product = null) {
   const modal = document.getElementById('product-modal');
   modal.classList.remove('hidden');
   modal.classList.add('flex');
+  lockPageForModal(true);
 }
 
 function closeProductModal() {
@@ -703,6 +772,7 @@ function closeProductModal() {
   modal.classList.add('hidden');
   modal.classList.remove('flex');
   editingProductId = null;
+  lockPageForModal(false);
 }
 
 function editProduct(id) {
