@@ -40,14 +40,9 @@ async function ensureNotifyPermission() {
       console.warn('[notify] denied — Settings → SB Racing → Notifications');
       return false;
     }
-    if (window._sbrPushPermissionRequested) {
-      console.log('[notify] skip request — push already asked');
-      return false;
-    }
-    window._sbrPushPermissionRequested = true;
-    var req = await LN.requestPermissions();
-    console.log('[notify] requestPermissions', JSON.stringify(req));
-    return !!(req && req.display === 'granted');
+    // Never prompt here. PushNotifications is the only first-launch dialog.
+    console.log('[notify] not granted yet — waiting for push prompt');
+    return false;
   } catch (e) {
     console.warn('[notify] permission error', e);
     return false;

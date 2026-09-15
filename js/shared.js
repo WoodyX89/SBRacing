@@ -743,8 +743,8 @@ async function syncNativeBadge(count) {
         // Request permission on iOS (no-op on Android / already granted)
         if (typeof Badge.checkPermissions === 'function') {
           var perms = await Badge.checkPermissions();
-          if (perms && perms.display === 'prompt' && typeof Badge.requestPermissions === 'function') {
-            await Badge.requestPermissions();
+          if (perms && perms.display === 'prompt') {
+            // Do not prompt. PushNotifications owns the first-launch dialog.
           }
         }
         if (count <= 0) {
