@@ -118,6 +118,7 @@ async function initPushNotifications() {
   });
 
   try {
+    window._sbrPushPermissionRequested = true;
     var perm = await Push.requestPermissions();
     console.log('[push] permissions', JSON.stringify(perm));
     if (perm.receive !== 'granted') return;

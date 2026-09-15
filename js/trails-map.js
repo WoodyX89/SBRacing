@@ -345,14 +345,18 @@ function applyMyLocation(lat, lng, accuracy) {
   showToast('Location found');
 }
 
+function isNativeApp() {
+  try {
+    return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+  } catch (e) {
+    return false;
+  }
+}
+
 function nativeGeoPlugin() {
   try {
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation) {
       return window.Capacitor.Plugins.Geolocation;
-    }
-    if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()
-        && window.Geolocation) {
-      return window.Geolocation;
     }
   } catch (e) {}
   return null;
@@ -361,20 +365,36 @@ function nativeGeoPlugin() {
 async function locateMe() {
   showToast('Finding your location…');
   var plugin = nativeGeoPlugin();
-  if (plugin && typeof plugin.getCurrentPosition === 'function') {
+  var native = isNativeApp();
+
+  // iOS/Android: only the Capacitor plugin. Never also call navigator.geolocation —
+  // that second call is what shows the "localhost" permission sheet.
+  if (native) {
+    if (!plugin || typeof plugin.getCurrentPosition !== 'function') {
+      showToast('Location plugin missing — rebuild the iOS app', true);
+      return;
+    }
     try {
-      if (typeof plugin.requestPermissions === 'function') {
-        await plugin.requestPermissions();
-      }
-      var pos = await plugin.getCurrentPosition({ enableHighAccuracy: true, timeout: 12000 });
+      var pos = await plugin.getCurrentPosition({
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 5000
+      });
       var c = pos && pos.coords;
       if (!c) throw new Error('no coords');
       applyMyLocation(c.latitude, c.longitude, c.accuracy);
-      return;
     } catch (e) {
       console.warn('[trails] native geo', e);
+      var msg = (e && (e.message || e.errorMessage)) || 'Could not get location';
+      if (/denied|permission/i.test(String(msg))) {
+        showToast('Location permission denied — enable it in iPhone Settings → SB Racing', true);
+      } else {
+        showToast('Could not get location', true);
+      }
     }
+    return;
   }
+
   if (!navigator.geolocation) {
     showToast('Geolocation not available', true);
     return;
