@@ -1129,8 +1129,10 @@ function initEvCheckpointMap() {
   // Same area as Trails page (Medicine Hat / Redcliff / Elkwater)
   evCheckpointMap = L.map('ev-checkpoint-map', {
     scrollWheelZoom: true,
-    tap: true
+    tap: true,
+    zoomControl: false
   }).setView([50.04, -110.68], 12);
+  L.control.zoom({ position: 'topleft' }).addTo(evCheckpointMap);
 
   var streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,

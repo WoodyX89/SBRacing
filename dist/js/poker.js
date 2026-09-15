@@ -409,38 +409,71 @@ function setGeoStatus(msg){
   if(el)el.textContent=msg||'';
 }
 
+function capGeo(){
+  try{
+    if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Geolocation)return window.Capacitor.Plugins.Geolocation;
+  }catch(e){}
+  return null;
+}
+function isNativeApp(){
+  try{return !!(window.Capacitor&&typeof window.Capacitor.isNativePlatform==='function'&&window.Capacitor.isNativePlatform());}catch(e){return false;}
+}
+function applyPokerFix(coords){
+  if(!coords)return;
+  pokerLastGps={lat:coords.latitude,lng:coords.longitude,accFt:(coords.accuracy||0)*3.28084};
+  setGeoStatus('GPS ±'+Math.round(pokerLastGps.accFt)+' ft');
+  renderGeoList(pokerLastGps);
+}
+
 async function refreshPokerGps(forcePrompt){
-  if(!navigator.geolocation){
-    setGeoStatus('This device has no GPS.');
-    renderGeoList(null);
-    return;
-  }
   setGeoStatus(forcePrompt?'Getting a fresh fix…':'Getting your location…');
   try{
-    var pos=await new Promise(function(resolve,reject){
+    var Geo=capGeo();
+    if(Geo&&isNativeApp()){
+      if(forcePrompt||true){
+        try{await Geo.requestPermissions();}catch(e){}
+      }
+      var pos=await Geo.getCurrentPosition({enableHighAccuracy:true,timeout:15000,maximumAge:forcePrompt?0:15000});
+      applyPokerFix(pos&&pos.coords);
+      startPokerGpsWatch();
+      return;
+    }
+    if(!navigator.geolocation){
+      setGeoStatus('This device has no GPS.');
+      renderGeoList(null);
+      return;
+    }
+    var webPos=await new Promise(function(resolve,reject){
       navigator.geolocation.getCurrentPosition(resolve,reject,{
         enableHighAccuracy:true,
         timeout:15000,
         maximumAge:forcePrompt?0:15000
       });
     });
-    pokerLastGps={lat:pos.coords.latitude,lng:pos.coords.longitude,accFt:pos.coords.accuracy*3.28084};
-    setGeoStatus('GPS ±'+Math.round(pokerLastGps.accFt)+' ft');
-    renderGeoList(pokerLastGps);
+    applyPokerFix(webPos.coords);
     startPokerGpsWatch();
   }catch(err){
     var code=err&&err.code;
-    setGeoStatus(code===1?'Location permission denied — enable it for this site.':'Could not get GPS. Try Refresh outdoors.');
+    setGeoStatus(code===1?'Location permission denied — enable it in Settings → SB Racing.':'Could not get GPS. Try Refresh outdoors.');
     renderGeoList(null);
   }
 }
 
-function startPokerGpsWatch(){
-  if(pokerGpsWatch!=null||!navigator.geolocation)return;
+async function startPokerGpsWatch(){
+  if(pokerGpsWatch!=null)return;
+  var Geo=capGeo();
+  if(Geo&&isNativeApp()){
+    try{
+      pokerGpsWatch=await Geo.watchPosition({enableHighAccuracy:true,timeout:15000,maximumAge:5000},function(pos,err){
+        if(err||!pos||!pos.coords)return;
+        applyPokerFix(pos.coords);
+      });
+    }catch(e){}
+    return;
+  }
+  if(!navigator.geolocation)return;
   pokerGpsWatch=navigator.geolocation.watchPosition(function(pos){
-    pokerLastGps={lat:pos.coords.latitude,lng:pos.coords.longitude,accFt:pos.coords.accuracy*3.28084};
-    setGeoStatus('GPS ±'+Math.round(pokerLastGps.accFt)+' ft');
-    renderGeoList(pokerLastGps);
+    applyPokerFix(pos.coords);
   },function(){},{enableHighAccuracy:true,maximumAge:5000});
 }
 

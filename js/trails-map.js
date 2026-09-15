@@ -436,19 +436,28 @@ function onBrowserTrailClick(trailId) {
   });
 }
 
-/** Enhanced popup: description + photos from trail-info.js */
+/** Enhanced popup: description + photos from trail-info.js + member uploads */
 function buildTrailPopupHtml(name, diff, area, trailId) {
   var col = diffColor(diff);
   var norm = normalizeDifficulty(diff);
   var info = (typeof getTrailDescription === 'function')
     ? getTrailDescription(name, area, diff)
     : { desc: '', photos: [] };
+  var photos = (typeof getTrailGalleryPhotos === 'function')
+    ? getTrailGalleryPhotos(name, area, diff)
+    : (info.photos || []).map(function (src) { return { image_url: src }; });
   var photosHtml = '';
-  if (info.photos && info.photos.length) {
-    photosHtml = '<div class="trail-popup-photos">' +
-      info.photos.map(function (src) {
-        return '<img src="' + src + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
-      }).join('') + '</div>';
+  if (photos && photos.length) {
+    photosHtml = '<div class="trail-popup-photos" onclick="openTrailGallery(\'' + String(trailId).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\', 0)">' +
+      photos.slice(0, 8).map(function (p, i) {
+        return '<img src="' + p.image_url + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
+      }).join('') +
+      (photos.length > 1
+        ? '<span class="trail-popup-photo-count">' + photos.length + ' photos · swipe</span>'
+        : '') +
+      '</div>';
+  } else {
+    photosHtml = '<div class="trail-popup-photos empty">No photos yet</div>';
   }
   var descHtml = info.desc
     ? '<div class="trail-popup-desc">' + escapeHtmlTrail(info.desc) + '</div>'
@@ -478,9 +487,13 @@ function buildTrailPopupHtml(name, diff, area, trailId) {
     photosHtml +
     descHtml +
     '<div class="trail-popup-actions">' +
-    '<button type="button" class="trail-popup-btn primary" onclick="addTrailMidpointAsCheckpoint(\'' + safeId + '\')">' +
-    '<i class="fa-solid fa-map-pin"></i> Add checkpoint</button>' +
     '<button type="button" class="trail-popup-btn" onclick="focusTrail(\'' + safeId + '\', false)">Zoom</button>' +
+    '<button type="button" class="trail-popup-btn green" onclick="startTrailPhotoUpload(\'' + safeId + '\')">' +
+    '<i class="fa-solid fa-camera"></i> Add photo</button>' +
+    (photos.length
+      ? '<button type="button" class="trail-popup-btn" onclick="openTrailGallery(\'' + safeId + '\', 0)">' +
+        '<i class="fa-solid fa-images"></i> Gallery</button>'
+      : '') +
     linkHtml +
     '</div>' +
     '</div>';
@@ -557,8 +570,13 @@ async function initMap() {
         layer.feature = f;
 
         layer.bindPopup(buildTrailPopupHtml(name, diff, area, id), {
-          maxWidth: 300,
+          maxWidth: 320,
           className: 'trail-popup'
+        });
+        layer.on('popupopen', function () {
+          if (typeof getTrailGalleryPhotos === 'function') {
+            try { layer.setPopupContent(buildTrailPopupHtml(name, diff, area, id)); } catch (err) {}
+          }
         });
 
         layer.on('click', function (e) {
@@ -1280,6 +1298,17 @@ document.addEventListener('DOMContentLoaded', function () {
     var eventId = q.get('event') || q.get('e');
     if (eventId) {
       loadEventCheckpointsOnMap(eventId);
+    }
+    if (window.trailPhotosReady && typeof window.trailPhotosReady.then === 'function') {
+      window.trailPhotosReady.then(function () {
+        trailFeatures.forEach(function (tf) {
+          if (tf.layer) {
+            try {
+              tf.layer.setPopupContent(buildTrailPopupHtml(tf.name, tf.difficulty, tf.area, tf.id));
+            } catch (e) {}
+          }
+        });
+      });
     }
   }).catch(function () {});
 
