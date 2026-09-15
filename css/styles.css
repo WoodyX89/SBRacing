@@ -342,33 +342,41 @@ input, select, textarea { font-size: 16px !important; }
   background: #fafafa !important;
   transform: rotateY(180deg) !important;
   border: 1px solid #d4d4d8 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  justify-content: space-between !important;
-  padding: 0.25rem 0.3rem !important;
+  display: block !important;
+  padding: 0 !important;
   color: #18181b !important;
+  position: relative !important;
 }
 .poker-card-front.red { color: #dc2626 !important; }
 .poker-card-corner {
+  position: absolute !important;
+  top: 0.18rem !important;
+  left: 0.2rem !important;
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
   line-height: 1 !important;
   font-weight: 800 !important;
-  font-size: 0.65rem !important;
+  font-size: 0.7rem !important;
+  z-index: 2 !important;
 }
-.poker-card-corner .suit { font-size: 0.7rem !important; }
+.poker-card-corner .suit { font-size: 0.72rem !important; line-height: 1 !important; }
 .poker-card-corner.bl {
+  top: auto !important;
+  left: auto !important;
+  right: 0.2rem !important;
+  bottom: 0.18rem !important;
   transform: rotate(180deg) !important;
-  align-self: flex-end !important;
 }
 .poker-card-center {
-  flex: 1 !important;
+  position: absolute !important;
+  inset: 0 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   font-size: 1.35rem !important;
   line-height: 1 !important;
+  pointer-events: none !important;
 }
 .poker-card.lg .poker-card-corner { font-size: 1.1rem !important; }
 .poker-card.lg .poker-card-corner .suit { font-size: 1.2rem !important; }

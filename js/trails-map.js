@@ -963,7 +963,7 @@ function updateRideUI(snap) {
   if (elDist) elDist.textContent = (snap.distanceKm || 0).toFixed(2) + ' km';
   if (elTime) elTime.textContent = formatRideTime(snap.elapsedSec);
   if (elElev) elElev.textContent = (snap.elevGainM || 0) + ' m';
-  if (elPts) elPts.textContent = String(snap.pointCount || 0);
+  if (elPts) elPts.textContent = String(scoreRidePoints(snap.distanceKm, snap.elevGainM));
 
   var mapHud = document.getElementById('map-ride-hud');
   var mapDist = document.getElementById('map-ride-distance');

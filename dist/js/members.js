@@ -2,18 +2,17 @@
 
 async function initMembersPage() {
     console.log('[members] init start');
+    // Always show login wall first so UI is never stuck blank
     showLoginWall();
 
-    let session = typeof getSessionFromStorage === 'function' ? getSessionFromStorage() : null;
-    if (!(session && session.user)) {
-      try {
+    let session = null;
+    try {
         session = await Promise.race([
             getSession(),
-            new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 1500); })
+            new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 3000); })
         ]);
-      } catch (e) {
+    } catch (e) {
         console.warn('[members] getSession error', e);
-      }
     }
 
     console.log('[members] session', session && session.user && session.user.email);
@@ -104,11 +103,18 @@ async function loadMemberDirectory() {
   const grid = document.getElementById('member-directory');
   if (!grid || !window.sb) return;
   try {
-    const { data, error } = await window.sb
+    var res = await window.sb
       .from('profiles')
-      .select('id, full_name, avatar_url, membership_tier, membership_status, created_at')
+      .select('id, full_name, avatar_url, membership_tier, membership_status, created_at, riding_bike, experience_level')
       .order('full_name', { ascending: true });
-    if (error) throw error;
+    if (res.error && /riding_bike|experience_level|column|schema cache/i.test(String(res.error.message || ''))) {
+      res = await window.sb
+        .from('profiles')
+        .select('id, full_name, avatar_url, membership_tier, membership_status, created_at')
+        .order('full_name', { ascending: true });
+    }
+    if (res.error) throw res.error;
+    var data = res.data;
     _memberDirCache = data || [];
     renderMemberDirectory(_memberDirCache);
   } catch (e) {
@@ -142,10 +148,12 @@ function renderMemberDirectory(list) {
       : '<div class="w-12 h-12 rounded-2xl bg-orange-600 text-white flex items-center justify-center font-bold">' + initial + '</div>';
     const tier = tierLabel[p.membership_tier] || 'Member';
     const active = p.membership_status === 'active';
+    const exp = experienceLabel(p.experience_level);
+    const sub = [tier + (active ? ' · Active' : ''), exp].filter(Boolean).join(' · ');
     return '<button type="button" onclick="openMemberProfile(\'' + p.id + '\')" class="text-left flex items-center gap-3 p-4 rounded-2xl bg-zinc-950 border border-zinc-800 hover:border-orange-700/60 transition-all w-full">' +
       av +
       '<div class="min-w-0 flex-1"><div class="font-semibold truncate">' + escapeHtml(name) + '</div>' +
-      '<div class="text-xs ' + (active ? 'text-emerald-400' : 'text-zinc-500') + '">' + escapeHtml(tier) + (active ? ' · Active' : '') + '</div></div>' +
+      '<div class="text-xs ' + (active ? 'text-emerald-400' : 'text-zinc-500') + '">' + escapeHtml(sub) + '</div></div>' +
       '<i class="fa-solid fa-chevron-right text-zinc-600 text-xs"></i></button>';
   }).join('');
 }
@@ -185,6 +193,16 @@ function lockPageForModal(lock) {
 }
 window.lockPageForModal = lockPageForModal;
 
+function experienceLabel(level) {
+  var map = {
+    beginner: 'Beginner',
+    intermediate: 'Intermediate',
+    advanced: 'Advanced',
+    expert: 'Expert / Race'
+  };
+  return map[level] || '';
+}
+
 async function openMemberProfile(userId) {
   const modal = document.getElementById('member-profile-modal');
   const body = document.getElementById('member-profile-body');
@@ -194,12 +212,18 @@ async function openMemberProfile(userId) {
   lockPageForModal(true);
   body.innerHTML = '<div class="text-zinc-500 text-sm">Loading…</div>';
   try {
-    const { data: p, error } = await window.sb
-      .from('profiles')
-      .select('id, full_name, avatar_url, membership_tier, membership_status, created_at, email, is_admin')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) throw error;
+    var cols = 'id, full_name, avatar_url, membership_tier, membership_status, created_at, email, is_admin, bio, riding_bike, experience_level';
+    if (window._isAdmin) cols += ', emergency_contact, phone';
+    var res = await window.sb.from('profiles').select(cols).eq('id', userId).maybeSingle();
+    if (res.error && /bio|riding_bike|experience_level|emergency_contact|column|schema cache/i.test(String(res.error.message || ''))) {
+      res = await window.sb
+        .from('profiles')
+        .select('id, full_name, avatar_url, membership_tier, membership_status, created_at, email, is_admin, emergency_contact, phone')
+        .eq('id', userId)
+        .maybeSingle();
+    }
+    if (res.error) throw res.error;
+    var p = res.data;
     if (!p) {
       body.innerHTML = '<p class="text-zinc-500">Member not found</p>';
       return;
@@ -208,8 +232,8 @@ async function openMemberProfile(userId) {
     const name = p.full_name || 'Member';
     const initial = name.charAt(0).toUpperCase();
     const av = p.avatar_url
-      ? '<img src="' + escapeAttr(p.avatar_url) + '" class="w-20 h-20 rounded-2xl object-cover bg-zinc-800" alt="">'
-      : '<div class="w-20 h-20 rounded-2xl bg-orange-600 text-white flex items-center justify-center text-2xl font-bold">' + initial + '</div>';
+      ? '<img src="' + escapeAttr(p.avatar_url) + '" class="w-24 h-24 rounded-3xl object-cover bg-zinc-800 border border-zinc-700" alt="">'
+      : '<div class="w-24 h-24 rounded-3xl bg-orange-600 text-white flex items-center justify-center text-2xl font-bold">' + initial + '</div>';
     // public ride count if allowed
     let rideHtml = '';
     try {
@@ -222,13 +246,28 @@ async function openMemberProfile(userId) {
       }
     } catch (_) {}
     const joined = p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '';
+    const exp = experienceLabel(p.experience_level);
+    var extra = '';
+    if (p.bio) extra += '<div><div class="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">Bio</div><p class="text-sm text-zinc-300 whitespace-pre-wrap">' + escapeHtml(p.bio) + '</p></div>';
+    if (p.riding_bike) extra += '<div><div class="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">Riding bike</div><p class="text-sm text-zinc-200">' + escapeHtml(p.riding_bike) + '</p></div>';
+    if (exp) extra += '<div><div class="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">Experience</div><p class="text-sm text-zinc-200">' + escapeHtml(exp) + '</p></div>';
+    if (window._isAdmin && (p.emergency_contact || p.phone)) {
+      extra += '<div class="rounded-2xl border border-orange-900/60 bg-orange-950/20 p-3">' +
+        '<div class="text-[10px] uppercase tracking-widest text-orange-400 mb-1">Admin only</div>' +
+        (p.phone ? '<p class="text-sm text-zinc-300">Phone: ' + escapeHtml(p.phone) + '</p>' : '') +
+        (p.emergency_contact ? '<p class="text-sm text-zinc-300">Emergency: ' + escapeHtml(p.emergency_contact) + '</p>' : '') +
+        '</div>';
+    }
     body.innerHTML =
       '<div class="flex items-center gap-4">' + av +
       '<div><div class="text-xl font-bold">' + escapeHtml(name) + '</div>' +
       '<div class="text-sm text-emerald-400 mt-1">' + escapeHtml(tierLabel[p.membership_tier] || 'Member') +
       (p.membership_status === 'active' ? ' · Active' : '') + '</div>' +
+      (exp ? '<div class="text-xs text-zinc-400 mt-1">' + escapeHtml(exp) + '</div>' : '') +
       (joined ? '<div class="text-xs text-zinc-500 mt-1">Joined ' + joined + '</div>' : '') +
-      '</div></div>' + rideHtml;
+      '</div></div>' +
+      (extra ? '<div class="space-y-3 pt-1">' + extra + '</div>' : '') +
+      rideHtml;
   } catch (e) {
     body.innerHTML = '<p class="text-red-400 text-sm">' + escapeHtml(e.message || 'Failed to load') + '</p>';
   }
@@ -258,6 +297,12 @@ function fillProfileForm(profile, user) {
     if (email) email.value = profile?.email || user?.email || '';
     if (phone) phone.value = profile?.phone || '';
     if (emergency) emergency.value = profile?.emergency_contact || '';
+    var bio = document.getElementById('profile-bio');
+    var bike = document.getElementById('profile-bike');
+    var exp = document.getElementById('profile-experience');
+    if (bio) bio.value = profile?.bio || '';
+    if (bike) bike.value = profile?.riding_bike || '';
+    if (exp) exp.value = profile?.experience_level || '';
     if (tier) {
         const labels = {
             trail_rider: 'Trail Rider',
@@ -292,8 +337,11 @@ async function saveProfile(e) {
         const file = fileInput && fileInput.files && fileInput.files[0];
 
         if (file) {
+            if (typeof compressImageFile === 'function') {
+                try { file = await compressImageFile(file, 1200, 0.82); } catch (ce) {}
+            }
             if (file.size > 3.5 * 1024 * 1024) throw new Error('Image must be under 3.5MB');
-            const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/jpeg/, 'jpg');
+            const ext = 'jpg';
             const path = user.id + '/avatar.' + ext;
             const { error: upErr } = await window.sb.storage
                 .from('avatars')
@@ -307,12 +355,28 @@ async function saveProfile(e) {
             full_name: document.getElementById('profile-full-name').value.trim() || null,
             phone: document.getElementById('profile-phone').value.trim() || null,
             emergency_contact: document.getElementById('profile-emergency').value.trim() || null,
+            bio: (document.getElementById('profile-bio') && document.getElementById('profile-bio').value.trim()) || null,
+            riding_bike: (document.getElementById('profile-bike') && document.getElementById('profile-bike').value.trim()) || null,
+            experience_level: (document.getElementById('profile-experience') && document.getElementById('profile-experience').value) || null,
             updated_at: new Date().toISOString()
         };
         if (avatar_url) updates.avatar_url = avatar_url;
 
-        const { error } = await window.sb.from('profiles').update(updates).eq('id', user.id);
-        if (error) throw error;
+        var upd = await window.sb.from('profiles').update(updates).eq('id', user.id);
+        if (upd.error && /bio|riding_bike|experience_level|column|schema cache/i.test(String(upd.error.message || ''))) {
+            var fallback = {
+                full_name: updates.full_name,
+                phone: updates.phone,
+                emergency_contact: updates.emergency_contact,
+                updated_at: updates.updated_at
+            };
+            if (avatar_url) fallback.avatar_url = avatar_url;
+            upd = await window.sb.from('profiles').update(fallback).eq('id', user.id);
+            if (!upd.error) {
+                throw new Error('Saved name and photo. Run profile_bio.sql in Supabase so bio, bike, and experience can save.');
+            }
+        }
+        if (upd.error) throw upd.error;
 
         // refresh header
         const nameEl = document.getElementById('member-name');

@@ -240,8 +240,28 @@
                                 <input type="tel" id="profile-phone" placeholder="403-555-1234" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
                             </div>
                             <div>
+                                <label class="text-xs font-medium text-zinc-400">Short bio</label>
+                                <textarea id="profile-bio" rows="3" maxlength="400" placeholder="A bit about you and how you ride…" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600 resize-none"></textarea>
+                                <p class="text-[11px] text-zinc-500 mt-1">Shown when other members tap your name.</p>
+                            </div>
+                            <div>
+                                <label class="text-xs font-medium text-zinc-400">Riding bike</label>
+                                <input type="text" id="profile-bike" maxlength="80" placeholder="e.g. Trek Fuel EX, Specialized Stumpjumper" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+                            </div>
+                            <div>
+                                <label class="text-xs font-medium text-zinc-400">Experience level</label>
+                                <select id="profile-experience" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+                                    <option value="">Select level</option>
+                                    <option value="beginner">Beginner</option>
+                                    <option value="intermediate">Intermediate</option>
+                                    <option value="advanced">Advanced</option>
+                                    <option value="expert">Expert / Race</option>
+                                </select>
+                            </div>
+                            <div>
                                 <label class="text-xs font-medium text-zinc-400">Emergency contact</label>
                                 <input type="text" id="profile-emergency" placeholder="Name + phone" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-3 text-sm outline-none focus:border-orange-600">
+                                <p class="text-[11px] text-zinc-500 mt-1">Only club admins can see this. Other members cannot.</p>
                             </div>
                             <div>
                                 <label class="text-xs font-medium text-zinc-400">Membership</label>
@@ -326,7 +346,7 @@
 
 
 <!-- Public member profile modal -->
-<div id="member-profile-modal" onclick="if(event.target.id==='member-profile-modal')closeMemberProfile()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[80] items-center justify-center p-4">
+<div id="member-profile-modal" onclick="if(event.target.id==='member-profile-modal')closeMemberProfile()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[100000] items-center justify-center p-4" style="padding-top:max(16px, env(safe-area-inset-top, 0px)); padding-bottom:max(16px, env(safe-area-inset-bottom, 0px));">
   <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
     <div class="flex justify-between items-start mb-5">
       <div class="font-bold text-lg">Member profile</div>
@@ -578,7 +598,7 @@
 <script src="js/shared.js"></script>
 <script src="js/native-notifications.js"></script>
 <script src="js/push-notifications.js"></script>
-<script src="js/members.js?v=admin-modals-2"></script>
+<script src="js/members.js?v=member-bio-1"></script>
 <script src="js/account-deletion.js"></script>
 <script>
 (function () {
