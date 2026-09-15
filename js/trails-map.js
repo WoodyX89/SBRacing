@@ -319,36 +319,69 @@ function flyTo(key) {
   if (a && map) map.flyTo(a.center, a.zoom, { duration: 1.2 });
 }
 
-function locateMe() {
+function applyMyLocation(lat, lng, accuracy) {
+  if (!map) return;
+  var ll = L.latLng(lat, lng);
+  map.flyTo(ll, 14, { duration: 1 });
+  if (!gpsMarker) {
+    gpsMarker = L.circleMarker(ll, {
+      radius: 8, color: '#fff', weight: 3,
+      fillColor: '#3b82f6', fillOpacity: 1
+    }).addTo(map);
+    gpsMarker.bindTooltip('You', { direction: 'top' });
+  } else {
+    gpsMarker.setLatLng(ll);
+  }
+  if (!gpsAccuracyCircle) {
+    gpsAccuracyCircle = L.circle(ll, {
+      radius: accuracy || 30,
+      color: '#3b82f6', weight: 1, opacity: 0.35,
+      fillColor: '#3b82f6', fillOpacity: 0.08
+    }).addTo(map);
+  } else {
+    gpsAccuracyCircle.setLatLng(ll);
+    gpsAccuracyCircle.setRadius(accuracy || 30);
+  }
+  showToast('Location found');
+}
+
+function nativeGeoPlugin() {
+  try {
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation) {
+      return window.Capacitor.Plugins.Geolocation;
+    }
+    if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()
+        && window.Geolocation) {
+      return window.Geolocation;
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function locateMe() {
+  showToast('Finding your location…');
+  var plugin = nativeGeoPlugin();
+  if (plugin && typeof plugin.getCurrentPosition === 'function') {
+    try {
+      if (typeof plugin.requestPermissions === 'function') {
+        await plugin.requestPermissions();
+      }
+      var pos = await plugin.getCurrentPosition({ enableHighAccuracy: true, timeout: 12000 });
+      var c = pos && pos.coords;
+      if (!c) throw new Error('no coords');
+      applyMyLocation(c.latitude, c.longitude, c.accuracy);
+      return;
+    } catch (e) {
+      console.warn('[trails] native geo', e);
+    }
+  }
   if (!navigator.geolocation) {
     showToast('Geolocation not available', true);
     return;
   }
-  showToast('Finding your location…');
   navigator.geolocation.getCurrentPosition(
     function (pos) {
-      var ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
-      map.flyTo(ll, 14, { duration: 1 });
-      if (!gpsMarker) {
-        gpsMarker = L.circleMarker(ll, {
-          radius: 8, color: '#fff', weight: 3,
-          fillColor: '#3b82f6', fillOpacity: 1
-        }).addTo(map);
-        gpsMarker.bindTooltip('You', { direction: 'top' });
-      } else {
-        gpsMarker.setLatLng(ll);
-      }
-      if (!gpsAccuracyCircle) {
-        gpsAccuracyCircle = L.circle(ll, {
-          radius: pos.coords.accuracy || 30,
-          color: '#3b82f6', weight: 1, opacity: 0.35,
-          fillColor: '#3b82f6', fillOpacity: 0.08
-        }).addTo(map);
-      } else {
-        gpsAccuracyCircle.setLatLng(ll);
-        gpsAccuracyCircle.setRadius(pos.coords.accuracy || 30);
-      }
-      showToast('Location found');
+      applyMyLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
     },
     function () {
       showToast('Could not get location — check permissions', true);

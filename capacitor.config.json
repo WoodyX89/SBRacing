@@ -2,6 +2,11 @@
   "appId": "ca.sbracing.app",
   "appName": "Soggy Bottom Racing",
   "webDir": "dist",
+  "server": {
+    "hostname": "sbracing.app",
+    "iosScheme": "https",
+    "androidScheme": "https"
+  },
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 2200,
