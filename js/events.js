@@ -107,9 +107,11 @@ window.clearEventImage = clearEventImage;
 async function uploadEventImageFile(file) {
   if (!file || !window.sb) return '';
   if (!file.type || file.type.indexOf('image/') !== 0) throw new Error('Choose an image file');
+  if (typeof compressImageFile === 'function') {
+    try { file = await compressImageFile(file, 1400, 0.82); } catch (e) {}
+  }
   if (file.size > 5 * 1024 * 1024) throw new Error('Image must be under 5 MB');
-  var ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/jpeg/, 'jpg');
-  if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic'].indexOf(ext) === -1) ext = 'jpg';
+  var ext = 'jpg';
   var path = 'events/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
   var buckets = ['event-images', 'merch', 'avatars', 'trail-photos'];
   var lastErr = null;
@@ -259,9 +261,31 @@ function summarizeEventChanges(before, after) {
 
 
 async function initEvents() {
-  await checkAdmin();
-  await loadEvents();
+  var cached = typeof sbCacheGet === 'function' ? sbCacheGet('events') : null;
+  if (cached && cached.length) {
+    allEvents = cached;
+    var stored = typeof getSessionFromStorage === 'function' ? getSessionFromStorage() : null;
+    if (!stored || !stored.user) {
+      allEvents = allEvents.filter(function (ev) { return !ev.is_members_only; });
+    }
+    sortEventsByDate();
+    renderEvents();
+  }
+  checkAdmin().then(showAdminChrome).catch(function () {});
+  await loadEvents(!!(cached && cached.length));
   showAdminChrome();
+  Promise.resolve()
+    .then(function () { return loadEventSocial(); })
+    .then(function () { return loadMyRsvps(); })
+    .then(function () {
+      renderEvents();
+      subscribeEventLikesRealtime();
+      subscribeEventSpotsRealtime();
+      if (typeof scheduleEventReminders === 'function') {
+        return scheduleEventReminders(allEvents, myRsvpByEvent);
+      }
+    })
+    .catch(function (e) { console.warn('[events] extras', e); });
 }
 
 async function checkAdmin() {
@@ -293,27 +317,34 @@ function showAdminChrome() {
   }
 }
 
-async function loadEvents() {
+async function loadEvents(keepVisible) {
   const grid = document.getElementById('events-grid');
   if (!grid) return;
 
-  grid.innerHTML = `
+  if (!keepVisible || !allEvents.length) {
+    grid.innerHTML = `
     <div class="col-span-full flex justify-center py-16 text-zinc-500">
       <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
     </div>`;
+  }
+
+  var eventCols = 'id,title,description,event_date,event_time,location,image_url,is_members_only,max_spots';
 
   try {
     let data = null;
 
     const clientQuery = (async () => {
-      let q = window.sb.from('events').select('*').order('event_date', { ascending: true });
+      let q = window.sb.from('events').select(eventCols).order('event_date', { ascending: true });
       // Members: ~60 days history + upcoming (expired stay visible, stamped)
       if (!canManageEvents) {
         var from = new Date();
         from.setDate(from.getDate() - 60);
         q = q.gte('event_date', from.toISOString().split('T')[0]);
       }
-      const res = await q.limit(50);
+      var res = await q.limit(50);
+      if (res.error && /column|schema cache/i.test(String(res.error.message || ''))) {
+        res = await window.sb.from('events').select('*').order('event_date', { ascending: true }).limit(50);
+      }
       if (res.error) throw res.error;
       return res.data || [];
     })();
@@ -327,7 +358,7 @@ async function loadEvents() {
       // fetch fallback
       const session = typeof getSessionFromStorage === 'function' ? getSessionFromStorage() : null;
       const token = (session && session.access_token) || window.SB_ANON_KEY;
-      let url = window.SB_URL + '/rest/v1/events?select=*&order=event_date.asc&limit=50';
+      let url = window.SB_URL + '/rest/v1/events?select=' + encodeURIComponent(eventCols) + '&order=event_date.asc&limit=50';
       if (!canManageEvents) {
         var from2 = new Date();
         from2.setDate(from2.getDate() - 60);
@@ -345,28 +376,13 @@ async function loadEvents() {
     }
 
     allEvents = data || [];
-    // Members-only events live on the Members → Private Events tab.
-    // Guests on the public Events page should not see them.
-    var sessionUser = null;
-    try {
-      if (typeof getCurrentUser === 'function') sessionUser = await getCurrentUser();
-    } catch (e) {}
-    if (!sessionUser) {
+    var storedSess = typeof getSessionFromStorage === 'function' ? getSessionFromStorage() : null;
+    if (!storedSess || !storedSess.user) {
       allEvents = allEvents.filter(function (ev) { return !ev.is_members_only; });
     }
     sortEventsByDate();
-    await loadEventSocial();
-    await loadMyRsvps();
+    if (typeof sbCacheSet === 'function') sbCacheSet('events', allEvents);
     renderEvents();
-    subscribeEventLikesRealtime();
-    subscribeEventSpotsRealtime();
-    try {
-      if (typeof scheduleEventReminders === 'function') {
-        await scheduleEventReminders(allEvents, myRsvpByEvent);
-      }
-    } catch (rerr) {
-      console.warn('[events] reminders', rerr);
-    }
     console.log('[events] loaded', allEvents.length, 'admin=', isAdmin, 'leader=', isLeader, 'manage=', canManageEvents);
   } catch (err) {
     console.error(err);

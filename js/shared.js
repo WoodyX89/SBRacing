@@ -207,6 +207,61 @@ function setActiveNav() {
     });
 }
 
+function sbCacheGet(key) {
+    try {
+        var raw = localStorage.getItem('sbr-cache-' + key);
+        if (!raw) return null;
+        var parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.data)) return null;
+        return parsed.data;
+    } catch (e) {
+        return null;
+    }
+}
+
+function sbCacheSet(key, data) {
+    try {
+        localStorage.setItem('sbr-cache-' + key, JSON.stringify({ t: Date.now(), data: data || [] }));
+    } catch (e) {}
+}
+
+function compressImageFile(file, maxEdge, quality) {
+    maxEdge = maxEdge || 1400;
+    quality = quality || 0.82;
+    return new Promise(function (resolve) {
+        if (!file || !file.type || file.type.indexOf('image/') !== 0) return resolve(file);
+        if (file.type === 'image/gif') return resolve(file);
+        var img = new Image();
+        var url = URL.createObjectURL(file);
+        img.onload = function () {
+            var w = img.naturalWidth || img.width;
+            var h = img.naturalHeight || img.height;
+            var scale = Math.min(1, maxEdge / Math.max(w, h || 1));
+            var canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(w * scale));
+            canvas.height = Math.max(1, Math.round(h * scale));
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(function (blob) {
+                URL.revokeObjectURL(url);
+                if (!blob) return resolve(file);
+                var name = String(file.name || 'image').replace(/\.[a-z0-9]+$/i, '.jpg');
+                try {
+                    resolve(new File([blob], name, { type: 'image/jpeg' }));
+                } catch (e) {
+                    blob.name = name;
+                    resolve(blob);
+                }
+            }, 'image/jpeg', quality);
+        };
+        img.onerror = function () {
+            URL.revokeObjectURL(url);
+            resolve(file);
+        };
+        img.src = url;
+    });
+}
+
 function showToast(message, isError = false) {
     let toast = document.getElementById('success-toast');
     if (!toast) {

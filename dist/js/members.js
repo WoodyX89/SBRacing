@@ -2,17 +2,18 @@
 
 async function initMembersPage() {
     console.log('[members] init start');
-    // Always show login wall first so UI is never stuck blank
     showLoginWall();
 
-    let session = null;
-    try {
+    let session = typeof getSessionFromStorage === 'function' ? getSessionFromStorage() : null;
+    if (!(session && session.user)) {
+      try {
         session = await Promise.race([
             getSession(),
-            new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 3000); })
+            new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 1500); })
         ]);
-    } catch (e) {
+      } catch (e) {
         console.warn('[members] getSession error', e);
+      }
     }
 
     console.log('[members] session', session && session.user && session.user.email);

@@ -89,7 +89,7 @@ async function getProfile(userId) {
   var token = (session && session.access_token) || window.SB_ANON_KEY;
   try {
     var res = await fetch(
-      window.SB_URL + '/rest/v1/profiles?id=eq.' + encodeURIComponent(userId) + '&select=*',
+      window.SB_URL + '/rest/v1/profiles?id=eq.' + encodeURIComponent(userId) + '&select=id,full_name,avatar_url,email,is_admin,is_leader,membership_tier,membership_status',
       {
         headers: {
           apikey: window.SB_ANON_KEY,

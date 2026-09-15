@@ -6,16 +6,15 @@ let editingProductId = null;
 var productsRealtimeChannel = null;
 
 async function initMerch() {
-  try {
-    await Promise.race([
-      checkAdmin(),
-      new Promise(function (r) { setTimeout(r, 3000); })
-    ]);
-  } catch (e) {
-    console.warn('[merch] checkAdmin', e);
-    isAdmin = false;
+  var cached = typeof sbCacheGet === 'function' ? sbCacheGet('products') : null;
+  if (cached && cached.length) {
+    allProducts = cached;
+    if (typeof renderProducts === 'function') renderProducts();
   }
-  await loadProducts();
+  checkAdmin().then(function () {
+    if (isAdmin) showAdminUI();
+  }).catch(function () {});
+  await loadProducts(!!(cached && cached.length));
   if (isAdmin) showAdminUI();
   subscribeProductsRealtime();
   console.log('[merch] loaded', allProducts.length, 'products, admin=', isAdmin);
@@ -82,21 +81,30 @@ async function checkAdmin() {
   }
 }
 
-async function loadProducts() {
+async function loadProducts(keepVisible) {
   const grid = document.getElementById('products-grid');
   if (!grid) return;
 
-  grid.innerHTML = `
+  if (!keepVisible || !allProducts.length) {
+    grid.innerHTML = `
     <div class="col-span-full flex justify-center py-16 text-zinc-500">
       <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
     </div>`;
+  }
+
+  var productCols = 'id,name,description,price,image_url,badge,sort_order,is_active,color,size,stock_qty';
 
   try {
     let data = null;
     const clientQuery = (async () => {
-      let query = window.sb.from('products').select('*').order('sort_order', { ascending: true });
+      let query = window.sb.from('products').select(productCols).order('sort_order', { ascending: true });
       if (!isAdmin) query = query.eq('is_active', true);
-      const res = await query;
+      var res = await query;
+      if (res.error && /column|schema cache/i.test(String(res.error.message || ''))) {
+        query = window.sb.from('products').select('*').order('sort_order', { ascending: true });
+        if (!isAdmin) query = query.eq('is_active', true);
+        res = await query;
+      }
       if (res.error) throw res.error;
       return res.data || [];
     })();
@@ -110,7 +118,7 @@ async function loadProducts() {
       console.warn('[merch] client query slow — using fetch');
       const session = typeof getSessionFromStorage === 'function' ? getSessionFromStorage() : null;
       const token = (session && session.access_token) || window.SB_ANON_KEY;
-      let url = window.SB_URL + '/rest/v1/products?select=*&order=sort_order.asc';
+      let url = window.SB_URL + '/rest/v1/products?select=' + encodeURIComponent(productCols) + '&order=sort_order.asc';
       if (!isAdmin) url += '&is_active=eq.true';
       const res = await fetch(url, {
         headers: {
@@ -124,6 +132,7 @@ async function loadProducts() {
     }
 
     allProducts = data || [];
+    if (typeof sbCacheSet === 'function') sbCacheSet('products', allProducts);
     renderProducts();
   } catch (err) {
     console.error(err);
@@ -895,19 +904,21 @@ async function uploadProductImage(input) {
     return;
   }
 
+  if (typeof compressImageFile === 'function') {
+    try { file = await compressImageFile(file, 1400, 0.82); } catch (e) {}
+  }
   if (file.size > 5 * 1024 * 1024) {
     showToast('Image must be under 5 MB', true);
     return;
   }
 
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-  const path = `products/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const path = `products/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
 
   showToast('Uploading image...');
   const { data, error } = await window.sb.storage.from('merch').upload(path, file, {
     cacheControl: '3600',
     upsert: false,
-    contentType: file.type || 'image/jpeg'
+    contentType: 'image/jpeg'
   });
 
   if (error) {
