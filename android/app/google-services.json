@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "364914674642",
+    "project_id": "sb-racing-914fd",
+    "storage_bucket": "sb-racing-914fd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:364914674642:android:9cb10d989dec0793c6960b",
+        "android_client_info": {
+          "package_name": "ca.sbracing.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjtwwQgtvLeGw22iJhtQMsiv4naLhxNMk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
