@@ -43,13 +43,18 @@ Deno.serve(async (req) => {
   }
 
   const authHeader = req.headers.get("Authorization") || "";
+  const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!jwt) {
+    return json(req, { error: "Not signed in" }, 401);
+  }
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } }
+    { global: { headers: { Authorization: "Bearer " + jwt } } },
   );
 
-  const { data: { user }, error: userErr } = await supabase.auth.getUser();
+  const { data: { user }, error: userErr } = await supabase.auth.getUser(jwt);
   if (userErr || !user) {
     return json(req, { error: "Not signed in" }, 401);
   }

@@ -45,7 +45,7 @@ function getSessionFromStorage() {
       var sess = parsed;
       if (parsed && parsed.currentSession) sess = parsed.currentSession;
       if (parsed && parsed.user && parsed.access_token) sess = parsed;
-      if (sess && (sess.user || sess.access_token)) {
+      if (sess && sess.user && sess.access_token) {
         return {
           access_token: sess.access_token,
           refresh_token: sess.refresh_token,
@@ -62,7 +62,7 @@ function getSessionFromStorage() {
 async function getSession() {
   // Prefer non-blocking storage read
   var stored = getSessionFromStorage();
-  if (stored && stored.user) return stored;
+  if (stored && stored.user && stored.access_token) return stored;
 
   if (!window.sb) return null;
   try {

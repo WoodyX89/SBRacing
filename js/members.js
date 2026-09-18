@@ -1312,26 +1312,15 @@ async function reviewClubApplication(id, action) {
       try {
         var token = rec.invite_token;
         var acceptUrl = (window.SB_SITE_URL || 'https://sbracing.ca').replace(/\/$/, '') + '/accept' + (token ? ('?t=' + encodeURIComponent(token)) : '');
-        var sessMail = await getSession();
-        var access = (sessMail && sessMail.access_token) || '';
-        var fnUrl = (window.SB_URL || '').replace(/\/$/, '') + '/functions/v1/send-approval-email';
-        var mailRes = await fetch(fnUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + access,
-            apikey: window.SB_ANON_KEY || ''
-          },
-          body: JSON.stringify({
+        var mail = await window.sb.functions.invoke('send-approval-email', {
+          body: {
             to: rec.email,
             name: rec.full_name,
             acceptUrl: acceptUrl
-          })
+          }
         });
-        if (!mailRes.ok) {
-          var mailText = '';
-          try { mailText = await mailRes.text(); } catch (e) {}
-          console.warn('[apps] smtp2go', mailRes.status, mailText);
+        if (mail.error) {
+          console.warn('[apps] smtp2go', mail.error);
           if (typeof showToast === 'function') {
             showToast('Approved — email failed, copy the invite link', true);
           }
