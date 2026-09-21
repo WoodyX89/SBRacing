@@ -686,8 +686,26 @@ async function initMap() {
 
   updateSaveHint();
   updateCheckpointList();
-  loadMyRoutes();
+  loadMyRoutes().then(function () { openRouteFromQuery(); });
   updateFabCheckpointState();
+}
+
+async function openRouteFromQuery() {
+  try {
+    var id = new URLSearchParams(location.search || '').get('route');
+    if (!id || !window.sb) return;
+    var res = await window.sb
+      .from('member_routes')
+      .select('id, name, distance_km, description, created_at, geojson, elev_gain_m, point_count, points')
+      .eq('id', id)
+      .maybeSingle();
+    if (res.error || !res.data) {
+      res = await window.sb.from('member_routes').select('id, name, distance_km, created_at, geojson').eq('id', id).maybeSingle();
+    }
+    if (res.data) showSavedRoute(res.data);
+  } catch (e) {
+    console.warn('[trails] open query route', e);
+  }
 }
 
 async function updateSaveHint() {

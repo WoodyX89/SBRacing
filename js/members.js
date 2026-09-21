@@ -235,15 +235,33 @@ async function openMemberProfile(userId) {
     const av = p.avatar_url
       ? '<img src="' + escapeAttr(p.avatar_url) + '" class="w-24 h-24 rounded-3xl object-cover bg-zinc-800 border border-zinc-700" alt="">'
       : '<div class="w-24 h-24 rounded-3xl bg-orange-600 text-white flex items-center justify-center text-2xl font-bold">' + initial + '</div>';
-    // public ride count if allowed
     let rideHtml = '';
     try {
-      const { data: rides } = await window.sb.from('rides').select('trail_name, rating, ride_date').eq('user_id', userId).order('ride_date', { ascending: false }).limit(5);
-      if (rides && rides.length) {
+      var rideRes = await window.sb
+        .from('member_routes')
+        .select('id, name, distance_km, elev_gain_m, points, created_at, geojson')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(8);
+      if (rideRes.error) {
+        rideRes = await window.sb
+          .from('member_routes')
+          .select('id, name, distance_km, created_at, geojson')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(8);
+      }
+      var rides = rideRes.data || [];
+      if (rides.length) {
         rideHtml = '<div class="mt-4"><div class="text-xs uppercase tracking-widest text-zinc-500 mb-2">Recent rides</div><div class="space-y-2">' +
           rides.map(function (r) {
-            return '<div class="text-sm bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 flex justify-between gap-2"><span class="truncate">' + escapeHtml(r.trail_name || 'Ride') + '</span><span class="text-zinc-500 text-xs shrink-0">' + (r.rating ? r.rating + '★' : '') + '</span></div>';
+            return '<button type="button" class="w-full text-left text-sm bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 flex items-center gap-3" onclick="openRideRouteModalById(\'' + r.id + '\')">' +
+              routeThumbSvg(r.geojson, 72, 40) +
+              '<span class="min-w-0 flex-1"><span class="block truncate font-medium">' + escapeHtml(r.name || 'Ride') + '</span>' +
+              '<span class="block text-xs text-zinc-500">' + formatRideMeta(r) + '</span></span></button>';
           }).join('') + '</div></div>';
+        window._profileRideCache = (window._profileRideCache || {});
+        rides.forEach(function (r) { window._profileRideCache[String(r.id)] = r; });
       }
     } catch (_) {}
     const joined = p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '';
@@ -598,6 +616,7 @@ function switchMemberTab(tabIndex) {
     if (String(tabIndex) === '6') {
         loadClubPushMaster();
     }
+    if (String(tabIndex) === '4') loadProfileRecentRides();
     if (String(tabIndex) === '7') loadRideLeaderboard(window._lbPeriod || 'weekly');
 }
 
@@ -642,19 +661,19 @@ async function loadRideLeaderboard(period) {
             var mine = me && String(row.user_id) === String(me);
             var rank = i + 1;
             var medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank + '.';
-            return '<div class="flex items-center gap-3 bg-zinc-950 border ' +
+            return '<button type="button" onclick="openMemberProfile(\'' + escapeHtml(String(row.user_id || '')) + '\')" class="w-full text-left flex items-center gap-3 bg-zinc-950 border ' +
                 (mine ? 'border-orange-700' : 'border-zinc-800') +
-                ' rounded-2xl px-4 py-3">' +
+                ' rounded-2xl px-4 py-3 hover:border-orange-600 transition-colors">' +
                 '<div class="w-8 text-center font-semibold">' + medal + '</div>' +
                 '<div class="flex-1 min-w-0">' +
-                '<div class="font-medium truncate">' + escapeHtml(row.full_name || 'Rider') +
+                '<div class="font-medium truncate text-zinc-100">' + escapeHtml(row.full_name || 'Rider') +
                 (mine ? ' <span class="text-orange-500 text-xs">you</span>' : '') + '</div>' +
-                '<div class="text-xs text-zinc-500">' + (row.rides || 0) + ' ride' + (row.rides === 1 ? '' : 's') + '</div>' +
+                '<div class="text-xs text-zinc-500">' + (row.rides || 0) + ' ride' + (row.rides === 1 ? '' : 's') + ' · tap name for profile</div>' +
                 '</div>' +
                 '<div class="text-right shrink-0">' +
                 '<div class="font-semibold text-orange-400">' + (row.points || 0) + ' pts</div>' +
                 '<div class="text-[11px] text-zinc-500">' + (row.km || 0) + ' km · +' + (row.elev_m || 0) + ' m</div>' +
-                '</div></div>';
+                '</div></button>';
         }).join('');
     } catch (e) {
         console.warn('[leaderboard]', e);
@@ -1382,7 +1401,7 @@ async function reviewClubApplication(id, action) {
         }
       }
     } else {
-      rec = rpc.data;
+      rec = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data;
     }
 
     if (typeof showToast === 'function') {
@@ -1796,5 +1815,146 @@ document.addEventListener('DOMContentLoaded', function () {
   bindNotifToggles();
   loadNotifSettings();
 });
+
+function routeCoordsFromGeojson(gj) {
+  if (!gj) return [];
+  var geom = gj.geometry || gj;
+  var coords = geom.coordinates || [];
+  if (geom.type === 'MultiLineString' && coords.length) {
+    coords = coords.reduce(function (acc, line) { return acc.concat(line); }, []);
+  }
+  if (coords.length && Array.isArray(coords[0]) && typeof coords[0][0] === 'number') {
+    return coords.map(function (c) { return { lng: c[0], lat: c[1] }; });
+  }
+  var pts = (gj.properties && gj.properties.points) || [];
+  return pts.filter(function (p) { return p && p.lat != null && p.lng != null; });
+}
+
+function routeThumbSvg(gj, w, h) {
+  w = w || 88;
+  h = h || 48;
+  var pts = routeCoordsFromGeojson(gj);
+  if (pts.length < 2) {
+    return '<div class="shrink-0 rounded-lg bg-zinc-900 border border-zinc-800" style="width:' + w + 'px;height:' + h + 'px"></div>';
+  }
+  var minLat = pts[0].lat, maxLat = pts[0].lat, minLng = pts[0].lng, maxLng = pts[0].lng;
+  pts.forEach(function (p) {
+    if (p.lat < minLat) minLat = p.lat;
+    if (p.lat > maxLat) maxLat = p.lat;
+    if (p.lng < minLng) minLng = p.lng;
+    if (p.lng > maxLng) maxLng = p.lng;
+  });
+  var pad = 4;
+  var dx = Math.max(maxLng - minLng, 0.00001);
+  var dy = Math.max(maxLat - minLat, 0.00001);
+  var d = pts.map(function (p, i) {
+    var x = pad + ((p.lng - minLng) / dx) * (w - pad * 2);
+    var y = pad + (1 - (p.lat - minLat) / dy) * (h - pad * 2);
+    return (i ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
+  }).join(' ');
+  return '<svg class="shrink-0 rounded-lg bg-zinc-900 border border-zinc-800" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" aria-hidden="true">' +
+    '<path d="' + d + '" fill="none" stroke="#f97316" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '</svg>';
+}
+
+function formatRideMeta(r) {
+  var bits = [];
+  if (r.distance_km != null) bits.push(Number(r.distance_km).toFixed(1) + ' km');
+  if (r.elev_gain_m) bits.push('+' + Math.round(r.elev_gain_m) + ' m');
+  if (r.points) bits.push(r.points + ' pts');
+  if (r.created_at) {
+    try {
+      bits.push(new Date(r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+    } catch (e) {}
+  }
+  return bits.join(' · ') || 'Saved route';
+}
+
+async function fetchMemberRoutes(userId, limit) {
+  if (!window.sb || !userId) return [];
+  var q = window.sb
+    .from('member_routes')
+    .select('id, name, distance_km, elev_gain_m, points, created_at, geojson')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (limit) q = q.limit(limit);
+  var res = await q;
+  if (res.error) {
+    res = await window.sb
+      .from('member_routes')
+      .select('id, name, distance_km, created_at, geojson')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit || 20);
+  }
+  if (res.error) throw res.error;
+  return res.data || [];
+}
+
+async function loadProfileRecentRides() {
+  var box = document.getElementById('profile-recent-rides');
+  if (!box) return;
+  try {
+    var user = await getCurrentUser();
+    if (!user) {
+      box.innerHTML = '<p class="text-zinc-500 text-sm">Sign in to see saved rides.</p>';
+      return;
+    }
+    box.innerHTML = '<p class="text-zinc-500 text-sm">Loading…</p>';
+    var rides = await fetchMemberRoutes(user.id, 20);
+    window._profileRideCache = {};
+    rides.forEach(function (r) { window._profileRideCache[String(r.id)] = r; });
+    if (!rides.length) {
+      box.innerHTML = '<p class="text-zinc-500 text-sm">No saved routes yet. Record or draw a route on <a class="text-orange-400 hover:underline" href="trails.html">Trails</a> and tap Save.</p>';
+      return;
+    }
+    box.innerHTML = rides.map(function (r) {
+      return '<button type="button" onclick="openRideRouteModalById(\'' + r.id + '\')" class="w-full text-left flex items-center gap-3 p-3 rounded-2xl bg-zinc-950 border border-zinc-800 hover:border-orange-700 transition-colors">' +
+        routeThumbSvg(r.geojson, 88, 52) +
+        '<span class="min-w-0 flex-1">' +
+        '<span class="block font-medium truncate text-zinc-100">' + escapeHtml(r.name || 'Ride') + '</span>' +
+        '<span class="block text-xs text-zinc-500 mt-0.5">' + escapeHtml(formatRideMeta(r)) + '</span>' +
+        '</span><i class="fa-solid fa-chevron-right text-zinc-600 text-xs"></i></button>';
+    }).join('');
+  } catch (e) {
+    console.warn('[profile rides]', e);
+    box.innerHTML = '<p class="text-red-400 text-sm">' + escapeHtml(e.message || 'Could not load rides') + '</p>';
+  }
+}
+
+function openRideRouteModalById(id) {
+  var row = window._profileRideCache && window._profileRideCache[String(id)];
+  if (!row) {
+    if (typeof showToast === 'function') showToast('Ride not loaded', true);
+    return;
+  }
+  openRideRouteModal(row);
+}
+
+function openRideRouteModal(row) {
+  var modal = document.getElementById('ride-route-modal');
+  var title = document.getElementById('ride-route-title');
+  var meta = document.getElementById('ride-route-meta');
+  var mapEl = document.getElementById('ride-route-map');
+  var link = document.getElementById('ride-route-open-trails');
+  if (!modal || !mapEl) return;
+  if (title) title.textContent = row.name || 'Ride';
+  if (meta) meta.textContent = formatRideMeta(row);
+  mapEl.innerHTML = routeThumbSvg(row.geojson, 520, 240).replace('width="520"', 'width="100%"').replace('height="240"', 'height="100%" class="w-full h-full"');
+  if (link) link.href = 'trails.html?route=' + encodeURIComponent(row.id);
+  modal.style.display = 'flex';
+  if (typeof lockPageForModal === 'function') lockPageForModal(true);
+}
+
+function closeRideRouteModal() {
+  var modal = document.getElementById('ride-route-modal');
+  if (modal) modal.style.display = 'none';
+  if (typeof lockPageForModal === 'function') lockPageForModal(false);
+}
+
+window.loadProfileRecentRides = loadProfileRecentRides;
+window.openRideRouteModalById = openRideRouteModalById;
+window.openRideRouteModal = openRideRouteModal;
+window.closeRideRouteModal = closeRideRouteModal;
 
 
