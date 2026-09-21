@@ -75,6 +75,76 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    async function callerUserId(): Promise<string | null> {
+      try {
+        const authHeader = req.headers.get("Authorization") || "";
+        if (!authHeader.startsWith("Bearer ")) return null;
+        const { data: userData } = await supabase.auth.getUser(authHeader.slice(7));
+        return userData?.user?.id || null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    async function callerIsAdmin(): Promise<{ userId: string | null; admin: boolean }> {
+      const userId = await callerUserId();
+      if (!userId) return { userId: null, admin: false };
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_admin")
+        .eq("id", userId)
+        .maybeSingle();
+      return { userId, admin: !!(profile && profile.is_admin) };
+    }
+
+    async function readPushEnabled(): Promise<boolean> {
+      const { data, error } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "push_enabled")
+        .maybeSingle();
+      if (error || !data) return true;
+      const v = data.value;
+      if (v === false || v === "false" || v === 0 || v === "0") return false;
+      if (typeof v === "object" && v !== null && "enabled" in (v as Record<string, unknown>)) {
+        return (v as { enabled?: unknown }).enabled !== false;
+      }
+      return v !== false;
+    }
+
+    if (action === "get-push-enabled") {
+      const enabled = await readPushEnabled();
+      return new Response(JSON.stringify({ ok: true, enabled }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "set-push-enabled") {
+      const { userId, admin } = await callerIsAdmin();
+      if (!admin) {
+        return new Response(JSON.stringify({ error: "Admins only" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const enabled = !(body.enabled === false || body.enabled === "false" || body.enabled === 0);
+      const { error } = await supabase.from("app_settings").upsert({
+        key: "push_enabled",
+        value: enabled,
+        updated_at: new Date().toISOString(),
+        updated_by: userId,
+      }, { onConflict: "key" });
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ ok: true, enabled }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (action === "clear-badge") {
       let userId = body.user_id || null;
       const token = body.token || null;
@@ -132,10 +202,29 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action) {
+      return new Response(JSON.stringify({ error: "Unknown action: " + action }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const title = (body.title || "SB Racing").toString().slice(0, 80);
     const message = (body.body || body.message || "").toString().slice(0, 200);
     const data = body.data || {};
     const audience = (body.audience || body.data?.audience || "all").toString().toLowerCase();
+
+    const pushEnabled = await readPushEnabled();
+    if (!pushEnabled) {
+      return new Response(
+        JSON.stringify({
+          sent: 0,
+          paused: true,
+          message: "Club push notifications are paused by an admin",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
     const excludeUserId = (body.exclude_user_id || body.excludeUserId || "").toString() || null;
     const badgeOverride =
       body.badge != null && body.badge !== "" ? Math.max(0, Math.min(99, Number(body.badge))) : null;

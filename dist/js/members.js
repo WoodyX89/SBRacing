@@ -87,6 +87,7 @@ async function showDashboard(user) {
         if (window._isAdmin) {
             adminBtn.classList.remove('hidden');
             refreshAdminAppBadge();
+            loadClubPushMaster();
         } else {
             adminBtn.classList.add('hidden');
         }
@@ -595,7 +596,7 @@ function switchMemberTab(tabIndex) {
     if (String(tabIndex) === '1') loadPrivateEvents();
     if (String(tabIndex) === '5') loadMemberDirectory();
     if (String(tabIndex) === '6') {
-        // Tools open in their own modals
+        loadClubPushMaster();
     }
     if (String(tabIndex) === '7') loadRideLeaderboard(window._lbPeriod || 'weekly');
 }
@@ -1002,6 +1003,79 @@ function formatTimeAgo(iso) {
 
 
 
+function applyClubPushMasterUi(enabled) {
+  var sw = document.getElementById('admin-push-master-switch');
+  var hint = document.getElementById('admin-push-master-hint');
+  if (sw) sw.setAttribute('aria-checked', enabled ? 'true' : 'false');
+  if (hint) {
+    hint.textContent = enabled
+      ? 'Master switch for every device. Off pauses events, forum, RSVP, and admin broadcasts.'
+      : 'Paused — no remote pushes will leave the club until you turn this back on.';
+  }
+  window._clubPushEnabled = !!enabled;
+  syncAdminPushPausedUi();
+}
+
+function syncAdminPushPausedUi() {
+  var paused = window._clubPushEnabled === false;
+  var banner = document.getElementById('admin-push-paused-banner');
+  var btn = document.getElementById('admin-push-send-btn');
+  if (banner) {
+    if (paused) banner.classList.remove('hidden');
+    else banner.classList.add('hidden');
+  }
+  if (btn) {
+    btn.disabled = !!paused;
+    if (paused) btn.innerHTML = '<i class="fa-solid fa-bell-slash mr-2"></i>PUSHES PAUSED';
+    else btn.innerHTML = '<i class="fa-solid fa-paper-plane mr-2"></i>SEND PUSH';
+  }
+}
+
+async function loadClubPushMaster() {
+  if (!window._isAdmin) return;
+  try {
+    var enabled = true;
+    if (typeof getClubPushEnabled === 'function') {
+      enabled = await getClubPushEnabled();
+    }
+    applyClubPushMasterUi(enabled);
+  } catch (e) {
+    console.warn('[admin push master] load', e);
+  }
+}
+
+async function toggleClubPushMaster() {
+  if (!window._isAdmin) {
+    if (typeof showToast === 'function') showToast('Admins only', true);
+    return;
+  }
+  var sw = document.getElementById('admin-push-master-switch');
+  var currentlyOn = !!(sw && sw.getAttribute('aria-checked') === 'true');
+  var next = !currentlyOn;
+  if (sw) sw.disabled = true;
+  try {
+    var enabled;
+    if (typeof setClubPushEnabled === 'function') {
+      enabled = await setClubPushEnabled(next);
+    } else {
+      throw new Error('Push helper missing');
+    }
+    applyClubPushMasterUi(enabled);
+    if (typeof showToast === 'function') {
+      showToast(enabled ? 'Club push notifications ON' : 'Club push notifications OFF');
+    }
+  } catch (e) {
+    console.warn('[admin push master] toggle', e);
+    if (typeof showToast === 'function') showToast((e && e.message) || 'Could not update push switch', true);
+    applyClubPushMasterUi(currentlyOn);
+  } finally {
+    if (sw) sw.disabled = false;
+  }
+}
+
+window.loadClubPushMaster = loadClubPushMaster;
+window.toggleClubPushMaster = toggleClubPushMaster;
+
 /** Admin-only: send custom remote push via notify-event edge function */
 async function sendAdminPush() {
     var titleEl = document.getElementById('admin-push-title');
@@ -1010,6 +1084,12 @@ async function sendAdminPush() {
     var urlEl = document.getElementById('admin-push-url');
     var btn = document.getElementById('admin-push-send-btn');
     var statusEl = document.getElementById('admin-push-status');
+
+    if (window._clubPushEnabled === false) {
+        if (typeof showToast === 'function') showToast('Club pushes are paused', true);
+        syncAdminPushPausedUi();
+        return;
+    }
 
     var title = (titleEl && titleEl.value || 'Update').trim().slice(0, 80);
     var body = (bodyEl && bodyEl.value || '').trim().slice(0, 200);
@@ -1360,6 +1440,7 @@ function openAdminTool(which) {
   lockPageForModal(true);
   if (which === 'apps') loadClubApplications(window._appFilter || 'pending');
   if (which === 'perms') loadAdminMembers();
+  if (which === 'push') syncAdminPushPausedUi();
 }
 
 function closeAdminTool(which) {

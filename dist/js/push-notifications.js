@@ -128,11 +128,65 @@ async function initPushNotifications() {
   }
 }
 
+window._clubPushEnabled = true;
+
+function parseSettingEnabled(value) {
+  if (value === false || value === 'false' || value === 0 || value === '0') return false;
+  if (typeof value === 'object' && value !== null && Object.prototype.hasOwnProperty.call(value, 'enabled')) {
+    return value.enabled !== false;
+  }
+  return value !== false;
+}
+
+async function getClubPushEnabled() {
+  if (!window.sb) return true;
+  try {
+    var res = await window.sb
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'push_enabled')
+      .maybeSingle();
+    if (res.error) {
+      console.warn('[push] getClubPushEnabled', res.error);
+      return window._clubPushEnabled !== false;
+    }
+    var enabled = res.data ? parseSettingEnabled(res.data.value) : true;
+    window._clubPushEnabled = enabled;
+    return enabled;
+  } catch (e) {
+    console.warn('[push] getClubPushEnabled', e);
+    return true;
+  }
+}
+
+async function setClubPushEnabled(enabled) {
+  if (!window.sb) throw new Error('Supabase not ready');
+  enabled = !!enabled;
+  var res = await window.sb
+    .from('app_settings')
+    .update({
+      value: enabled,
+      updated_at: new Date().toISOString()
+    })
+    .eq('key', 'push_enabled')
+    .select('value');
+  if (res.error) throw res.error;
+  if (!res.data || !res.data.length) {
+    throw new Error('No app_settings row updated (RLS or missing row)');
+  }
+  window._clubPushEnabled = parseSettingEnabled(res.data[0].value);
+  return window._clubPushEnabled;
+}
+
 /** Generic remote push to all registered devices via edge function */
 async function broadcastPush(opts) {
   opts = opts || {};
   if (!window.sb) return;
   try {
+    if (window._clubPushEnabled === false) {
+      console.log('[push] skipped — club master switch is off');
+      return { sent: 0, paused: true };
+    }
     var title = opts.title || 'Update';
     var body = opts.body || '';
     if (body.length > 180) body = body.slice(0, 177) + '…';
@@ -153,6 +207,8 @@ async function broadcastPush(opts) {
     });
     if (res.error) console.warn('[push] broadcast', res.error);
     else console.log('[push] broadcast ok', res.data);
+    if (res.data && res.data.paused) window._clubPushEnabled = false;
+    return res.data || res;
   } catch (e) {
     console.warn('[push] broadcastPush', e);
   }
