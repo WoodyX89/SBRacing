@@ -668,7 +668,7 @@ async function loadRideLeaderboard(period) {
                 '<div class="flex-1 min-w-0">' +
                 '<div class="font-medium truncate text-zinc-100">' + escapeHtml(row.full_name || 'Rider') +
                 (mine ? ' <span class="text-orange-500 text-xs">you</span>' : '') + '</div>' +
-                '<div class="text-xs text-zinc-500">' + (row.rides || 0) + ' ride' + (row.rides === 1 ? '' : 's') + ' · tap name for profile</div>' +
+                '<div class="text-xs text-zinc-500">' + (row.rides || 0) + ' ride' + (row.rides === 1 ? '' : 's') + '</div>' +
                 '</div>' +
                 '<div class="text-right shrink-0">' +
                 '<div class="font-semibold text-orange-400">' + (row.points || 0) + ' pts</div>' +
