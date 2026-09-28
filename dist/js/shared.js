@@ -306,7 +306,8 @@ let cart = (function () {
         name: item.name || 'Item',
         price: Number(item.price) || 0,
         qty: Math.max(1, Number(item.qty) || 1),
-        size: item.size || ''
+        size: item.size || '',
+        color: item.color || ''
       };
     });
   } catch (e) {
@@ -327,6 +328,96 @@ function cartTotal() {
 function saveCart() {
   localStorage.setItem('sb_cart', JSON.stringify(cart));
   updateCartCount();
+}
+
+function emptyCart(opts) {
+  opts = opts || {};
+  cart = [];
+  saveCart();
+  try { sessionStorage.removeItem('sb_checkout_pending'); } catch (e) {}
+  if (!opts.keepPending) {
+    try { localStorage.removeItem('sb_checkout_pending'); } catch (e2) {}
+  }
+  if (typeof refreshMerchStockUi === 'function') {
+    try { refreshMerchStockUi(); } catch (e3) {}
+  }
+  if (typeof hideCart === 'function') {
+    try { hideCart(); } catch (e4) {}
+  }
+}
+
+function setPendingCheckout(info) {
+  try {
+    localStorage.setItem('sb_checkout_pending', JSON.stringify(info || {}));
+  } catch (e) {}
+  try {
+    sessionStorage.setItem('sb_checkout_pending', '1');
+  } catch (e2) {}
+}
+
+function getPendingCheckout() {
+  try {
+    var raw = localStorage.getItem('sb_checkout_pending');
+    if (!raw) return null;
+    var parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearPendingCheckout() {
+  try { localStorage.removeItem('sb_checkout_pending'); } catch (e) {}
+  try { sessionStorage.removeItem('sb_checkout_pending'); } catch (e2) {}
+}
+
+async function fetchCheckoutStatus(pending) {
+  if (!pending || !window.SB_URL) return null;
+  var sessionId = pending.sessionId || pending.session_id || '';
+  var orderId = pending.orderId || pending.order_id || '';
+  if (!sessionId && !orderId) return null;
+  var qs = sessionId
+    ? ('session_id=' + encodeURIComponent(sessionId))
+    : ('order_id=' + encodeURIComponent(orderId));
+  var res = await fetch(window.SB_URL + '/functions/v1/checkout-status?' + qs, {
+    headers: {
+      apikey: window.SB_ANON_KEY || '',
+      Authorization: 'Bearer ' + (window.SB_ANON_KEY || '')
+    }
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+/** Empty the cart when Stripe has confirmed payment (web return + native resume). */
+async function reconcileStripeCheckout(opts) {
+  opts = opts || {};
+  var pending = getPendingCheckout();
+  if (!pending && !opts.forceSuccess) return false;
+  try {
+    if (opts.forceSuccess) {
+      emptyCart();
+      if (typeof loadProducts === 'function') {
+        setTimeout(function () { try { loadProducts(); } catch (e) {} }, 400);
+      }
+      return true;
+    }
+    var status = await fetchCheckoutStatus(pending);
+    if (status && status.paid) {
+      emptyCart();
+      if (typeof showToast === 'function' && !opts.silent) {
+        showToast('Payment received — thank you! We’ll process your order soon.');
+      }
+      if (typeof loadProducts === 'function') {
+        setTimeout(function () { try { loadProducts(); } catch (e) {} }, 400);
+      }
+      return true;
+    }
+  } catch (e) {
+    console.warn('[checkout] reconcile', e);
+  }
+  return false;
 }
 
 var _hapticsPlugin = null;
@@ -779,12 +870,13 @@ async function syncNativeBadge(count) {
  * Add to cart. size optional. Merges same productId+size (or name+size).
  * @param {string} name
  * @param {number} price
- * @param {{productId?:number|string, size?:string, qty?:number}} [opts]
+ * @param {{productId?:number|string, size?:string, color?:string, qty?:number}} [opts]
  */
 function addToCart(name, price, opts) {
   opts = opts || {};
   var productId = opts.productId != null ? opts.productId : null;
   var size = (opts.size || '').trim();
+  var color = (opts.color || '').trim();
   var qty = Math.max(1, Number(opts.qty) || 1);
 
   // Cap by remaining stock (DB stock minus what's already in cart)
@@ -806,9 +898,9 @@ function addToCart(name, price, opts) {
 
   var existing = cart.findIndex(function (item) {
     if (productId != null && item.productId != null) {
-      return String(item.productId) === String(productId) && (item.size || '') === size;
+      return String(item.productId) === String(productId) && (item.size || '') === size && (item.color || '') === color;
     }
-    return item.name === name && (item.size || '') === size;
+    return item.name === name && (item.size || '') === size && (item.color || '') === color;
   });
 
   if (existing >= 0) {
@@ -819,7 +911,8 @@ function addToCart(name, price, opts) {
       name: name,
       price: Number(price) || 0,
       qty: qty,
-      size: size
+      size: size,
+      color: color
     });
   }
   saveCart();
@@ -1163,10 +1256,13 @@ async function submitCheckout(e) {
       throw new Error('No payment URL returned. Check Stripe keys on the server.');
     }
 
-    // Keep cart until paid — success page clears it
-    try {
-      sessionStorage.setItem('sb_checkout_pending', '1');
-    } catch (e) {}
+    // Keep cart until Stripe confirms payment. Persist session so the
+    // Capacitor app can empty the cart after the user returns from Checkout.
+    setPendingCheckout({
+      orderId: data.orderId || null,
+      sessionId: data.sessionId || null,
+      at: Date.now()
+    });
 
     closeCheckoutModal();
     showToast('Opening secure Stripe checkout…');
@@ -1190,19 +1286,28 @@ function handleStripeCheckoutReturn() {
   try {
     var q = new URLSearchParams(location.search);
     var status = q.get('checkout');
-    if (!status) return;
+    var sessionId = q.get('session_id') || q.get('sessionId');
+    if (sessionId) {
+      var pending = getPendingCheckout() || {};
+      pending.sessionId = sessionId;
+      pending.at = pending.at || Date.now();
+      setPendingCheckout(pending);
+    }
     if (status === 'success') {
-      cart = [];
-      saveCart();
-      try { sessionStorage.removeItem('sb_checkout_pending'); } catch (e) {}
+      // Stripe sent the buyer back — treat as a purchase and empty the cart.
+      emptyCart({ keepPending: true });
       showToast('Payment received — thank you! We’ll process your order soon.');
-      if (typeof loadProducts === 'function') {
-        setTimeout(function () { try { loadProducts(); } catch (e) {} }, 400);
-      }
+      reconcileStripeCheckout({ silent: true }).then(function () {
+        if (typeof loadProducts === 'function') {
+          try { loadProducts(); } catch (e) {}
+        }
+      });
     } else if (status === 'cancel') {
       showToast('Payment cancelled — your cart is still here.', true);
+    } else if (getPendingCheckout()) {
+      reconcileStripeCheckout({ silent: true });
     }
-    if (window.history && history.replaceState) {
+    if (status && window.history && history.replaceState) {
       history.replaceState(null, '', location.pathname);
     }
   } catch (e) {
@@ -1928,6 +2033,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         Capacitor.Plugins.App.addListener('appStateChange', function (state) {
           if (state && state.isActive) {
             try { updateNotifCount(); } catch (e) {}
+            try { reconcileStripeCheckout({ silent: false }); } catch (e2) {}
           }
         });
       } else if (window.Capacitor && typeof Capacitor.registerPlugin === 'function') {
@@ -1936,6 +2042,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           App.addListener('appStateChange', function (state) {
             if (state && state.isActive) {
               try { updateNotifCount(); } catch (e) {}
+              try { reconcileStripeCheckout({ silent: false }); } catch (e2) {}
             }
           });
         }

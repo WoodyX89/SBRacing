@@ -1890,6 +1890,7 @@ async function submitRSVP(e) {
     }
 
     showToast(status === 'waitlist' ? 'Added to waitlist' : 'RSVP confirmed!');
+    if (status === 'confirmed' && typeof evaluateMyBadges === 'function') evaluateMyBadges();
     // Alert leaders/admins of new RSVP
     try {
       var evName = (ev && ev.title) ? ev.title : 'Event';

@@ -1,4 +1,4 @@
-// SB Racing — Stripe webhook → mark orders paid
+// SB Racing — Stripe webhook → mark orders paid + decrement inventory
 // Secrets: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
 // Deploy: supabase functions deploy stripe-webhook --no-verify-jwt
 // Stripe Dashboard → Webhooks → endpoint:
@@ -54,11 +54,25 @@ Deno.serve(async (req) => {
   try {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
-      const orderId = session.metadata?.order_id;
+      const paid = session.payment_status === "paid" || session.status === "complete";
+      if (!paid && session.payment_status && session.payment_status !== "no_payment_required") {
+        console.log("session not paid yet", session.id, session.payment_status);
+      }
+
       const paymentIntent =
         typeof session.payment_intent === "string"
           ? session.payment_intent
           : session.payment_intent?.id || null;
+
+      let orderId = session.metadata?.order_id || null;
+      if (!orderId && session.id) {
+        const { data } = await supabase
+          .from("orders")
+          .select("id")
+          .eq("stripe_session_id", session.id)
+          .maybeSingle();
+        orderId = data?.id || null;
+      }
 
       if (orderId) {
         await supabase
@@ -70,6 +84,16 @@ Deno.serve(async (req) => {
             paid_at: new Date().toISOString(),
           })
           .eq("id", orderId);
+
+        const { data: inv, error: invErr } = await supabase.rpc(
+          "apply_paid_order_inventory",
+          { p_order_id: orderId },
+        );
+        if (invErr) {
+          console.error("inventory rpc", invErr);
+          return new Response("Inventory update failed", { status: 500 });
+        }
+        console.log("inventory", orderId, inv);
       } else if (session.id) {
         await supabase
           .from("orders")
@@ -79,6 +103,18 @@ Deno.serve(async (req) => {
             paid_at: new Date().toISOString(),
           })
           .eq("stripe_session_id", session.id);
+      }
+    }
+
+    if (event.type === "checkout.session.expired") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const orderId = session.metadata?.order_id;
+      if (orderId) {
+        await supabase
+          .from("orders")
+          .update({ status: "expired" })
+          .eq("id", orderId)
+          .eq("status", "awaiting_payment");
       }
     }
   } catch (e) {

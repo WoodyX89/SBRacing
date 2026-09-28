@@ -68,7 +68,7 @@ async function showDashboard(user) {
     };
     const statusEl = dashboard.querySelector('.text-emerald-400 span') || dashboard.querySelector('.text-emerald-400');
     if (statusEl && profile) {
-        statusEl.textContent = tierLabel[profile.membership_tier] || 'Member';
+        statusEl.textContent = memberRoleLabel(profile);
     }
 
     const av = document.getElementById('member-avatar');
@@ -76,6 +76,7 @@ async function showDashboard(user) {
         av.src = profile?.avatar_url || '/assets/logo.png';
     }
 
+    window._myProfile = profile || null;
     fillProfileForm(profile, user);
 
     window._myId = user.id;
@@ -96,6 +97,25 @@ async function showDashboard(user) {
     await loadMemberDirectory();
     loadPrivateEvents();
     switchMemberTab(7);
+    if (window.SBBadges) {
+        window.SBBadges.loadBadgeCatalog().then(function () {
+            return window.SBBadges.evaluateMyBadges();
+        }).then(function () {
+            if (user && user.id) window.SBBadges.renderOwnBadges(user.id);
+        }).catch(function (e) { console.warn('[badges] boot', e); });
+    }
+}
+
+function memberRoleLabel(p) {
+    if (p && p.is_admin) return 'Admin';
+    if (p && p.is_leader) return 'Leader';
+    var tierLabel = {
+        trail_rider: 'Trail Rider',
+        coulee_crusher: 'Coulee Crusher',
+        youth: 'Youth',
+        none: 'Member'
+    };
+    return tierLabel[p && p.membership_tier] || 'Member';
 }
 
 let _memberDirCache = [];
@@ -106,12 +126,12 @@ async function loadMemberDirectory() {
   try {
     var res = await window.sb
       .from('profiles')
-      .select('id, full_name, avatar_url, membership_tier, membership_status, created_at, riding_bike, experience_level')
+      .select('id, full_name, avatar_url, membership_tier, membership_status, created_at, riding_bike, experience_level, is_admin, is_leader')
       .order('full_name', { ascending: true });
-    if (res.error && /riding_bike|experience_level|column|schema cache/i.test(String(res.error.message || ''))) {
+    if (res.error && /riding_bike|experience_level|is_leader|is_admin|column|schema cache/i.test(String(res.error.message || ''))) {
       res = await window.sb
         .from('profiles')
-        .select('id, full_name, avatar_url, membership_tier, membership_status, created_at')
+        .select('id, full_name, avatar_url, membership_tier, membership_status, created_at, is_admin')
         .order('full_name', { ascending: true });
     }
     if (res.error) throw res.error;
@@ -140,14 +160,13 @@ function renderMemberDirectory(list) {
     grid.innerHTML = '<div class="col-span-full text-center text-zinc-500 py-8">No members found</div>';
     return;
   }
-  const tierLabel = { trail_rider: 'Trail Rider', coulee_crusher: 'Coulee Crusher', youth: 'Youth', none: 'Member' };
   grid.innerHTML = list.map(function (p) {
     const name = p.full_name || 'Member';
     const initial = name.charAt(0).toUpperCase();
     const av = p.avatar_url
       ? '<img src="' + escapeAttr(p.avatar_url) + '" class="w-12 h-12 rounded-2xl object-cover bg-zinc-800" alt="">'
       : '<div class="w-12 h-12 rounded-2xl bg-orange-600 text-white flex items-center justify-center font-bold">' + initial + '</div>';
-    const tier = tierLabel[p.membership_tier] || 'Member';
+    const tier = memberRoleLabel(p);
     const active = p.membership_status === 'active';
     const exp = experienceLabel(p.experience_level);
     const sub = [tier + (active ? ' · Active' : ''), exp].filter(Boolean).join(' · ');
@@ -213,13 +232,13 @@ async function openMemberProfile(userId) {
   lockPageForModal(true);
   body.innerHTML = '<div class="text-zinc-500 text-sm">Loading…</div>';
   try {
-    var cols = 'id, full_name, avatar_url, membership_tier, membership_status, created_at, email, is_admin, bio, riding_bike, experience_level';
+    var cols = 'id, full_name, avatar_url, membership_tier, membership_status, created_at, email, is_admin, is_leader, bio, riding_bike, experience_level';
     if (window._isAdmin) cols += ', emergency_contact, phone';
     var res = await window.sb.from('profiles').select(cols).eq('id', userId).maybeSingle();
     if (res.error && /bio|riding_bike|experience_level|emergency_contact|column|schema cache/i.test(String(res.error.message || ''))) {
       res = await window.sb
         .from('profiles')
-        .select('id, full_name, avatar_url, membership_tier, membership_status, created_at, email, is_admin, emergency_contact, phone')
+        .select('id, full_name, avatar_url, membership_tier, membership_status, created_at, email, is_admin, is_leader, emergency_contact, phone')
         .eq('id', userId)
         .maybeSingle();
     }
@@ -229,7 +248,6 @@ async function openMemberProfile(userId) {
       body.innerHTML = '<p class="text-zinc-500">Member not found</p>';
       return;
     }
-    const tierLabel = { trail_rider: 'Trail Rider', coulee_crusher: 'Coulee Crusher', youth: 'Youth', none: 'Member' };
     const name = p.full_name || 'Member';
     const initial = name.charAt(0).toUpperCase();
     const av = p.avatar_url
@@ -280,13 +298,17 @@ async function openMemberProfile(userId) {
     body.innerHTML =
       '<div class="flex items-center gap-4">' + av +
       '<div><div class="text-xl font-bold">' + escapeHtml(name) + '</div>' +
-      '<div class="text-sm text-emerald-400 mt-1">' + escapeHtml(tierLabel[p.membership_tier] || 'Member') +
+      '<div class="text-sm text-emerald-400 mt-1">' + escapeHtml(memberRoleLabel(p)) +
       (p.membership_status === 'active' ? ' · Active' : '') + '</div>' +
       (exp ? '<div class="text-xs text-zinc-400 mt-1">' + escapeHtml(exp) + '</div>' : '') +
       (joined ? '<div class="text-xs text-zinc-500 mt-1">Joined ' + joined + '</div>' : '') +
       '</div></div>' +
       (extra ? '<div class="space-y-3 pt-1">' + extra + '</div>' : '') +
-      rideHtml;
+      rideHtml +
+      '<div id="profile-badges-mount" class="pt-2"></div>';
+    if (window.SBBadges) {
+      window.SBBadges.renderProfileBadges(userId, document.getElementById('profile-badges-mount'));
+    }
   } catch (e) {
     body.innerHTML = '<p class="text-red-400 text-sm">' + escapeHtml(e.message || 'Failed to load') + '</p>';
   }
@@ -330,7 +352,7 @@ function fillProfileForm(profile, user) {
             none: 'No active membership'
         };
         const st = profile?.membership_status || '';
-        tier.textContent = (labels[profile?.membership_tier] || 'Member') + (st ? ' · ' + st : '');
+        tier.textContent = memberRoleLabel(profile) + (st ? ' · ' + st : '');
     }
     if (preview) preview.src = profile?.avatar_url || '/assets/logo.png';
 }
@@ -407,6 +429,8 @@ async function saveProfile(e) {
             if (prev) prev.src = avatar_url;
         }
         if (fileInput) fileInput.value = '';
+        window._myProfile = Object.assign({}, window._myProfile || {}, updates);
+        if (avatar_url) window._myProfile.avatar_url = avatar_url;
         showToast('Profile saved');
     } catch (err) {
         console.error(err);
@@ -616,12 +640,22 @@ function switchMemberTab(tabIndex) {
     if (String(tabIndex) === '6') {
         loadClubPushMaster();
     }
-    if (String(tabIndex) === '4') loadProfileRecentRides();
-    if (String(tabIndex) === '7') loadRideLeaderboard(window._lbPeriod || 'weekly');
+    if (String(tabIndex) === '4') {
+        if (window._myProfile) fillProfileForm(window._myProfile, { email: window._myProfile.email });
+        loadProfileRecentRides();
+        if (window.SBBadges && window._myId) {
+            window.SBBadges.loadBadgeCatalog().then(function () {
+                return window.SBBadges.loadMemberBadges(window._myId);
+            }).then(function () {
+                window.SBBadges.renderOwnBadges(window._myId);
+            }).catch(function () {});
+        }
+    }
+    if (String(tabIndex) === '7') loadRideLeaderboard(window._lbPeriod || 'yearly');
 }
 
 async function loadRideLeaderboard(period) {
-    period = period || 'weekly';
+    period = period || 'yearly';
     window._lbPeriod = period;
     document.querySelectorAll('.lb-period').forEach(function (btn) {
         var on = btn.getAttribute('data-period') === period;
@@ -757,6 +791,7 @@ async function logNewRide() {
     window.memberRides = window.memberRides || [];
     window.memberRides.unshift(data);
     renderRideLog();
+    if (typeof evaluateMyBadges === 'function') evaluateMyBadges();
     showToast('Ride logged! Thanks for riding with SB Racing.');
 }
 
@@ -1448,6 +1483,7 @@ function adminToolModalId(which) {
   if (which === 'apps') return 'admin-apps-modal';
   if (which === 'perms') return 'admin-perms-modal';
   if (which === 'push') return 'admin-push-modal';
+  if (which === 'badges') return 'admin-badges-modal';
   return '';
 }
 
@@ -1460,11 +1496,12 @@ function openAdminTool(which) {
   if (which === 'apps') loadClubApplications(window._appFilter || 'pending');
   if (which === 'perms') loadAdminMembers();
   if (which === 'push') syncAdminPushPausedUi();
+  if (which === 'badges') loadAdminBadgeAward();
 }
 
 function closeAdminTool(which) {
   var id = which ? adminToolModalId(which) : '';
-  var ids = id ? [id] : ['admin-apps-modal', 'admin-perms-modal', 'admin-push-modal'];
+  var ids = id ? [id] : ['admin-apps-modal', 'admin-perms-modal', 'admin-push-modal', 'admin-badges-modal'];
   ids.forEach(function (mid) {
     var modal = document.getElementById(mid);
     if (modal) modal.style.display = 'none';
@@ -1530,6 +1567,7 @@ function renderAdminMembers(rows) {
     var mine = window._myId && String(window._myId) === id;
     var tier = p.membership_tier || 'none';
     var st = p.membership_status || 'active';
+    var clubRole = p.is_admin ? 'admin' : (p.is_leader ? 'leader' : 'member');
     return (
       '<div class="bg-zinc-950 border border-zinc-800 rounded-2xl p-4" data-uid="' + escapeAttr(id) + '">' +
         '<div class="flex flex-wrap items-start justify-between gap-2">' +
@@ -1544,8 +1582,8 @@ function renderAdminMembers(rows) {
             (p.is_leader ? '<span class="text-[10px] uppercase tracking-wider px-2 py-1 rounded-lg border border-emerald-800 text-emerald-400">Leader</span>' : '') +
           '</div>' +
         '</div>' +
-        '<div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-3">' +
-          '<label class="text-[10px] uppercase tracking-wider text-zinc-500">Role' +
+        '<div class="grid sm:grid-cols-3 gap-2 mt-3">' +
+          '<label class="text-[10px] uppercase tracking-wider text-zinc-500">Membership' +
             '<select onchange="queueMemberPerm(\'' + id + '\',\'membership_tier\',this.value)" class="mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-200">' +
               opt('none', 'Member', tier) +
               opt('trail_rider', 'Trail Rider', tier) +
@@ -1559,16 +1597,12 @@ function renderAdminMembers(rows) {
               opt('inactive', 'Inactive', st) +
               opt('denied', 'Denied', st) +
             '</select></label>' +
-          '<label class="text-[10px] uppercase tracking-wider text-zinc-500">Leader' +
-            '<select onchange="queueMemberPerm(\'' + id + '\',\'is_leader\',this.value)" class="mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-200">' +
-              opt('false', 'No', p.is_leader ? 'true' : 'false') +
-              opt('true', 'Yes', p.is_leader ? 'true' : 'false') +
-            '</select></label>' +
-          '<label class="text-[10px] uppercase tracking-wider text-zinc-500">Access' +
+          '<label class="text-[10px] uppercase tracking-wider text-zinc-500">Club role' +
             '<select ' + (mine ? 'disabled title="You cannot change your own admin flag"' : '') +
-              ' onchange="queueMemberPerm(\'' + id + '\',\'is_admin\',this.value)" class="mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-200">' +
-              opt('false', 'Member', p.is_admin ? 'true' : 'false') +
-              opt('true', 'Admin', p.is_admin ? 'true' : 'false') +
+              ' onchange="queueMemberPerm(\'' + id + '\',\'club_role\',this.value)" class="mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-200">' +
+              opt('member', 'Member', clubRole) +
+              opt('leader', 'Leader', clubRole) +
+              opt('admin', 'Admin', clubRole) +
             '</select></label>' +
         '</div>' +
       '</div>'
@@ -1586,13 +1620,23 @@ async function queueMemberPerm(userId, field, value) {
     return;
   }
   if (!userId || !field) return;
-  if (field === 'is_admin' && window._myId && String(window._myId) === String(userId)) {
+  if ((field === 'is_admin' || field === 'club_role') && window._myId && String(window._myId) === String(userId)) {
     if (typeof showToast === 'function') showToast('You cannot change your own admin access', true);
     loadAdminMembers();
     return;
   }
   var patch = {};
-  if (field === 'is_admin') patch.is_admin = value === 'true' || value === true;
+  if (field === 'club_role') {
+    if (value === 'admin') {
+      patch.is_admin = true;
+    } else if (value === 'leader') {
+      patch.is_admin = false;
+      patch.is_leader = true;
+    } else {
+      patch.is_admin = false;
+      patch.is_leader = false;
+    }
+  } else if (field === 'is_admin') patch.is_admin = value === 'true' || value === true;
   else if (field === 'is_leader') {
     patch.is_leader = value === 'true' || value === true;
   } else patch[field] = value;
@@ -1958,3 +2002,46 @@ window.openRideRouteModal = openRideRouteModal;
 window.closeRideRouteModal = closeRideRouteModal;
 
 
+
+
+async function loadAdminBadgeAward() {
+  var sel = document.getElementById('admin-badge-member');
+  var badge = document.getElementById('admin-badge-slug');
+  if (!sel || !window.sb) return;
+  sel.innerHTML = '<option value="">Loading…</option>';
+  try {
+    var pr = await window.sb.from('profiles').select('id, full_name').order('full_name');
+    var people = pr.data || [];
+    sel.innerHTML = '<option value="">Select member</option>' + people.map(function (p) {
+      return '<option value="' + p.id + '">' + String(p.full_name || p.id).replace(/</g,'') + '</option>';
+    }).join('');
+    if (window.SBBadges) {
+      var cats = await window.SBBadges.loadBadgeCatalog();
+      var manuals = cats.filter(function (b) { return b.award_type === 'manual'; });
+      if (badge) {
+        badge.innerHTML = manuals.map(function (b) {
+          return '<option value="' + b.slug + '">' + b.name + '</option>';
+        }).join('') || '<option value="trail-day">Trail Day</option>';
+      }
+    }
+  } catch (e) {
+    sel.innerHTML = '<option value="">Could not load members</option>';
+  }
+}
+
+async function submitAdminBadgeAward() {
+  var userId = (document.getElementById('admin-badge-member') || {}).value;
+  var slug = (document.getElementById('admin-badge-slug') || {}).value;
+  if (!userId || !slug) {
+    showToast('Pick a member and a badge', true);
+    return;
+  }
+  try {
+    await window.SBBadges.awardBadge(userId, slug);
+    showToast('Badge awarded');
+  } catch (e) {
+    showToast(e.message || 'Award failed', true);
+  }
+}
+window.loadAdminBadgeAward = loadAdminBadgeAward;
+window.submitAdminBadgeAward = submitAdminBadgeAward;

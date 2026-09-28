@@ -87,23 +87,31 @@ async function getProfile(userId) {
   if (!userId) return null;
   var session = getSessionFromStorage();
   var token = (session && session.access_token) || window.SB_ANON_KEY;
+  var selects = [
+    'id,full_name,avatar_url,email,phone,emergency_contact,bio,riding_bike,experience_level,is_admin,is_leader,membership_tier,membership_status',
+    'id,full_name,avatar_url,email,phone,emergency_contact,is_admin,is_leader,membership_tier,membership_status',
+    'id,full_name,avatar_url,email,is_admin,is_leader,membership_tier,membership_status'
+  ];
   try {
-    var res = await fetch(
-      window.SB_URL + '/rest/v1/profiles?id=eq.' + encodeURIComponent(userId) + '&select=id,full_name,avatar_url,email,is_admin,is_leader,membership_tier,membership_status',
-      {
-        headers: {
-          apikey: window.SB_ANON_KEY,
-          Authorization: 'Bearer ' + token,
-          Accept: 'application/json'
+    for (var i = 0; i < selects.length; i++) {
+      var res = await fetch(
+        window.SB_URL + '/rest/v1/profiles?id=eq.' + encodeURIComponent(userId) + '&select=' + selects[i],
+        {
+          headers: {
+            apikey: window.SB_ANON_KEY,
+            Authorization: 'Bearer ' + token,
+            Accept: 'application/json'
+          }
         }
+      );
+      if (!res.ok) {
+        console.warn('getProfile status', res.status);
+        continue;
       }
-    );
-    if (!res.ok) {
-      console.warn('getProfile status', res.status);
-      return null;
+      var rows = await res.json();
+      if (rows && rows[0]) return rows[0];
     }
-    var rows = await res.json();
-    return rows && rows[0] ? rows[0] : null;
+    return null;
   } catch (e) {
     console.warn('getProfile failed:', e);
     return null;

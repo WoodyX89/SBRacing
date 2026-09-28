@@ -27,12 +27,12 @@ Deno.serve(async (req) => {
     });
 
     const body = await req.json().catch(() => ({}));
-    const items = Array.isArray(body.items) ? body.items : [];
+    const rawItems = Array.isArray(body.items) ? body.items : [];
     const customer = body.customer || {};
     const origin = String(body.origin || Deno.env.get("SITE_URL") || "")
       .replace(/\/$/, "");
 
-    if (!items.length) {
+    if (!rawItems.length) {
       return json({ error: "Cart is empty" }, 400);
     }
     if (!customer.email || !customer.name) {
@@ -42,18 +42,69 @@ Deno.serve(async (req) => {
       return json({ error: "Missing origin / SITE_URL" }, 400);
     }
 
-    // Build Stripe line items (amounts in cents)
-    const line_items = [];
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    const ids = rawItems
+      .map((it: Record<string, unknown>) => it.productId ?? it.id)
+      .filter((id: unknown) => id != null && String(id).length > 0)
+      .map((id: unknown) => {
+        const s = String(id);
+        return /^\d+$/.test(s) ? Number(s) : s;
+      });
+
+    const productMap = new Map<string, Record<string, unknown>>();
+    if (ids.length) {
+      const { data: rows, error: prodErr } = await supabase
+        .from("products")
+        .select("id,name,price,stock_qty,is_active,size,color")
+        .in("id", ids);
+      if (prodErr) {
+        console.error("products lookup", prodErr);
+        return json({ error: "Could not load products" }, 500);
+      }
+      for (const row of rows || []) {
+        productMap.set(String(row.id), row as Record<string, unknown>);
+      }
+    }
+
+    const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+    const snapshot: Record<string, unknown>[] = [];
     let total = 0;
-    for (const it of items) {
-      const name = String(it.name || "Item").slice(0, 120);
-      const size = it.size ? ` (${it.size})` : "";
-      const color = it.color ? ` — ${it.color}` : "";
-      const unit = Math.round(Number(it.price) * 100);
+
+    for (const it of rawItems) {
+      const productId = it.productId != null ? String(it.productId) : (it.id != null ? String(it.id) : null);
+      const db = productId ? productMap.get(productId) : null;
+      if (productId && !db) {
+        return json({ error: `Unknown product ${productId}` }, 400);
+      }
+      if (db && db.is_active === false) {
+        return json({ error: `${db.name || "Item"} is no longer available` }, 400);
+      }
+
+      const name = String((db && db.name) || it.name || "Item").slice(0, 120);
+      const size = String((db && db.size) || it.size || "").trim();
+      const color = String((db && db.color) || it.color || "").trim();
+      const unit = Math.round(Number((db && db.price) != null ? db.price : it.price) * 100);
       const qty = Math.max(1, Math.min(99, Number(it.qty) || 1));
+
       if (!Number.isFinite(unit) || unit < 50) {
         return json({ error: `Invalid price for ${name}` }, 400);
       }
+
+      if (db) {
+        const stock = Math.max(0, Number(db.stock_qty) || 0);
+        if (stock < qty) {
+          return json({
+            error: stock <= 0
+              ? `${name}${size ? " (" + size + ")" : ""} is sold out`
+              : `Only ${stock} left of ${name}${size ? " (" + size + ")" : ""}`,
+          }, 409);
+        }
+      }
+
       total += (unit * qty) / 100;
       line_items.push({
         quantity: qty,
@@ -61,18 +112,20 @@ Deno.serve(async (req) => {
           currency: "cad",
           unit_amount: unit,
           product_data: {
-            name: name + size + color,
+            name: name + (size ? ` (${size})` : "") + (color ? ` — ${color}` : ""),
           },
         },
       });
+      snapshot.push({
+        productId: productId,
+        name,
+        price: unit / 100,
+        qty,
+        size: size || null,
+        color: color || null,
+      });
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-
-    // Optional auth user
     let userId: string | null = null;
     try {
       const authHeader = req.headers.get("Authorization") || "";
@@ -92,16 +145,10 @@ Deno.serve(async (req) => {
       shipping_province: customer.province || null,
       shipping_postal: customer.postal || null,
       notes: customer.notes || null,
-      items: items.map((it: Record<string, unknown>) => ({
-        productId: it.productId ?? null,
-        name: it.name,
-        price: Number(it.price),
-        qty: Number(it.qty) || 1,
-        size: it.size || null,
-        color: it.color || null,
-      })),
+      items: snapshot,
       total: Math.round(total * 100) / 100,
       status: "awaiting_payment",
+      inventory_applied: false,
     };
 
     const { data: order, error: orderErr } = await supabase

@@ -579,7 +579,11 @@ function addTrailMidpointAsCheckpoint(trailId) {
 }
 
 async function initMap() {
-  map = L.map('trail-map', { scrollWheelZoom: true, tap: true }).setView(AREAS.hat.center, 11);
+  map = L.map('trail-map', {
+    scrollWheelZoom: true,
+    tap: true,
+    attributionControl: false
+  }).setView(AREAS.hat.center, 11);
 
   var streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,

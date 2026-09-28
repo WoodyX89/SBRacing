@@ -7,6 +7,15 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/styles.css">
+    <style>
+      .sb-badge-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(92px,1fr)); gap:10px; }
+      .sb-badge { background:#09090b; border:1px solid #27272a; border-radius:16px; padding:8px 6px 10px; text-align:center; color:#e4e4e7; }
+      .sb-badge.is-locked { opacity:.38; filter:grayscale(.7); }
+      .sb-badge.is-earned { border-color:#9a3412; }
+      .sb-badge-img { width:64px; height:64px; object-fit:cover; border-radius:999px; margin:0 auto 6px; display:block; background:#18181b; }
+      .sb-badge-name { display:block; font-size:11px; font-weight:600; line-height:1.2; }
+      .sb-badge-date { display:block; font-size:10px; color:#a1a1aa; margin-top:2px; }
+    </style>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#000000">
     <meta name="mobile-web-app-capable" content="yes">
@@ -124,9 +133,9 @@
                                 <p class="text-xs text-zinc-500 mt-1">From saved GPS rides. Score = 10 pts / km + 1 pt / 10 m climbing.</p>
                             </div>
                             <div class="flex gap-2 text-xs font-semibold" id="lb-period-btns">
-                                <button type="button" class="lb-period px-3 py-1.5 rounded-xl border border-orange-600 text-orange-500" data-period="weekly" onclick="loadRideLeaderboard('weekly')">Week</button>
+                                <button type="button" class="lb-period px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-period="weekly" onclick="loadRideLeaderboard('weekly')">Week</button>
                                 <button type="button" class="lb-period px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-period="monthly" onclick="loadRideLeaderboard('monthly')">Month</button>
-                                <button type="button" class="lb-period px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-period="yearly" onclick="loadRideLeaderboard('yearly')">Year</button>
+                                <button type="button" class="lb-period px-3 py-1.5 rounded-xl border border-orange-600 text-orange-500" data-period="yearly" onclick="loadRideLeaderboard('yearly')">Year</button>
                             </div>
                         </div>
                         <div id="lb-status" class="text-sm text-zinc-500 mb-3"></div>
@@ -220,6 +229,13 @@
                                 <div class="font-semibold">Send Push Notification</div>
                                 <p class="text-xs text-zinc-500 mt-1">Broadcast to member devices.</p>
                             </button>
+                            <button type="button" onclick="openAdminTool('badges')" class="text-left bg-zinc-950 border border-zinc-800 hover:border-orange-600 rounded-3xl p-5 transition-colors">
+                                <div class="w-10 h-10 rounded-2xl bg-orange-950/60 border border-orange-800 flex items-center justify-center text-orange-400 mb-3">
+                                    <i class="fa-solid fa-medal"></i>
+                                </div>
+                                <div class="font-semibold">Award Badge</div>
+                                <p class="text-xs text-zinc-500 mt-1">Give Trail Day or Wrench to a member.</p>
+                            </button>
                         </div>
                     </div>
 
@@ -227,6 +243,16 @@
 
                     <!-- Profile Tab -->
                     <div id="tab-4" class="member-tab-content hidden">
+                        <div class="mb-8">
+                            <div class="flex items-end justify-between mb-3">
+                                <div>
+                                    <div class="font-semibold">Badges</div>
+                                    <p class="text-xs text-zinc-500 mt-0.5">Earned from rides, RSVPs, photos, and club work.</p>
+                                </div>
+                                <div id="my-badges-count" class="text-xs text-orange-400"></div>
+                            </div>
+                            <div id="my-badges-grid" class="sb-badge-grid"></div>
+                        </div>
                         <div class="font-semibold mb-5">Edit profile</div>
                         <form id="profile-form" onsubmit="saveProfile(event)" class="max-w-lg space-y-5">
                             <div class="flex items-center gap-5">
@@ -401,6 +427,33 @@
     <p id="admin-apps-status" class="px-5 text-sm text-zinc-500 shrink-0"></p>
     <div id="admin-apps-list" class="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-3" style="-webkit-overflow-scrolling:touch;">
       <p class="text-zinc-500 text-sm">Open this tool to load applications.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Admin: Award badge -->
+<div id="admin-badges-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100000] items-center justify-center p-4" style="display:none; padding-top:max(16px, env(safe-area-inset-top, 0px)); padding-bottom:max(16px, env(safe-area-inset-bottom, 0px));" onclick="if(event.target.id==='admin-badges-modal')closeAdminTool('badges')">
+  <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-start gap-3 px-5 pt-5 pb-3 border-b border-zinc-800">
+      <div>
+        <div class="font-bold text-lg">Award badge</div>
+        <p class="text-xs text-zinc-500 mt-0.5">Manual badges only. Ride / RSVP badges award themselves.</p>
+      </div>
+      <button type="button" onclick="closeAdminTool('badges')" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="text-xs text-zinc-400">Member</label>
+        <select id="admin-badge-member" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm"></select>
+      </div>
+      <div>
+        <label class="text-xs text-zinc-400">Badge</label>
+        <select id="admin-badge-slug" class="mt-1.5 w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-4 py-2.5 text-sm">
+          <option value="trail-day">Trail Day</option>
+          <option value="wrench">Wrench</option>
+        </select>
+      </div>
+      <button type="button" onclick="submitAdminBadgeAward()" class="w-full rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 text-sm">Award</button>
     </div>
   </div>
 </div>
@@ -642,6 +695,7 @@
 <script src="js/shared.js"></script>
 <script src="js/native-notifications.js"></script>
 <script src="js/push-notifications.js"></script>
+<script src="js/badges.js?v=badges-1"></script>
 <script src="js/members.js?v=member-bio-1"></script>
 <script src="js/account-deletion.js"></script>
 <script>
