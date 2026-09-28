@@ -99,6 +99,7 @@
                 <div class="px-4 sm:px-8 pt-6">
                     <div class="member-tabs-scroll flex flex-nowrap border-b border-zinc-700 text-sm font-medium overflow-x-auto overscroll-x-contain -mx-1 px-1" style="-webkit-overflow-scrolling: touch; scrollbar-width: thin;">
                         <button onclick="switchMemberTab(7)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 border-b-2 border-orange-600 text-orange-500 font-semibold" data-tab="7">Leaderboard</button>
+                        <button onclick="switchMemberTab(8)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="8">Stats</button>
                         <button onclick="switchMemberTab(1)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="1">Private Events</button>
                         <button onclick="switchMemberTab(2)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="2">Perks &amp; Resources</button>
                         <button onclick="switchMemberTab(4)" class="member-tab shrink-0 whitespace-nowrap px-4 sm:px-5 py-3 text-zinc-400 hover:text-white" data-tab="4">Profile</button>
@@ -140,6 +141,30 @@
                         </div>
                         <div id="lb-status" class="text-sm text-zinc-500 mb-3"></div>
                         <div id="leaderboard-list" class="space-y-2 text-sm"></div>
+                    </div>
+
+                    <!-- Personal Stats Tab -->
+                    <div id="tab-8" class="member-tab-content hidden">
+                        <div class="flex flex-wrap items-end justify-between gap-3 mb-5">
+                            <div>
+                                <div class="font-semibold">Your ride stats</div>
+                                <p class="text-xs text-zinc-500 mt-1">Full-ride totals plus auto-detected trail splits from GPS.</p>
+                            </div>
+                            <div class="flex gap-2 text-xs font-semibold" id="stats-period-btns">
+                                <button type="button" class="stats-period px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-period="weekly" onclick="loadRideStats('weekly')">Week</button>
+                                <button type="button" class="stats-period px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-period="monthly" onclick="loadRideStats('monthly')">Month</button>
+                                <button type="button" class="stats-period px-3 py-1.5 rounded-xl border border-orange-600 text-orange-500" data-period="yearly" onclick="loadRideStats('yearly')">Year</button>
+                                <button type="button" class="stats-period px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-period="all" onclick="loadRideStats('all')">All</button>
+                            </div>
+                        </div>
+                        <p id="stats-status" class="text-sm text-zinc-500 mb-4"></p>
+                        <div id="stats-summary" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 mb-6"></div>
+                        <div class="font-semibold mb-3">Personal bests</div>
+                        <div id="stats-prs" class="grid sm:grid-cols-2 gap-2 mb-6"></div>
+                        <div class="font-semibold mb-3">By trail</div>
+                        <div id="stats-trails" class="space-y-2 mb-6"></div>
+                        <div class="font-semibold mb-3">Ride log</div>
+                        <div id="stats-rides" class="space-y-2 text-sm"></div>
                     </div>
 
                     <!-- Private Events Tab -->

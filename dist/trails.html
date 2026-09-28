@@ -446,10 +446,28 @@
             <div class="text-xl font-black tracking-tight" id="ride-elev">0 m</div>
           </div>
           <div class="rounded-2xl bg-zinc-950 border border-zinc-800 p-3">
+            <div class="text-[10px] uppercase tracking-wider text-zinc-500">Moving</div>
+            <div class="text-xl font-black tracking-tight" id="ride-moving">0:00</div>
+          </div>
+          <div class="rounded-2xl bg-zinc-950 border border-zinc-800 p-3">
+            <div class="text-[10px] uppercase tracking-wider text-zinc-500">Avg speed</div>
+            <div class="text-xl font-black tracking-tight" id="ride-avg">0.0</div>
+          </div>
+          <div class="rounded-2xl bg-zinc-950 border border-zinc-800 p-3">
+            <div class="text-[10px] uppercase tracking-wider text-zinc-500">Top speed</div>
+            <div class="text-xl font-black tracking-tight" id="ride-max">0.0</div>
+          </div>
+          <div class="rounded-2xl bg-zinc-950 border border-zinc-800 p-3 col-span-2">
             <div class="text-[10px] uppercase tracking-wider text-zinc-500">Points</div>
             <div class="text-xl font-black tracking-tight" id="ride-points">0</div>
           </div>
         </div>
+        <div id="ride-trail-live" class="rounded-2xl bg-zinc-950 border border-zinc-800 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-zinc-500">Current trail</div>
+          <div class="text-sm font-semibold text-zinc-100 mt-0.5" id="ride-trail-name">Not on a mapped trail</div>
+          <div class="text-xs text-zinc-500 mt-1" id="ride-trail-meta">Ride past a trail start or end to begin a split.</div>
+        </div>
+        <div id="ride-trail-splits" class="space-y-1.5"></div>
 
         <div class="flex flex-wrap gap-2">
           <button type="button" id="btn-ride-start" onclick="rideStart()" class="flex-1 min-w-[7rem] px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold">
@@ -501,6 +519,7 @@
 <script src="js/trail-info.js"></script>
 <script src="js/trail-photos.js"></script>
 <script src="js/ride-tracker.js"></script>
+<script src="js/trail-splits.js"></script>
 <script src="js/trails-map.js"></script>
 </body>
 </html>

@@ -126,6 +126,7 @@ function buildTrailIndex(geojson) {
     });
   });
   console.log('[trails] features:', trailFeatures.length);
+  if (window.TrailSplits && TrailSplits.setNetwork) TrailSplits.setNetwork(trailFeatures);
 }
 
 function routeDistanceKm() {
@@ -278,6 +279,7 @@ function addCheckpoint(latlng) {
 function focusTrail(trailId, openPopup) {
   var trail = trailFeatures.find(function (tf) { return tf.id === trailId; });
   if (!trail || !trail.latlngs.length) return;
+  window._selectedTrail = { id: trail.id, name: trail.name || trailId };
   clearHighlight();
   if (trail.layer) {
     highlightLayer(trail.layer);
@@ -982,10 +984,50 @@ function updateRideUI(snap) {
   var elTime = document.getElementById('ride-time');
   var elElev = document.getElementById('ride-elev');
   var elPts = document.getElementById('ride-points');
+  var elMoving = document.getElementById('ride-moving');
+  var elAvg = document.getElementById('ride-avg');
+  var elMax = document.getElementById('ride-max');
   if (elDist) elDist.textContent = (snap.distanceKm || 0).toFixed(2) + ' km';
   if (elTime) elTime.textContent = formatRideTime(snap.elapsedSec);
   if (elElev) elElev.textContent = (snap.elevGainM || 0) + ' m';
+  if (elMoving) elMoving.textContent = formatRideTime(snap.movingSec);
+  if (elAvg) elAvg.textContent = (snap.avgSpeedKmh || 0).toFixed(1) + ' km/h';
+  if (elMax) elMax.textContent = (snap.maxSpeedKmh || 0).toFixed(1) + ' km/h';
   if (elPts) elPts.textContent = String(scoreRidePoints(snap.distanceKm, snap.elevGainM));
+
+  var splitSnap = snap.trailSplits || (window.TrailSplits && TrailSplits.getSnapshot && TrailSplits.getSnapshot()) || { current: null, splits: [] };
+  var nameEl = document.getElementById('ride-trail-name');
+  var metaEl = document.getElementById('ride-trail-meta');
+  var listEl = document.getElementById('ride-trail-splits');
+  if (nameEl) {
+    if (splitSnap.current) nameEl.textContent = splitSnap.current.trail_name;
+    else nameEl.textContent = snap.status === 'idle' ? 'Not on a mapped trail' : 'Between trails';
+  }
+  if (metaEl) {
+    if (splitSnap.current) {
+      var bits = [formatRideTime(splitSnap.current.elapsed_sec)];
+      if (splitSnap.current.distance_km) bits.push(splitSnap.current.distance_km.toFixed(2) + ' km');
+      if (splitSnap.current.end_to_end) bits.push('end to end');
+      else if (splitSnap.current.saw_start && !splitSnap.current.saw_end) bits.push('from start');
+      else if (splitSnap.current.saw_end && !splitSnap.current.saw_start) bits.push('from end');
+      else bits.push('on trail');
+      metaEl.textContent = bits.join(' · ');
+    } else {
+      metaEl.textContent = splitSnap.ready
+        ? 'Ride past a trail start or end to begin a split.'
+        : 'Trail map still loading…';
+    }
+  }
+  if (listEl) {
+    var rows = splitSnap.splits || [];
+    listEl.innerHTML = rows.map(function (s) {
+      return '<div class="flex items-center justify-between gap-2 text-xs bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2">' +
+        '<span class="truncate font-medium text-zinc-200">' + escapeHtmlTrail(s.trail_name || 'Trail') +
+        (s.end_to_end ? ' <span class="text-emerald-400 font-normal">end-to-end</span>' : '') + '</span>' +
+        '<span class="shrink-0 text-zinc-400">' + formatRideTime(s.elapsed_sec) +
+        (s.max_speed_kmh ? ' · ' + s.max_speed_kmh.toFixed(1) + ' top' : '') + '</span></div>';
+    }).join('');
+  }
 
   var mapHud = document.getElementById('map-ride-hud');
   var mapDist = document.getElementById('map-ride-distance');
@@ -1215,43 +1257,84 @@ async function saveRecordedRide() {
     showToast('Log in on Members to save rides', true);
     return;
   }
-  var name = prompt('Name this ride', 'Ride ' + new Date().toLocaleDateString());
+  var splitSnap = snap.trailSplits || (window.TrailSplits && TrailSplits.getSnapshot && TrailSplits.getSnapshot()) || { splits: [] };
+  var splits = (splitSnap.splits || []).slice();
+  var primary = null;
+  splits.forEach(function (s) {
+    if (!primary) primary = s;
+    else if (s.end_to_end && !primary.end_to_end) primary = s;
+    else if ((s.distance_km || 0) > (primary.distance_km || 0)) primary = s;
+  });
+  var defaultName = (primary && primary.trail_name)
+    || (window._selectedTrail && window._selectedTrail.name)
+    || ('Ride ' + new Date().toLocaleDateString());
+  var name = prompt('Name this ride', defaultName);
   if (!name) return;
   name = name.trim();
   if (!name) return;
+  var trailName = (primary && primary.trail_name) || null;
+  var trailId = (primary && primary.trail_id) || (window._selectedTrail && window._selectedTrail.id) || null;
 
   var geojson = RideTracker.toGeoJSON(name);
   var km = Math.round(snap.distanceKm * 100) / 100;
   var elev = Math.round(snap.elevGainM || 0);
   var pts = scoreRidePoints(km, elev);
+  var elapsed = snap.elapsedSec || 0;
+  var moving = snap.movingSec || 0;
+  var avg = snap.avgSpeedKmh || 0;
+  var top = snap.maxSpeedKmh || 0;
   if (geojson && geojson.properties) {
     geojson.properties.elev_gain_m = elev;
     geojson.properties.elev_loss_m = Math.round(snap.elevLossM || 0);
     geojson.properties.score = pts;
+    geojson.properties.elapsed_sec = elapsed;
+    geojson.properties.moving_sec = moving;
+    geojson.properties.avg_speed_kmh = avg;
+    geojson.properties.max_speed_kmh = top;
+    geojson.properties.trail_name = trailName;
+    geojson.properties.trail_id = trailId;
+    geojson.properties.trail_splits = splits;
   }
   try {
     var payload = {
       user_id: user.id,
       name: name,
-      description: 'Recorded ride · +' + elev + ' m · ' + formatRideTime(snap.elapsedSec),
+      description: 'Recorded ride · +' + elev + ' m · ' + formatRideTime(elapsed) +
+        ' · avg ' + avg + ' · top ' + top + ' km/h',
       distance_km: km,
       elev_gain_m: elev,
       elev_loss_m: Math.round(snap.elevLossM || 0),
       point_count: snap.pointCount || 0,
       points: pts,
+      elapsed_sec: elapsed,
+      moving_sec: moving,
+      avg_speed_kmh: avg,
+      max_speed_kmh: top,
+      started_at: snap.startTs ? new Date(snap.startTs).toISOString() : null,
+      trail_id: trailId,
+      trail_name: trailName,
+      trail_splits: splits,
       geojson: geojson,
       is_public: false
     };
     var result = await window.sb.from('member_routes').insert(payload);
-    if (result.error && /elev_gain_m|point_count|column/i.test(result.error.message || '')) {
+    if (result.error && /elev_gain_m|point_count|elapsed_sec|moving_sec|avg_speed|max_speed|started_at|trail_|column/i.test(result.error.message || '')) {
       delete payload.elev_gain_m;
       delete payload.elev_loss_m;
       delete payload.point_count;
       delete payload.points;
+      delete payload.elapsed_sec;
+      delete payload.moving_sec;
+      delete payload.avg_speed_kmh;
+      delete payload.max_speed_kmh;
+      delete payload.started_at;
+      delete payload.trail_id;
+      delete payload.trail_name;
+      delete payload.trail_splits;
       result = await window.sb.from('member_routes').insert(payload);
     }
     if (result.error) throw result.error;
-    showToast('Ride saved');
+    showToast(splits.length ? ('Ride saved · ' + splits.length + ' trail split' + (splits.length === 1 ? '' : 's')) : 'Ride saved');
     loadMyRoutes();
   } catch (e) {
     console.error(e);

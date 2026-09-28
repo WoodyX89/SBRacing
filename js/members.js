@@ -652,6 +652,7 @@ function switchMemberTab(tabIndex) {
         }
     }
     if (String(tabIndex) === '7') loadRideLeaderboard(window._lbPeriod || 'yearly');
+    if (String(tabIndex) === '8') loadRideStats(window._statsPeriod || 'yearly');
 }
 
 async function loadRideLeaderboard(period) {
@@ -1901,10 +1902,53 @@ function routeThumbSvg(gj, w, h) {
     '</svg>';
 }
 
+function formatRideClock(sec) {
+  sec = Math.max(0, Math.floor(Number(sec) || 0));
+  var h = Math.floor(sec / 3600);
+  var m = Math.floor((sec % 3600) / 60);
+  var s = sec % 60;
+  if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+function enrichRideRow(r) {
+  r = r || {};
+  var p = (r.geojson && r.geojson.properties) ? r.geojson.properties : {};
+  var elapsed = r.elapsed_sec != null ? r.elapsed_sec : p.elapsed_sec;
+  var moving = r.moving_sec != null ? r.moving_sec : p.moving_sec;
+  var avg = r.avg_speed_kmh != null ? r.avg_speed_kmh : p.avg_speed_kmh;
+  var top = r.max_speed_kmh != null ? r.max_speed_kmh : p.max_speed_kmh;
+  var elev = r.elev_gain_m != null ? r.elev_gain_m : p.elev_gain_m;
+  var dist = r.distance_km != null ? Number(r.distance_km) : (p.distance_km != null ? Number(p.distance_km) : 0);
+  if ((avg == null || avg === 0) && moving && dist) avg = dist / (Number(moving) / 3600);
+  return {
+    id: r.id,
+    name: r.name,
+    created_at: r.created_at,
+    started_at: r.started_at || p.started_at,
+    geojson: r.geojson,
+    points: r.points || p.score || 0,
+    distance_km: dist || 0,
+    elev_gain_m: Number(elev) || 0,
+    elev_loss_m: Number(r.elev_loss_m != null ? r.elev_loss_m : p.elev_loss_m) || 0,
+    elapsed_sec: Number(elapsed) || 0,
+    moving_sec: Number(moving) || 0,
+    avg_speed_kmh: Math.round((Number(avg) || 0) * 10) / 10,
+    max_speed_kmh: Math.round((Number(top) || 0) * 10) / 10,
+    trail_name: r.trail_name || p.trail_name || null,
+    trail_id: r.trail_id || p.trail_id || null,
+    trail_splits: Array.isArray(r.trail_splits) ? r.trail_splits : (Array.isArray(p.trail_splits) ? p.trail_splits : [])
+  };
+}
+
 function formatRideMeta(r) {
+  r = enrichRideRow(r);
   var bits = [];
-  if (r.distance_km != null) bits.push(Number(r.distance_km).toFixed(1) + ' km');
+  if (r.distance_km) bits.push(Number(r.distance_km).toFixed(1) + ' km');
   if (r.elev_gain_m) bits.push('+' + Math.round(r.elev_gain_m) + ' m');
+  if (r.elapsed_sec) bits.push(formatRideClock(r.elapsed_sec));
+  if (r.avg_speed_kmh) bits.push(r.avg_speed_kmh.toFixed(1) + ' avg');
+  if (r.max_speed_kmh) bits.push(r.max_speed_kmh.toFixed(1) + ' top');
   if (r.points) bits.push(r.points + ' pts');
   if (r.created_at) {
     try {
@@ -1918,7 +1962,7 @@ async function fetchMemberRoutes(userId, limit) {
   if (!window.sb || !userId) return [];
   var q = window.sb
     .from('member_routes')
-    .select('id, name, distance_km, elev_gain_m, points, created_at, geojson')
+    .select('id, name, distance_km, elev_gain_m, elev_loss_m, points, created_at, geojson, elapsed_sec, moving_sec, avg_speed_kmh, max_speed_kmh, started_at, trail_name, trail_id, trail_splits')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
   if (limit) q = q.limit(limit);
@@ -1996,6 +2040,223 @@ function closeRideRouteModal() {
   if (typeof lockPageForModal === 'function') lockPageForModal(false);
 }
 
+function rideInStatsPeriod(r, period) {
+  var t = r.started_at || r.created_at;
+  if (!t || period === 'all') return true;
+  var d = new Date(t);
+  if (isNaN(d.getTime())) return true;
+  var now = new Date();
+  if (period === 'weekly') return (now - d) <= 7 * 24 * 3600 * 1000;
+  if (period === 'monthly') return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  if (period === 'yearly') return d.getFullYear() === now.getFullYear();
+  return true;
+}
+
+async function loadRideStats(period) {
+  period = period || window._statsPeriod || 'yearly';
+  window._statsPeriod = period;
+  document.querySelectorAll('.stats-period').forEach(function (btn) {
+    var on = btn.getAttribute('data-period') === period;
+    btn.classList.toggle('border-orange-600', on);
+    btn.classList.toggle('text-orange-500', on);
+    btn.classList.toggle('border-zinc-700', !on);
+    btn.classList.toggle('text-zinc-400', !on);
+  });
+  var status = document.getElementById('stats-status');
+  var summary = document.getElementById('stats-summary');
+  var prs = document.getElementById('stats-prs');
+  var trails = document.getElementById('stats-trails');
+  var list = document.getElementById('stats-rides');
+  if (summary) summary.innerHTML = '<p class="text-zinc-500 text-sm col-span-full">Loading…</p>';
+  try {
+    var user = await getCurrentUser();
+    if (!user) {
+      if (status) status.textContent = 'Sign in to see your stats.';
+      if (summary) summary.innerHTML = '';
+      return;
+    }
+    var raw = await fetchMemberRoutes(user.id, 200);
+    var rides = raw.map(enrichRideRow).filter(function (r) { return rideInStatsPeriod(r, period); });
+    var labels = { weekly: 'this week', monthly: 'this month', yearly: 'this year', all: 'all time' };
+    if (status) {
+      status.textContent = rides.length
+        ? rides.length + ' ride' + (rides.length === 1 ? '' : 's') + ' ' + (labels[period] || period)
+        : 'No saved rides ' + (labels[period] || period) + '. Record one on Trails.';
+    }
+    if (!rides.length) {
+      if (summary) summary.innerHTML = '';
+      if (prs) prs.innerHTML = '<p class="text-zinc-500 text-sm col-span-full">Save a GPS ride to start a history.</p>';
+      if (trails) trails.innerHTML = '';
+      if (list) list.innerHTML = '';
+      return;
+    }
+
+    var totKm = 0, totElev = 0, totPts = 0, totElapsed = 0, totMoving = 0, maxTop = 0;
+    rides.forEach(function (r) {
+      totKm += r.distance_km || 0;
+      totElev += r.elev_gain_m || 0;
+      totPts += Number(r.points) || 0;
+      totElapsed += r.elapsed_sec || 0;
+      totMoving += r.moving_sec || 0;
+      if ((r.max_speed_kmh || 0) > maxTop) maxTop = r.max_speed_kmh || 0;
+    });
+    var overallAvg = totMoving > 0 ? totKm / (totMoving / 3600) : 0;
+
+    function card(label, value, sub) {
+      return '<div class="rounded-2xl bg-zinc-950 border border-zinc-800 p-4">' +
+        '<div class="text-[10px] uppercase tracking-wider text-zinc-500">' + label + '</div>' +
+        '<div class="text-xl font-black tracking-tight text-zinc-100 mt-1">' + value + '</div>' +
+        (sub ? '<div class="text-[11px] text-zinc-500 mt-0.5">' + sub + '</div>' : '') +
+        '</div>';
+    }
+    if (summary) {
+      summary.innerHTML =
+        card('Rides', String(rides.length)) +
+        card('Distance', totKm.toFixed(1) + ' km') +
+        card('Climbing', Math.round(totElev) + ' m') +
+        card('Points', String(Math.round(totPts))) +
+        card('Elapsed', formatRideClock(totElapsed)) +
+        card('Moving', formatRideClock(totMoving)) +
+        card('Avg speed', overallAvg.toFixed(1) + ' km/h', 'moving time') +
+        card('Top speed', maxTop.toFixed(1) + ' km/h');
+    }
+
+    function bestOf(arr, key, minVal) {
+      var best = null;
+      arr.forEach(function (r) {
+        var v = Number(r[key]) || 0;
+        if (v <= (minVal || 0)) return;
+        if (!best || v > Number(best[key])) best = r;
+      });
+      return best;
+    }
+    function fastestTime(arr) {
+      var best = null;
+      arr.forEach(function (r) {
+        var v = Number(r.moving_sec || r.elapsed_sec) || 0;
+        if (v <= 0) return;
+        if (!best || v < (Number(best.moving_sec || best.elapsed_sec) || 0)) best = r;
+      });
+      return best;
+    }
+    function prRow(label, ride, value) {
+      if (!ride) return '<div class="rounded-2xl bg-zinc-950 border border-zinc-800 p-4 text-sm text-zinc-500">' + label + ' — no data yet</div>';
+      return '<button type="button" onclick="openRideRouteModalById(\'' + ride.id + '\')" class="text-left rounded-2xl bg-zinc-950 border border-zinc-800 hover:border-orange-700 p-4 w-full">' +
+        '<div class="text-[10px] uppercase tracking-wider text-zinc-500">' + label + '</div>' +
+        '<div class="font-semibold text-zinc-100 mt-1">' + escapeHtml(value) + '</div>' +
+        '<div class="text-xs text-zinc-500 mt-0.5 truncate">' + escapeHtml(ride.name || 'Ride') +
+        (ride.trail_name ? ' · ' + ride.trail_name : '') + '</div></button>';
+    }
+    var longest = bestOf(rides, 'distance_km', 0);
+    var mostClimb = bestOf(rides, 'elev_gain_m', 0);
+    var fastestAvg = bestOf(rides.filter(function (r) { return (r.distance_km || 0) >= 0.5; }), 'avg_speed_kmh', 0);
+    var fastestTop = bestOf(rides, 'max_speed_kmh', 0);
+    var splitRides = [];
+    rides.forEach(function (r) {
+      (r.trail_splits || []).forEach(function (s) {
+        splitRides.push({
+          id: r.id,
+          name: s.trail_name || r.name,
+          trail_name: s.trail_name,
+          moving_sec: s.moving_sec || s.elapsed_sec,
+          elapsed_sec: s.elapsed_sec,
+          end_to_end: s.end_to_end
+        });
+      });
+    });
+    var bestTime = fastestTime(splitRides.filter(function (s) { return s.end_to_end; })) ||
+      fastestTime(splitRides) ||
+      fastestTime(rides.filter(function (r) { return r.trail_name && (r.moving_sec || r.elapsed_sec); }));
+    if (prs) {
+      prs.innerHTML =
+        prRow('Longest ride', longest, longest ? longest.distance_km.toFixed(1) + ' km' : '') +
+        prRow('Most climbing', mostClimb, mostClimb ? Math.round(mostClimb.elev_gain_m) + ' m' : '') +
+        prRow('Best average', fastestAvg, fastestAvg ? fastestAvg.avg_speed_kmh.toFixed(1) + ' km/h' : '') +
+        prRow('Top speed', fastestTop, fastestTop ? fastestTop.max_speed_kmh.toFixed(1) + ' km/h' : '') +
+        prRow('Fastest trail time', bestTime, bestTime ? formatRideClock(bestTime.moving_sec || bestTime.elapsed_sec) : '');
+    }
+
+    var byTrail = {};
+    rides.forEach(function (r) {
+      var parts = (r.trail_splits && r.trail_splits.length) ? r.trail_splits : null;
+      if (parts) {
+        parts.forEach(function (s) {
+          var key = s.trail_id || s.trail_name;
+          if (!key) return;
+          if (!byTrail[key]) byTrail[key] = { name: s.trail_name || key, runs: 0, e2e: 0, km: 0, bestSec: null, top: 0 };
+          var g = byTrail[key];
+          g.runs += 1;
+          if (s.end_to_end) g.e2e += 1;
+          g.km += Number(s.distance_km) || 0;
+          if ((s.max_speed_kmh || 0) > g.top) g.top = s.max_speed_kmh || 0;
+          var sec = s.end_to_end ? (s.elapsed_sec || s.moving_sec) : (s.moving_sec || s.elapsed_sec);
+          if (sec && (!g.bestSec || sec < g.bestSec)) g.bestSec = sec;
+        });
+      } else if (r.trail_name || r.trail_id) {
+        var key2 = r.trail_id || r.trail_name;
+        if (!byTrail[key2]) byTrail[key2] = { name: r.trail_name || key2, runs: 0, e2e: 0, km: 0, bestSec: null, top: 0 };
+        var g2 = byTrail[key2];
+        g2.runs += 1;
+        g2.km += r.distance_km || 0;
+        if ((r.max_speed_kmh || 0) > g2.top) g2.top = r.max_speed_kmh || 0;
+        var sec2 = r.moving_sec || r.elapsed_sec;
+        if (sec2 && (!g2.bestSec || sec2 < g2.bestSec)) g2.bestSec = sec2;
+      }
+    });
+    var trailRows = Object.keys(byTrail).map(function (k) { return byTrail[k]; });
+    trailRows.sort(function (a, b) { return b.runs - a.runs; });
+    if (trails) {
+      if (!trailRows.length) {
+        trails.innerHTML = '<p class="text-zinc-500 text-sm">Record a ride on Trails — splits appear when GPS matches a mapped trail.</p>';
+      } else {
+        trails.innerHTML = trailRows.map(function (g) {
+          return '<div class="rounded-2xl bg-zinc-950 border border-zinc-800 px-4 py-3">' +
+            '<div class="font-medium text-zinc-100">' + escapeHtml(g.name) + '</div>' +
+            '<div class="text-xs text-zinc-500 mt-1">' +
+            g.runs + ' run' + (g.runs === 1 ? '' : 's') +
+            (g.e2e ? ' · ' + g.e2e + ' end-to-end' : '') +
+            ' · ' + g.km.toFixed(1) + ' km' +
+            (g.bestSec ? ' · best ' + formatRideClock(g.bestSec) : '') +
+            (g.top ? ' · top ' + g.top.toFixed(1) + ' km/h' : '') +
+            '</div></div>';
+        }).join('');
+      }
+    }
+
+    window._profileRideCache = window._profileRideCache || {};
+    rides.forEach(function (r) { window._profileRideCache[String(r.id)] = r; });
+    if (list) {
+      list.innerHTML = rides.map(function (r) {
+        var splitHtml = '';
+        if (r.trail_splits && r.trail_splits.length) {
+          splitHtml = '<span class="block text-[11px] text-zinc-500 mt-1 space-y-0.5">' +
+            r.trail_splits.map(function (s) {
+              return '<span class="block">' + escapeHtml(s.trail_name || 'Trail') +
+                (s.end_to_end ? ' · end-to-end' : '') +
+                ' · ' + formatRideClock(s.elapsed_sec || s.moving_sec) +
+                (s.max_speed_kmh ? ' · ' + Number(s.max_speed_kmh).toFixed(1) + ' top' : '') +
+                '</span>';
+            }).join('') + '</span>';
+        }
+        return '<button type="button" onclick="openRideRouteModalById(\'' + r.id + '\')" class="w-full text-left flex items-center gap-3 p-3 rounded-2xl bg-zinc-950 border border-zinc-800 hover:border-orange-700 transition-colors">' +
+          routeThumbSvg(r.geojson, 88, 52) +
+          '<span class="min-w-0 flex-1">' +
+          '<span class="block font-medium truncate text-zinc-100">' + escapeHtml(r.name || 'Ride') +
+          (r.trail_name ? ' <span class="text-orange-400 text-xs font-normal">' + escapeHtml(r.trail_name) + '</span>' : '') +
+          '</span>' +
+          '<span class="block text-xs text-zinc-500 mt-0.5">' + escapeHtml(formatRideMeta(r)) + '</span>' +
+          splitHtml +
+          '</span><i class="fa-solid fa-chevron-right text-zinc-600 text-xs"></i></button>';
+      }).join('');
+    }
+  } catch (e) {
+    console.warn('[stats]', e);
+    if (status) status.textContent = e.message || 'Could not load stats';
+    if (summary) summary.innerHTML = '';
+  }
+}
+
+window.loadRideStats = loadRideStats;
 window.loadProfileRecentRides = loadProfileRecentRides;
 window.openRideRouteModalById = openRideRouteModalById;
 window.openRideRouteModal = openRideRouteModal;

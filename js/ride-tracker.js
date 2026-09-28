@@ -25,6 +25,7 @@
   var MIN_ELEV_DELTA_M = 2.5;         // ignore small altitude noise
   var MAX_ACCURACY_M = 45;            // discard very inaccurate points
   var MOVING_SPEED_THRESHOLD_KMH = 1.2;
+  var MAX_PLAUSIBLE_SPEED_KMH = 75;
 
   var state = {
     status: 'idle',          // idle | recording | paused
@@ -75,7 +76,8 @@
         distanceM: state.distanceM,
         elevGainM: state.elevGainM,
         elevLossM: state.elevLossM,
-        lastAcceptedAlt: state.lastAcceptedAlt
+        lastAcceptedAlt: state.lastAcceptedAlt,
+        trailSplits: (global.TrailSplits && TrailSplits.serialize) ? TrailSplits.serialize() : null
       }));
     } catch (e) { /* quota / private mode */ }
   }
@@ -95,6 +97,7 @@
       state.elevGainM = data.elevGainM || 0;
       state.elevLossM = data.elevLossM || 0;
       state.lastAcceptedAlt = data.lastAcceptedAlt != null ? data.lastAcceptedAlt : null;
+      if (data.trailSplits && global.TrailSplits && TrailSplits.restore) TrailSplits.restore(data.trailSplits);
       return state.points.length > 0;
     } catch (e) {
       return false;
@@ -142,6 +145,7 @@
     }
 
     state.points.push(pt);
+    if (global.TrailSplits && TrailSplits.onPoint) TrailSplits.onPoint(pt);
     persist();
     emit();
   }
@@ -281,31 +285,49 @@
       elapsedMs = Math.max(0, end - state.startTs - (state.pausedMs || 0));
     }
 
-    // Approximate moving time: sum segments where speed > threshold or dist implies movement
+    // Approximate moving time + speeds: sum segments where speed > threshold
     var movingMs = 0;
+    var maxSpeedKmh = 0;
     for (var i = 1; i < state.points.length; i++) {
       var a = state.points[i - 1];
       var b = state.points[i];
       var dt = b.t - a.t;
       if (dt <= 0 || dt > 120000) continue; // ignore huge gaps (pause)
       var dist = haversineM(a, b);
-      var speedKmh = (dist / (dt / 1000)) * 3.6;
-      if (speedKmh >= MOVING_SPEED_THRESHOLD_KMH) movingMs += dt;
+      var dtSec = dt / 1000;
+      if (dtSec < 0.4) continue;
+      var speedKmh = (dist / dtSec) * 3.6;
+      var deviceKmh = (typeof b.speed === 'number' && b.speed >= 0) ? b.speed * 3.6 : null;
+      var candidate = speedKmh;
+      if (deviceKmh != null && deviceKmh <= MAX_PLAUSIBLE_SPEED_KMH) {
+        candidate = Math.max(speedKmh, deviceKmh);
+      }
+      if (speedKmh >= MOVING_SPEED_THRESHOLD_KMH && speedKmh <= MAX_PLAUSIBLE_SPEED_KMH) {
+        movingMs += dt;
+        if (candidate <= MAX_PLAUSIBLE_SPEED_KMH && candidate > maxSpeedKmh) maxSpeedKmh = candidate;
+      }
     }
+
+    var movingSec = Math.floor(movingMs / 1000);
+    var distanceKm = state.distanceM / 1000;
+    var avgSpeedKmh = movingSec > 0 ? (distanceKm / (movingSec / 3600)) : 0;
 
     return {
       status: state.status,
       points: state.points.slice(),
-      distanceKm: state.distanceM / 1000,
+      distanceKm: distanceKm,
       distanceM: state.distanceM,
       elevGainM: Math.round(state.elevGainM),
       elevLossM: Math.round(state.elevLossM),
       elapsedSec: Math.floor(elapsedMs / 1000),
-      movingSec: Math.floor(movingMs / 1000),
+      movingSec: movingSec,
+      avgSpeedKmh: Math.round(avgSpeedKmh * 10) / 10,
+      maxSpeedKmh: Math.round(maxSpeedKmh * 10) / 10,
       pointCount: state.points.length,
       provider: state.provider,
       startTs: state.startTs,
-      lastPoint: state.points.length ? state.points[state.points.length - 1] : null
+      lastPoint: state.points.length ? state.points[state.points.length - 1] : null,
+      trailSplits: (global.TrailSplits && TrailSplits.getSnapshot) ? TrailSplits.getSnapshot() : { current: null, splits: [] }
     };
   }
 
@@ -335,6 +357,7 @@
     state.pauseStartedTs = null;
     state.startTs = now();
     state.status = 'recording';
+    if (global.TrailSplits && TrailSplits.reset) TrailSplits.reset();
 
     await _startProvider();
     persist();
@@ -370,6 +393,10 @@
       state.pauseStartedTs = null;
     }
     await _stopProvider();
+    if (global.TrailSplits && TrailSplits.finalize) {
+      var last = state.points.length ? state.points[state.points.length - 1] : null;
+      TrailSplits.finalize(last);
+    }
     // Keep points in memory so caller can save; clear storage so we don't auto-resume
     clearPersist();
     emit();
@@ -401,9 +428,12 @@
         elev_loss_m: snap.elevLossM,
         elapsed_sec: snap.elapsedSec,
         moving_sec: snap.movingSec,
+        avg_speed_kmh: snap.avgSpeedKmh,
+        max_speed_kmh: snap.maxSpeedKmh,
         point_count: snap.pointCount,
         started_at: snap.startTs ? new Date(snap.startTs).toISOString() : null,
-        recorded_with: 'SB Racing RideTracker'
+        recorded_with: 'SB Racing RideTracker',
+        trail_splits: (snap.trailSplits && snap.trailSplits.splits) || []
       },
       geometry: {
         type: 'LineString',
