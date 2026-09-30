@@ -93,9 +93,27 @@
         if (!b) return;
         var got = earnedMap[slug];
         var msg = b.name + ' — ' + (got ? b.description + (got.earned_at ? ' · ' + new Date(got.earned_at).toLocaleDateString() : '') : (b.secret ? 'Keep riding.' : b.description));
-        if (typeof showToast === 'function') showToast(msg);
+        showBadgeBanner(msg, container);
       });
     });
+  }
+
+  function showBadgeBanner(msg, fromEl) {
+    var modal = document.getElementById('member-profile-modal');
+    var inModal = modal && !modal.classList.contains('hidden') && modal.style.display !== 'none'
+      && fromEl && modal.contains(fromEl);
+    var banner = document.getElementById('member-profile-badge-banner');
+    if (inModal && banner) {
+      banner.textContent = msg;
+      banner.classList.remove('hidden');
+      banner.scrollIntoView({ block: 'nearest' });
+      clearTimeout(showBadgeBanner._t);
+      showBadgeBanner._t = setTimeout(function () { banner.classList.add('hidden'); }, 5000);
+      return;
+    }
+    var toast = document.getElementById('success-toast');
+    if (toast) toast.style.zIndex = '100001';
+    if (typeof showToast === 'function') showToast(msg);
   }
 
   function renderOwnBadges(userId) {

@@ -157,14 +157,27 @@
                                 <button type="button" class="stats-period px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-period="all" onclick="loadRideStats('all')">All</button>
                             </div>
                         </div>
-                        <p id="stats-status" class="text-sm text-zinc-500 mb-4"></p>
-                        <div id="stats-summary" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 mb-6"></div>
-                        <div class="font-semibold mb-3">Personal bests</div>
-                        <div id="stats-prs" class="grid sm:grid-cols-2 gap-2 mb-6"></div>
-                        <div class="font-semibold mb-3">By trail</div>
-                        <div id="stats-trails" class="space-y-2 mb-6"></div>
-                        <div class="font-semibold mb-3">Ride log</div>
-                        <div id="stats-rides" class="space-y-2 text-sm"></div>
+                        <p id="stats-status" class="text-sm text-zinc-500 mb-3"></p>
+                        <div class="flex gap-2 text-xs font-semibold mb-4 overflow-x-auto" id="stats-section-btns">
+                            <button type="button" class="stats-section px-3 py-1.5 rounded-xl border border-orange-600 text-orange-500" data-section="you" onclick="setStatsSection('you')">You</button>
+                            <button type="button" class="stats-section px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-section="club" onclick="setStatsSection('club')">Club</button>
+                            <button type="button" class="stats-section px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-section="trails" onclick="setStatsSection('trails')">Trails</button>
+                            <button type="button" class="stats-section px-3 py-1.5 rounded-xl border border-zinc-700 text-zinc-400" data-section="log" onclick="setStatsSection('log')">Ride log</button>
+                        </div>
+                        <div id="stats-sec-you">
+                            <div id="stats-summary" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 mb-6"></div>
+                            <div class="font-semibold mb-3">Personal bests</div>
+                            <div id="stats-prs" class="grid sm:grid-cols-2 gap-2 mb-6"></div>
+                        </div>
+                        <div id="stats-sec-club" class="hidden">
+                            <div id="stats-club" class="space-y-3"></div>
+                        </div>
+                        <div id="stats-sec-trails" class="hidden">
+                            <div id="stats-trails" class="space-y-2 mb-6"></div>
+                        </div>
+                        <div id="stats-sec-log" class="hidden">
+                            <div id="stats-rides" class="space-y-2 text-sm"></div>
+                        </div>
                     </div>
 
                     <!-- Private Events Tab -->
@@ -253,6 +266,13 @@
                                 </div>
                                 <div class="font-semibold">Send Push Notification</div>
                                 <p class="text-xs text-zinc-500 mt-1">Broadcast to member devices.</p>
+                            </button>
+                            <button type="button" onclick="openAdminTool('review')" class="text-left bg-zinc-950 border border-zinc-800 hover:border-orange-600 rounded-3xl p-5 transition-colors">
+                                <div class="w-10 h-10 rounded-2xl bg-orange-950/60 border border-orange-800 flex items-center justify-center text-orange-400 mb-3">
+                                    <i class="fa-solid fa-flag"></i>
+                                </div>
+                                <div class="font-semibold">Ride review</div>
+                                <p class="text-xs text-zinc-500 mt-1">Flagged and disqualified rides.</p>
                             </button>
                             <button type="button" onclick="openAdminTool('badges')" class="text-left bg-zinc-950 border border-zinc-800 hover:border-orange-600 rounded-3xl p-5 transition-colors">
                                 <div class="w-10 h-10 rounded-2xl bg-orange-950/60 border border-orange-800 flex items-center justify-center text-orange-400 mb-3">
@@ -419,9 +439,24 @@
 <div id="site-footer"></div>
 
 
+<div id="pb-chart-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100001] items-center justify-center p-4" style="display:none" onclick="if(event.target.id==='pb-chart-modal')closePbChart()">
+  <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-lg p-5 shadow-2xl" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-start gap-3 mb-1">
+      <div>
+        <div id="pb-chart-title" class="font-bold text-lg">Personal best</div>
+        <p id="pb-chart-sub" class="text-xs text-zinc-500 mt-0.5"></p>
+      </div>
+      <button type="button" onclick="closePbChart()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+    </div>
+    <div id="pb-chart" class="mt-4"></div>
+    <p id="pb-chart-who" class="text-sm text-zinc-300 mt-3"></p>
+  </div>
+</div>
+
 <!-- Public member profile modal -->
 <div id="member-profile-modal" onclick="if(event.target.id==='member-profile-modal')closeMemberProfile()" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[100000] items-center justify-center p-4" style="padding-top:max(16px, env(safe-area-inset-top, 0px)); padding-bottom:max(16px, env(safe-area-inset-bottom, 0px));">
-  <div onclick="event.stopPropagation()" class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+  <div onclick="event.stopPropagation()" class="relative bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+    <div id="member-profile-badge-banner" class="hidden mb-4 rounded-2xl border border-orange-800 bg-orange-950/80 px-4 py-3 text-sm text-orange-100"></div>
     <div class="flex justify-between items-start mb-5">
       <div class="font-bold text-lg">Member profile</div>
       <button type="button" onclick="closeMemberProfile()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
@@ -429,6 +464,19 @@
     <div id="member-profile-body" class="space-y-4">
       <div class="text-zinc-500 text-sm">Loading…</div>
     </div>
+  </div>
+</div>
+
+<div id="admin-review-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100000] items-center justify-center p-4" style="display:none" onclick="if(event.target.id==='admin-review-modal')closeAdminTool('review')">
+  <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-start gap-3 px-5 pt-5 pb-3 border-b border-zinc-800">
+      <div>
+        <div class="font-bold text-lg">Ride review</div>
+        <p class="text-xs text-zinc-500 mt-0.5">DQ removes points from the leaderboard.</p>
+      </div>
+      <button type="button" onclick="closeAdminTool('review')" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
+    </div>
+    <div id="admin-review-list" class="p-5 overflow-y-auto space-y-2 text-sm">Loading…</div>
   </div>
 </div>
 
@@ -638,8 +686,9 @@
       <button type="button" onclick="closeRideRouteModal()" class="text-zinc-400 hover:text-white"><i class="fa-solid fa-times text-xl"></i></button>
     </div>
     <div id="ride-route-map" class="mx-5 mb-4 h-64 rounded-2xl bg-zinc-950 border border-zinc-800 overflow-hidden"></div>
-    <div class="px-5 pb-5 flex gap-2">
+    <div class="px-5 pb-5 flex flex-wrap gap-2">
       <a id="ride-route-open-trails" href="trails.html" class="flex-1 text-center py-3 rounded-2xl bg-orange-600 hover:bg-orange-700 font-semibold text-sm">Open on Trails map</a>
+      <button type="button" id="ride-route-delete" onclick="deleteSavedRide()" class="px-4 py-3 rounded-2xl border border-red-800 text-red-400 text-sm hover:bg-red-950/40">Delete</button>
       <button type="button" onclick="closeRideRouteModal()" class="px-4 py-3 rounded-2xl border border-zinc-700 text-sm">Close</button>
     </div>
   </div>

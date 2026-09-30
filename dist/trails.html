@@ -512,6 +512,17 @@
 
 <div id="site-footer"></div>
 
+<div id="ride-idle-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100001] items-center justify-center p-4" style="display:none" onclick="if(event.target.id==='ride-idle-modal')keepRideGoing()">
+  <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-sm p-6 shadow-2xl" onclick="event.stopPropagation()">
+    <div class="font-bold text-lg">Still riding?</div>
+    <p class="text-sm text-zinc-400 mt-2">No movement for 15 minutes. End this ride?</p>
+    <div class="flex gap-2 mt-5">
+      <button type="button" onclick="endIdleRide()" class="flex-1 py-3 rounded-2xl bg-red-600 hover:bg-red-700 font-semibold text-sm">End ride</button>
+      <button type="button" onclick="keepRideGoing()" class="flex-1 py-3 rounded-2xl border border-zinc-600 text-sm">Keep riding</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 <script src="js/supabase-config.js"></script>

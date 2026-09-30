@@ -141,6 +141,45 @@ function routeDistanceKm() {
 }
 
 /** Club score: 10 pts per km + 1 pt per 10 m of climbing */
+function analyzeRideFairness(snap) {
+  var pts = (snap && snap.points) || [];
+  var flags = [];
+  var km = snap.distanceKm || 0;
+  var avg = snap.avgSpeedKmh || 0;
+  var top = snap.maxSpeedKmh || 0;
+  var fastSec = 0, veryFastSec = 0, moveSec = 0;
+  for (var i = 1; i < pts.length; i++) {
+    var a = pts[i - 1], b = pts[i];
+    var dt = (b.t - a.t) / 1000;
+    if (dt < 0.4 || dt > 120) continue;
+    var d = haversineKm([a.lat, a.lng], [b.lat, b.lng]) * 1000;
+    var kmh = (d / dt) * 3.6;
+    if (kmh < 1.2 || kmh > 90) continue;
+    moveSec += dt;
+    if (kmh >= 40) fastSec += dt;
+    if (kmh >= 65) veryFastSec += dt;
+  }
+  var fastShare = moveSec ? fastSec / moveSec : 0;
+  var veryShare = moveSec ? veryFastSec / moveSec : 0;
+  var straight = 0;
+  if (pts.length >= 2 && km >= 3) {
+    var first = pts[0], last = pts[pts.length - 1];
+    var crow = haversineKm([first.lat, first.lng], [last.lat, last.lng]);
+    straight = crow / km;
+  }
+  if (top >= 65 && km >= 1.5) flags.push('top ' + top.toFixed(0) + ' km/h');
+  if (avg >= 28 && km >= 4) flags.push('avg ' + avg.toFixed(1) + ' km/h');
+  if (fastShare >= 0.28 && km >= 3) flags.push(Math.round(fastShare * 100) + '% time over 40 km/h');
+  if (veryShare >= 0.12 && km >= 2) flags.push(Math.round(veryShare * 100) + '% time over 65 km/h');
+  if (straight >= 0.9 && avg >= 20 && km >= 6) flags.push('road-straight track');
+  var autoDq = flags.length >= 2 || veryShare >= 0.2 || (avg >= 32 && km >= 5) || top >= 75;
+  return {
+    flags: flags,
+    status: autoDq ? 'dq' : (flags.length ? 'flagged' : 'ok'),
+    reason: flags.join(', ')
+  };
+}
+
 function scoreRidePoints(km, elevGainM) {
   km = Number(km) || 0;
   elevGainM = Number(elevGainM) || 0;
@@ -1044,6 +1083,8 @@ function updateRideUI(snap) {
     mapStatus.textContent = snap.status === 'recording' ? 'Recording' : snap.status === 'paused' ? 'Paused' : '';
     mapStatus.className = snap.status === 'paused' ? 'text-amber-400' : 'text-emerald-400';
   }
+  checkRideIdle(snap);
+
   if (mapDot) {
     mapDot.className = 'w-2 h-2 rounded-full ' +
       (snap.status === 'recording' ? 'bg-emerald-400 ride-pulse' : 'bg-amber-400');
@@ -1191,6 +1232,9 @@ async function ridePause() {
   }
 }
 
+window.keepRideGoing = keepRideGoing;
+window.endIdleRide = endIdleRide;
+
 async function rideStop() {
   if (!window.RideTracker) return;
   try {
@@ -1201,6 +1245,39 @@ async function rideStop() {
   } catch (e) {
     showToast((e && e.message) || 'Stop failed', true);
   }
+}
+
+var RIDE_IDLE_MS = 15 * 60 * 1000;
+var rideIdleOpen = false;
+
+function checkRideIdle(snap) {
+  if (!snap || snap.status !== 'recording') {
+    hideRideIdleModal();
+    return;
+  }
+  if (rideIdleOpen) return;
+  var idleMs = (snap.idleSec || 0) * 1000;
+  if (idleMs < RIDE_IDLE_MS) return;
+  rideIdleOpen = true;
+  var modal = document.getElementById('ride-idle-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function hideRideIdleModal() {
+  rideIdleOpen = false;
+  var modal = document.getElementById('ride-idle-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function keepRideGoing() {
+  hideRideIdleModal();
+  if (window.RideTracker && RideTracker.nudgeActivity) RideTracker.nudgeActivity();
+  showToast('Still recording');
+}
+
+async function endIdleRide() {
+  hideRideIdleModal();
+  await rideStop();
 }
 
 function startRideTimer() {
@@ -1278,7 +1355,8 @@ async function saveRecordedRide() {
   var geojson = RideTracker.toGeoJSON(name);
   var km = Math.round(snap.distanceKm * 100) / 100;
   var elev = Math.round(snap.elevGainM || 0);
-  var pts = scoreRidePoints(km, elev);
+  var fair = analyzeRideFairness(snap);
+  var pts = fair.status === 'dq' ? 0 : scoreRidePoints(km, elev);
   var elapsed = snap.elapsedSec || 0;
   var moving = snap.movingSec || 0;
   var avg = snap.avgSpeedKmh || 0;
@@ -1294,6 +1372,8 @@ async function saveRecordedRide() {
     geojson.properties.trail_name = trailName;
     geojson.properties.trail_id = trailId;
     geojson.properties.trail_splits = splits;
+    geojson.properties.review_status = fair.status;
+    geojson.properties.review_reason = fair.reason;
   }
   try {
     var payload = {
@@ -1314,11 +1394,13 @@ async function saveRecordedRide() {
       trail_id: trailId,
       trail_name: trailName,
       trail_splits: splits,
+      review_status: fair.status,
+      review_reason: fair.reason,
       geojson: geojson,
       is_public: false
     };
     var result = await window.sb.from('member_routes').insert(payload);
-    if (result.error && /elev_gain_m|point_count|elapsed_sec|moving_sec|avg_speed|max_speed|started_at|trail_|column/i.test(result.error.message || '')) {
+    if (result.error && /elev_gain_m|point_count|elapsed_sec|moving_sec|avg_speed|max_speed|started_at|trail_|review_|column/i.test(result.error.message || '')) {
       delete payload.elev_gain_m;
       delete payload.elev_loss_m;
       delete payload.point_count;
@@ -1331,10 +1413,14 @@ async function saveRecordedRide() {
       delete payload.trail_id;
       delete payload.trail_name;
       delete payload.trail_splits;
+      delete payload.review_status;
+      delete payload.review_reason;
       result = await window.sb.from('member_routes').insert(payload);
     }
     if (result.error) throw result.error;
-    showToast(splits.length ? ('Ride saved · ' + splits.length + ' trail split' + (splits.length === 1 ? '' : 's')) : 'Ride saved');
+    if (fair.status === 'dq') showToast('Ride saved but disqualified from the leaderboard (' + fair.reason + ')', true);
+    else if (fair.status === 'flagged') showToast('Ride saved and flagged for review (' + fair.reason + ')');
+    else showToast(splits.length ? ('Ride saved · ' + splits.length + ' trail split' + (splits.length === 1 ? '' : 's')) : 'Ride saved');
     loadMyRoutes();
   } catch (e) {
     console.error(e);

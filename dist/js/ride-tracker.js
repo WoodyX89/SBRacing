@@ -37,6 +37,7 @@
     elevGainM: 0,
     elevLossM: 0,
     lastAcceptedAlt: null,
+    lastMoveTs: null,
     provider: null           // 'capgo' | 'capacitor' | 'browser'
   };
 
@@ -77,6 +78,7 @@
         elevGainM: state.elevGainM,
         elevLossM: state.elevLossM,
         lastAcceptedAlt: state.lastAcceptedAlt,
+        lastMoveTs: state.lastMoveTs,
         trailSplits: (global.TrailSplits && TrailSplits.serialize) ? TrailSplits.serialize() : null
       }));
     } catch (e) { /* quota / private mode */ }
@@ -97,6 +99,7 @@
       state.elevGainM = data.elevGainM || 0;
       state.elevLossM = data.elevLossM || 0;
       state.lastAcceptedAlt = data.lastAcceptedAlt != null ? data.lastAcceptedAlt : null;
+      state.lastMoveTs = data.lastMoveTs || (state.points.length ? state.points[state.points.length - 1].t : null);
       if (data.trailSplits && global.TrailSplits && TrailSplits.restore) TrailSplits.restore(data.trailSplits);
       return state.points.length > 0;
     } catch (e) {
@@ -128,6 +131,9 @@
       if (dist < MIN_POINT_DISTANCE_M) return;
 
       state.distanceM += dist;
+      var dtMove = Math.max(0.4, (t - prev.t) / 1000);
+      var kmh = (dist / dtMove) * 3.6;
+      if (kmh >= MOVING_SPEED_THRESHOLD_KMH && kmh <= MAX_PLAUSIBLE_SPEED_KMH) state.lastMoveTs = t;
 
       // Elevation gain / loss with simple deadband
       if (alt != null && state.lastAcceptedAlt != null) {
@@ -327,6 +333,10 @@
       provider: state.provider,
       startTs: state.startTs,
       lastPoint: state.points.length ? state.points[state.points.length - 1] : null,
+      lastMoveTs: state.lastMoveTs || state.startTs,
+      idleSec: state.status === 'recording'
+        ? Math.floor((now() - (state.lastMoveTs || state.startTs || now())) / 1000)
+        : 0,
       trailSplits: (global.TrailSplits && TrailSplits.getSnapshot) ? TrailSplits.getSnapshot() : { current: null, splits: [] }
     };
   }
@@ -341,6 +351,7 @@
         state.pauseStartedTs = null;
       }
       state.status = 'recording';
+      state.lastMoveTs = now();
       await _startProvider();
       persist();
       emit();
@@ -356,6 +367,7 @@
     state.pausedMs = 0;
     state.pauseStartedTs = null;
     state.startTs = now();
+    state.lastMoveTs = state.startTs;
     state.status = 'recording';
     if (global.TrailSplits && TrailSplits.reset) TrailSplits.reset();
 
@@ -476,6 +488,11 @@
     return false;
   }
 
+  function nudgeActivity() {
+    state.lastMoveTs = now();
+    persist();
+  }
+
   global.RideTracker = {
     start: start,
     pause: pause,
@@ -485,6 +502,7 @@
     toGeoJSON: toGeoJSON,
     toGPX: toGPX,
     initFromStorage: initFromStorage,
+    nudgeActivity: nudgeActivity,
     clearPersist: clearPersist,
     // exposed for UI that wants to force a provider check
     isNative: isNative,

@@ -6,13 +6,13 @@
 (function (global) {
   'use strict';
 
-  var MATCH_ON_M = 32;
-  var MATCH_OFF_M = 52;
-  var END_M = 42;
-  var SWITCH_CLOSER_M = 14;
-  var ENTER_HITS = 2;
+  var MATCH_ON_M = 16;
+  var MATCH_OFF_M = 26;
+  var END_M = 20;
+  var SWITCH_CLOSER_M = 8;
+  var ENTER_HITS = 3;
   var LEAVE_HITS = 3;
-  var SWITCH_HITS = 3;
+  var SWITCH_HITS = 4;
   var CELL = 0.003; // ~330m
   var SAMPLE_M = 28;
   var MIN_SPLIT_M = 35;
@@ -136,6 +136,7 @@
       network.push({
         id: String(tf.id),
         name: tf.name || 'Trail',
+        difficulty: tf.difficulty || 'intermediate',
         start: start,
         end: end,
         samples: samples,
@@ -179,6 +180,7 @@
     current = {
       trail_id: trail.id,
       trail_name: trail.name,
+      difficulty: trail.difficulty || 'intermediate',
       started_at: pt.t || now(),
       ended_at: null,
       entered_from: from,
@@ -239,6 +241,7 @@
     var rec = {
       trail_id: current.trail_id,
       trail_name: current.trail_name,
+      difficulty: current.difficulty || 'intermediate',
       started_at: new Date(current.started_at).toISOString(),
       ended_at: new Date(current.ended_at).toISOString(),
       elapsed_sec: elapsed,
