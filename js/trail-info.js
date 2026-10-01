@@ -2071,6 +2071,37 @@ window.TRAIL_INFO = {
     area: "Redcliff",
     photos: [],
     trailforks: "https://www.trailforks.com/trails/lump-gravy/"
+  },
+
+  "Six Mile": {
+    desc: "Popular blue singletrack in Lethbridge’s Six Mile Coulee. Coulee dirt, short climbs and fast descents — the spine of the south-side network.",
+    area: "Lethbridge",
+    photos: [],
+    trailforks: "https://www.trailforks.com/trails/six-mile/"
+  },
+  "Merlin View": {
+    desc: "West Bragg Creek classic. Rollers, tables and berms in either direction; counter-clockwise is the usual lap. Forest loam, not prairie dirt.",
+    area: "West Bragg Creek",
+    photos: [],
+    trailforks: "https://www.trailforks.com/trails/merlin-view/"
+  },
+  "Strange Brew": {
+    desc: "Fast West Bragg descent off the all-season network. More flow than tech — a reward lap after the climb up Snagmore or Ranger Summit.",
+    area: "West Bragg Creek",
+    photos: [],
+    trailforks: "https://www.trailforks.com/trails/strange-brew/"
+  },
+  "Ranger Summit": {
+    desc: "Long climb out of West Bragg Creek to the high point of the all-season trails. Used as the uphill for Strange Brew and Sugar Mama.",
+    area: "West Bragg Creek",
+    photos: [],
+    trailforks: "https://www.trailforks.com/trails/ranger-summit/"
+  },
+  "Pneuma": {
+    desc: "Moose Mountain cross-country trail west of Bragg Creek. Longer foothills singletrack with real elevation — shuttle or climb options from Station Flats / Ing’s Mine.",
+    area: "Moose Mountain",
+    photos: [],
+    trailforks: "https://www.trailforks.com/trails/pneuma/"
   }
 };
 
@@ -2080,9 +2111,18 @@ window.getTrailDescription = function (name, area, difficulty) {
   if (info && info.desc) return info;
   var areaLabel = area || "the local network";
   var diff = (difficulty || "intermediate").toLowerCase();
-  var generic =
-    "Local " + diff + " singletrack in " + areaLabel +
-    ". Part of the Medicine Hat / Redcliff / Cypress Hills / Fernie trail system. Check recent conditions on Trailforks before you ride.";
+  var areaNotes = {
+    "Lethbridge": "Coulee singletrack on the Oldman — Six Mile, Pavan, Bull Trail and Indian Battle Park. Dry prairie dirt, short punchy climbs.",
+    "Calgary": "City and river-valley riding around Calgary, including coulee networks and COP-side trails. Shared-use paths are mixed with bike-primary lines.",
+    "West Bragg Creek": "Foothills loam west of Calgary. All-season climbs and flow descents maintained with BCKC. Check conditions after rain.",
+    "Moose Mountain": "Bigger elevation west of Bragg Creek. XC from Station Flats and steeper lines off the Moose Mountain road.",
+    "Okotoks": "Sheep River valley trails between Calgary and High River. Shorter town network, not a full bike park.",
+    "High River": "Small-town paths and river trails south of Okotoks. Good link-up miles, not a big descent network.",
+    "Crowsnest Pass": "Highway 3 corridor riding between Pincher Creek and the BC border. Confirm the line is open to bikes before you drop in.",
+    "Foothills": "Southern Alberta foothills trail between Calgary and the Crowsnest. Ratings are from OSM where tagged."
+  };
+  var extra = areaNotes[areaLabel] || "Part of the SB Racing southern Alberta and Fernie map. Check recent conditions on Trailforks before you ride.";
+  var generic = "Local " + diff + " singletrack in " + areaLabel + ". " + extra;
   return {
     desc: generic,
     area: areaLabel,

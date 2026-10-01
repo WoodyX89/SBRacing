@@ -3,7 +3,7 @@
 // - Drop checkpoints to plan a route
 // - Trail popups with short description + photos
 
-var map, trailLayer, routeLine, routeMarkers = [];
+var map, trailLayer, trailHaloLayer, trailHitLayer, routeLine, routeMarkers = [];
 var checkpointMode = false;
 var trailFeatures = [];
 var highlightedLayer = null;
@@ -42,9 +42,19 @@ function normalizeDifficulty(raw) {
 
 function diffColor(d) {
   var n = normalizeDifficulty(d);
-  if (n === 'easy') return '#22c55e';
-  if (n === 'advanced') return '#0a0a0a';
-  return '#3b82f6';
+  if (n === 'easy') return '#4ade80';
+  if (n === 'advanced') return '#f8fafc';
+  return '#60a5fa';
+}
+
+function trailLineStyle(f, mode) {
+  var col = diffColor(f && f.properties && (f.properties.difficulty || f.properties.Difficulty || f.properties.rating));
+  var z = (map && map.getZoom) ? map.getZoom() : 12;
+  var core = z >= 15 ? 4.5 : z >= 13 ? 3.5 : 2.6;
+  if (mode === 'halo') {
+    return { color: '#0b1220', weight: core + 3.2, opacity: 0.55, lineCap: 'round', lineJoin: 'round', interactive: false };
+  }
+  return { color: col, weight: core, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
 }
 
 function diffLabel(d) {
@@ -321,7 +331,7 @@ function focusTrail(trailId, openPopup) {
   window._selectedTrail = { id: trail.id, name: trail.name || trailId };
   clearHighlight();
   if (trail.layer) {
-    highlightLayer(trail.layer);
+    highlightLayer(trail.core || trail.layer);
     if (openPopup) {
       try {
         var mid = trail.latlngs[Math.floor(trail.latlngs.length / 2)];
@@ -338,7 +348,10 @@ function highlightLayer(layer) {
   if (!layer) return;
   highlightedLayer = layer;
   try {
-    layer.setStyle({ weight: 9, opacity: 1 });
+    var st = trailLineStyle(layer.feature, 'core');
+    st.weight = (st.weight || 3) + 2.5;
+    st.opacity = 1;
+    layer.setStyle(st);
     if (layer._path) layer._path.classList.add('trail-highlight');
   } catch (e) {}
 }
@@ -348,7 +361,7 @@ function clearHighlight() {
     try {
       var f = highlightedLayer.feature;
       var col = diffColor(f && f.properties && (f.properties.difficulty || f.properties.Difficulty || f.properties.rating));
-      highlightedLayer.setStyle({ weight: 5, opacity: 0.9, color: col });
+      highlightedLayer.setStyle(trailLineStyle(f, 'core'));
       if (highlightedLayer._path) highlightedLayer._path.classList.remove('trail-highlight');
     } catch (e) {}
     highlightedLayer = null;
@@ -645,7 +658,7 @@ async function initMap() {
   );
 
   var satelliteGroup = L.layerGroup([satellite, satLabels]);
-  streets.addTo(map);
+  satelliteGroup.addTo(map);
 
   L.control.layers(
     { 'Street map': streets, 'Satellite': satelliteGroup },
@@ -659,13 +672,34 @@ async function initMap() {
     buildTrailIndex(geo);
 
     var idx = 0;
+    map.createPane('trailHalo');
+    map.getPane('trailHalo').style.zIndex = 350;
+    map.createPane('trailCore');
+    map.getPane('trailCore').style.zIndex = 390;
+    map.createPane('trailHit');
+    map.getPane('trailHit').style.zIndex = 410;
+
+    trailHaloLayer = L.geoJSON(geo, {
+      pane: 'trailHalo',
+      interactive: false,
+      style: function (f) { return trailLineStyle(f, 'halo'); }
+    }).addTo(map);
+
     trailLayer = L.geoJSON(geo, {
-      style: function (f) {
-        var col = diffColor(f.properties && (f.properties.difficulty || f.properties.Difficulty || f.properties.rating));
-        return { color: col, weight: 5, opacity: 0.9 };
+      pane: 'trailCore',
+      interactive: false,
+      style: function (f) { return trailLineStyle(f, 'core'); }
+    }).addTo(map);
+
+    var coreLayers = trailLayer.getLayers();
+    trailHitLayer = L.geoJSON(geo, {
+      pane: 'trailHit',
+      style: function () {
+        return { color: '#000', weight: 28, opacity: 0, lineCap: 'round', lineJoin: 'round' };
       },
       onEachFeature: function (f, layer) {
         var i = idx++;
+        var core = coreLayers[i];
         var p = f.properties || {};
         var name = p.name || p.Name || 'Trail';
         var diff = normalizeDifficulty(p.difficulty || p.Difficulty || p.rating);
@@ -676,7 +710,11 @@ async function initMap() {
           : 'idx:' + i;
 
         var tf = trailFeatures.find(function (t) { return t.id === id; });
-        if (tf) tf.layer = layer;
+        if (tf) {
+          tf.layer = layer;
+          tf.core = core || layer;
+        }
+        if (core) core.feature = f;
         layer.feature = f;
 
         layer.bindPopup(buildTrailPopupHtml(name, diff, area, id), {
@@ -693,19 +731,23 @@ async function initMap() {
           if (checkpointMode) {
             L.DomEvent.stopPropagation(e);
             addCheckpoint(e.latlng);
-          } else {
-            highlightLayer(layer);
+          } else if (core) {
+            highlightLayer(core);
           }
         });
 
         layer.on('mouseover', function () {
-          if (!checkpointMode) {
-            try { layer.setStyle({ weight: 7, opacity: 1 }); } catch (err) {}
+          if (!checkpointMode && core) {
+            try {
+              var hs = trailLineStyle(core.feature, 'core');
+              hs.weight = (hs.weight || 3) + 1.5;
+              core.setStyle(hs);
+            } catch (err) {}
           }
         });
         layer.on('mouseout', function () {
-          if (highlightedLayer !== layer) {
-            try { layer.setStyle({ weight: 5, opacity: 0.9 }); } catch (err) {}
+          if (core && highlightedLayer !== core) {
+            try { core.setStyle(trailLineStyle(core.feature, 'core')); } catch (err) {}
           }
         });
       }
@@ -716,6 +758,14 @@ async function initMap() {
     } catch (e) {}
 
     filterTrailBrowser();
+
+    map.on('zoomend', function () {
+      if (trailHaloLayer) trailHaloLayer.eachLayer(function (l) { l.setStyle(trailLineStyle(l.feature, 'halo')); });
+      if (trailLayer) trailLayer.eachLayer(function (l) {
+        if (highlightedLayer === l) return;
+        l.setStyle(trailLineStyle(l.feature, 'core'));
+      });
+    });
 
   } catch (e) {
     console.warn('[trails] geojson', e);

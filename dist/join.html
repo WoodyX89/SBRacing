@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Apply • SB Racing</title>
+    <title>Join • SB Racing</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/styles.css">
@@ -23,21 +23,21 @@
     <section id="join" class="bg-zinc-900 border-y border-zinc-800 py-20">
         <div class="max-w-screen-2xl mx-auto px-4 sm:px-8 md:px-12">
             <div class="max-w-2xl mx-auto text-center mb-10 mt-10">
-                <div class="uppercase tracking-[3px] text-xs font-semibold text-orange-600">PRIVATE CLUB</div>
-                <h2 class="section-header tracking-tighter mt-3">Apply to ride with us</h2>
-                <p class="mt-4 text-lg text-zinc-400">SB Racing is a private group. Fill out the form and we will review it. If you are a fit, someone from the crew will get in touch.</p>
+                <div class="uppercase tracking-[3px] text-xs font-semibold text-orange-600">JOIN THE CREW</div>
+                <h2 class="section-header tracking-tighter mt-3">Create your member account</h2>
+                <p class="mt-4 text-lg text-zinc-400">Sign up and you are on the list. No application, no approval email.</p>
             </div>
 
             <div id="apply-success" class="hidden max-w-xl mx-auto bg-zinc-950 border border-emerald-800 rounded-3xl p-8 md:p-10 text-center">
                 <i class="fa-solid fa-check-circle text-emerald-500 text-4xl mb-4"></i>
-                <h3 class="font-semibold text-xl mb-2">Application sent</h3>
-                <p class="text-sm text-zinc-400">Thanks. We have your info. Sit tight — this is not instant access. You will hear from us if you are in.</p>
-                <a href="events.html" class="inline-block mt-6 text-sm text-orange-400 hover:text-orange-300">Browse public events →</a>
+                <h3 class="font-semibold text-xl mb-2">You are in</h3>
+                <p id="apply-success-note" class="text-sm text-zinc-400">Taking you to Members…</p>
+                <a href="members.html" class="inline-block mt-6 text-sm text-orange-400 hover:text-orange-300">Go to Members →</a>
             </div>
 
             <div id="apply-card" class="max-w-xl mx-auto bg-zinc-950 border border-zinc-800 rounded-3xl p-8 md:p-10">
-                <h3 class="font-semibold text-xl mb-1">Club application</h3>
-                <p class="text-sm text-zinc-400 mb-6">No dues, no checkout. Submit once. Do not create a second application unless we ask.</p>
+                <h3 class="font-semibold text-xl mb-1">Create account</h3>
+                <p class="text-sm text-zinc-400 mb-6">Use a real email. You will log in with this on the Members page and in the app.</p>
 
                 <form id="apply-form" onsubmit="submitClubApplication(event)">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -53,6 +53,17 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
                         <div>
+                            <label class="text-xs font-medium tracking-wider text-zinc-400">PASSWORD *</label>
+                            <input type="password" id="password" required minlength="6" autocomplete="new-password" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium tracking-wider text-zinc-400">CONFIRM PASSWORD *</label>
+                            <input type="password" id="password-2" required minlength="6" autocomplete="new-password" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+                        <div>
                             <label class="text-xs font-medium tracking-wider text-zinc-400">PHONE</label>
                             <input type="tel" id="phone" autocomplete="tel" placeholder="403-555-0192" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
                         </div>
@@ -63,36 +74,20 @@
                     </div>
 
                     <div class="mt-5">
-                        <label class="text-xs font-medium tracking-wider text-zinc-400">RIDING EXPERIENCE *</label>
-                        <select id="experience" required class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
-                            <option value="">Select one</option>
-                            <option value="new">New to mountain biking</option>
-                            <option value="casual">Casual — I ride when I can</option>
-                            <option value="regular">Regular — I am out most weeks</option>
-                            <option value="advanced">Advanced / race pace</option>
+                        <label class="text-xs font-medium tracking-wider text-zinc-400">RIDING EXPERIENCE</label>
+                        <select id="experience" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
+                            <option value="">Optional</option>
+                            <option value="beginner">Beginner</option>
+                            <option value="intermediate">Intermediate</option>
+                            <option value="advanced">Advanced</option>
                         </select>
-                    </div>
-
-                    <div class="mt-5">
-                        <label class="text-xs font-medium tracking-wider text-zinc-400">HOW DID YOU HEAR ABOUT US?</label>
-                        <input type="text" id="how-found" placeholder="Friend, trail, Instagram…" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none">
-                    </div>
-
-                    <div class="mt-5">
-                        <label class="text-xs font-medium tracking-wider text-zinc-400">WHY DO YOU WANT TO JOIN? *</label>
-                        <textarea id="why-join" required rows="4" placeholder="Who you ride with, what you are looking for from the group…" class="mt-1.5 w-full bg-zinc-900 border border-zinc-700 focus:border-orange-600 transition-colors rounded-2xl px-5 py-3 text-sm outline-none"></textarea>
-                    </div>
-
-                    <div class="flex items-start gap-x-3 mt-6">
-                        <input type="checkbox" id="private-club-ack" required class="mt-1 accent-orange-600">
-                        <label for="private-club-ack" class="text-xs leading-tight text-zinc-400">I understand SB Racing is a private club. Applying does not guarantee a spot. Someone will contact me if approved.</label>
                     </div>
 
                     <button type="submit" id="apply-submit"
                             class="mt-8 w-full py-4 rounded-3xl bg-white hover:bg-amber-100 active:scale-[0.985] font-bold text-zinc-900 tracking-wider text-sm transition-all">
-                        SUBMIT APPLICATION
+                        CREATE ACCOUNT
                     </button>
-                    <p class="text-center text-[10px] text-zinc-500 mt-4">We will only use this to review your application.</p>
+                    <p class="text-center text-[10px] text-zinc-500 mt-4">Already have an account? <a href="members.html" class="text-orange-400">Log in</a></p>
                 </form>
             </div>
         </div>
