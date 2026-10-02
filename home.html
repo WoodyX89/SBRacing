@@ -40,29 +40,29 @@
 </head>
 <body class="bg-zinc-950 text-zinc-200">
 <div id="sb-splash" aria-hidden="true">
-  <div class="sb-splash-mark">
-    <img src="assets/splash.png" alt="">
-    <span class="sb-splash-shine"></span>
-  </div>
+  <img src="assets/splash.png" alt="">
+  <span class="sb-glow"></span>
 </div>
 <style>
-  #sb-splash{position:fixed;inset:0;z-index:100000;background:#000;display:flex;align-items:center;justify-content:center;transition:opacity .45s ease,visibility .45s ease}
-  #sb-splash.sb-splash-out{opacity:0;visibility:hidden}
-  .sb-splash-mark{position:relative;width:min(280px,70vw);animation:sbSplashIn .7s ease both}
-  .sb-splash-mark img{width:100%;height:auto;display:block}
-  .sb-splash-shine{position:absolute;inset:0;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.45) 50%,transparent 65%);transform:translateX(-120%);animation:sbSplashShine 1s .25s ease}
-  @keyframes sbSplashIn{from{opacity:0;transform:scale(.86)}to{opacity:1;transform:scale(1)}}
-  @keyframes sbSplashShine{to{transform:translateX(120%)}}
+  #sb-splash{position:fixed;inset:0;z-index:100000;background:#000;transition:opacity .4s ease}
+  #sb-splash img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}
+  #sb-splash .sb-glow{position:absolute;left:50%;top:46%;width:70vmin;height:70vmin;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,1) 0%,rgba(255,170,70,.45) 28%,rgba(255,120,20,.12) 48%,transparent 68%);mix-blend-mode:screen;pointer-events:none;animation:sbGlow 2.4s ease-in-out infinite}
+  #sb-splash.sb-splash-out{opacity:0}
+  @keyframes sbGlow{0%,100%{opacity:.45;transform:translate(-50%,-50%) scale(.92)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}}
 </style>
 <script>
-  window.addEventListener('load', function () {
+  (function () {
+    try {
+      var Splash = window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.SplashScreen;
+      if (Splash && Splash.hide) Splash.hide();
+    } catch (e) {}
     setTimeout(function () {
       var el = document.getElementById('sb-splash');
       if (!el) return;
       el.classList.add('sb-splash-out');
-      setTimeout(function () { el.remove(); }, 500);
-    }, 900);
-  });
+      setTimeout(function () { el.remove(); }, 420);
+    }, 2400);
+  })();
 </script>
 
 <div id="site-nav"></div>
