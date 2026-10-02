@@ -1304,8 +1304,10 @@ function handleStripeCheckoutReturn() {
       });
     } else if (status === 'cancel') {
       showToast('Payment cancelled — your cart is still here.', true);
-    } else if (getPendingCheckout()) {
+    } else if (getPendingCheckout() && /merch\.html/i.test(location.pathname || '')) {
       reconcileStripeCheckout({ silent: true });
+    } else if (getPendingCheckout()) {
+      clearPendingCheckout();
     }
     if (status && window.history && history.replaceState) {
       history.replaceState(null, '', location.pathname);
@@ -1377,11 +1379,13 @@ async function updateNavAuth(forcedUser) {
     let user = forcedUser || null;
     let profile = null;
     try {
-        if (!user && window.sb) {
-            const { data: { session } } = await window.sb.auth.getSession();
-            user = session?.user || null;
+        if (!user) {
+            var stored = typeof getSessionFromStorage === 'function' ? getSessionFromStorage() : null;
+            user = stored && stored.user ? stored.user : null;
         }
-        if (user && typeof getProfile === 'function') {
+        if (user && window._myProfile && window._myProfile.id === user.id) {
+            profile = window._myProfile;
+        } else if (user && typeof getProfile === 'function') {
             try {
                 profile = await getProfile(user.id);
             } catch (_) { /* ignore profile errors for nav */ }

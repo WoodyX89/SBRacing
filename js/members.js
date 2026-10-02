@@ -82,7 +82,6 @@ async function showDashboard(user) {
     window._myId = user.id;
     window._isAdmin = !!(profile && profile.is_admin);
 
-    // Admin tab — only for is_admin
     var adminBtn = document.getElementById('admin-tab-btn');
     if (adminBtn) {
         if (window._isAdmin) {
@@ -94,7 +93,8 @@ async function showDashboard(user) {
         }
     }
 
-    await loadMemberDirectory();
+    loadMemberDirectory();
+    subscribeMemberDirectory();
     loadPrivateEvents();
     switchMemberTab(7);
     if (window.SBBadges) {
@@ -160,12 +160,12 @@ async function attachRiderScores(members) {
     var year = new Date().getFullYear();
     var res = await window.sb
       .from('member_routes')
-      .select('user_id, distance_km, elev_gain_m, avg_speed_kmh, max_speed_kmh, trail_splits, geojson, created_at')
+      .select('user_id, distance_km, elev_gain_m, avg_speed_kmh, max_speed_kmh, trail_splits, created_at')
       .gte('created_at', year + '-01-01');
     if (res.error) {
       res = await window.sb
         .from('member_routes')
-        .select('user_id, distance_km, elev_gain_m, created_at, geojson')
+        .select('user_id, distance_km, elev_gain_m, created_at')
         .gte('created_at', year + '-01-01');
     }
     if (res.error) throw res.error;
@@ -212,6 +212,23 @@ async function loadMemberDirectory() {
   } catch (e) {
     console.error(e);
     grid.innerHTML = '<div class="col-span-full text-center text-zinc-500 py-8">Could not load members</div>';
+  }
+}
+
+function subscribeMemberDirectory() {
+  if (!window.sb || window._memberDirSub) return;
+  try {
+    window._memberDirSub = window.sb
+      .channel('profiles-directory')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, function () {
+        clearTimeout(window._memberDirReloadT);
+        window._memberDirReloadT = setTimeout(function () {
+          loadMemberDirectory();
+        }, 400);
+      })
+      .subscribe();
+  } catch (e) {
+    console.warn('[members] realtime', e);
   }
 }
 
@@ -1515,6 +1532,7 @@ async function reviewClubApplication(id, action) {
     if (typeof showToast === 'function') {
       showToast(action === 'approved' ? 'Approved' : 'Denied');
     }
+    if (typeof loadMemberDirectory === 'function') loadMemberDirectory();
     if (action === 'approved' && rec && rec.email) {
       try {
         var token = rec.invite_token;
@@ -2615,7 +2633,7 @@ async function loadClubPace(period) {
   try {
     var res = await window.sb
       .from('member_routes')
-      .select('user_id, distance_km, avg_speed_kmh, max_speed_kmh, trail_name, trail_splits, geojson, created_at, started_at')
+      .select('user_id, distance_km, elev_gain_m, avg_speed_kmh, max_speed_kmh, trail_name, trail_splits, created_at, started_at')
       .order('created_at', { ascending: false })
       .limit(500);
     if (res.error) return empty;

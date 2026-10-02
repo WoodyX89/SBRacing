@@ -75,6 +75,23 @@ async function submitClubApplication(e) {
       }
     }
 
+    try {
+      await window.sb.functions.invoke('notify-event', {
+        body: {
+          title: 'New member',
+          body: name + ' just signed up (' + email + ')',
+          audience: 'leaders',
+          data: {
+            url: 'https://sbracing.ca/members',
+            type: 'new_member',
+            audience: 'leaders'
+          }
+        }
+      });
+    } catch (pushErr) {
+      console.warn('[join] leader push', pushErr);
+    }
+
     var form = document.getElementById('apply-form');
     var card = document.getElementById('apply-card');
     var success = document.getElementById('apply-success');
@@ -88,7 +105,7 @@ async function submitClubApplication(e) {
     } else {
       var note = document.getElementById('apply-success-note');
       if (note) {
-        note.textContent = 'Account created. Please confirm email address. Ensure to check in junk mail.';
+        note.textContent = 'Account created, but email confirmation is still on in Supabase. Turn off Confirm email under Authentication → Providers → Email, or they will not land on the members list until they confirm.';
       }
       if (typeof showToast === 'function') showToast('Account created. Confirm email.');
     }
