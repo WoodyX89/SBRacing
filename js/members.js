@@ -2582,7 +2582,11 @@ function graphSvg(pack) {
   var dots = series.map(function (p, i) {
     var date = p.t ? formatE2ERecorded(p.t) : '';
     var tip = (date ? date + ' · ' : '') + pbLabel(p.v, pack.unit);
-    return '<circle class="pb-dot" data-i="' + i + '" data-tip="' + escapeHtml(tip) + '" data-date="' + escapeHtml(date) + '" data-val="' + escapeHtml(pbLabel(p.v, pack.unit)) + '" cx="' + x(i).toFixed(1) + '" cy="' + y(p.v).toFixed(1) + '" r="4" fill="#f97316"/>';
+    var cx = x(i).toFixed(1), cy = y(p.v).toFixed(1);
+    return '<g class="pb-dot" data-i="' + i + '" data-date="' + escapeHtml(date) + '" data-val="' + escapeHtml(pbLabel(p.v, pack.unit)) + '" data-cx="' + cx + '" data-cy="' + cy + '" style="cursor:pointer">' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="16" fill="transparent"/>' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="4.5" fill="#f97316" pointer-events="none"/>' +
+      '</g>';
   }).join('');
   function guide(v, color, label) {
     if (!v) return '';
@@ -2620,8 +2624,8 @@ function bindEmbeddedChartTip(chart) {
   var dateEl = chart.querySelector('#pb-tip-date');
   var valEl = chart.querySelector('#pb-tip-val');
   function showAt(target) {
-    var cx = Number(target.getAttribute('cx'));
-    var cy = Number(target.getAttribute('cy'));
+    var cx = Number(target.getAttribute('data-cx') || target.getAttribute('cx'));
+    var cy = Number(target.getAttribute('data-cy') || target.getAttribute('cy'));
     var date = target.getAttribute('data-date') || '';
     var val = target.getAttribute('data-val') || '';
     var bw = Math.max(72, Math.max(date.length, val.length) * 6.4 + 16);
@@ -2644,24 +2648,23 @@ function bindEmbeddedChartTip(chart) {
     valEl.textContent = val;
     tip.style.display = '';
   }
-  function nearest(clientX) {
-    var rect = svg.getBoundingClientRect();
-    var x = ((clientX - rect.left) / rect.width) * 440;
-    var best = null;
-    var bestD = Infinity;
-    dots.forEach(function (el) {
-      var d = Math.abs(Number(el.getAttribute('cx')) - x);
-      if (d < bestD) { bestD = d; best = el; }
+  var selected = null;
+  dots.forEach(function (el) {
+    el.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (selected === el) {
+        selected = null;
+        tip.style.display = 'none';
+        return;
+      }
+      selected = el;
+      showAt(el);
     });
-    return best;
-  }
-  function move(e) {
-    var hit = nearest(e.clientX);
-    if (hit) showAt(hit);
-  }
-  svg.addEventListener('pointermove', move);
-  svg.addEventListener('pointerdown', move);
-  svg.addEventListener('pointerleave', function () { tip.style.display = 'none'; });
+  });
+  svg.addEventListener('click', function () {
+    selected = null;
+    tip.style.display = 'none';
+  });
 }
 
 function showGraph(pack) {
