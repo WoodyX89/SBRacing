@@ -164,6 +164,24 @@
     return best;
   }
 
+  /** Other trail whose start or finish is at this same junction. */
+  function junctionTrail(pt, currentId) {
+    var ids = nearbyIds(pt.lat, pt.lng);
+    var best = null;
+    for (var i = 0; i < ids.length; i++) {
+      var tr = findTrail(ids[i]);
+      if (!tr || String(tr.id) === String(currentId)) continue;
+      var dA = haversineM(pt, tr.start);
+      var dB = haversineM(pt, tr.end);
+      var dEnd = Math.min(dA, dB);
+      var dLine = distToTrail(pt, tr);
+      if (dEnd <= END_M && dLine <= MATCH_OFF_M) {
+        if (!best || dEnd < best.dEnd) best = { trail: tr, dist: dLine, dEnd: dEnd };
+      }
+    }
+    return best;
+  }
+
   function speedKmh(a, b) {
     if (!a || !b || !b.t || !a.t) return 0;
     var dt = (b.t - a.t) / 1000;
@@ -276,6 +294,15 @@
     var curDist = curTrail ? distToTrail(pt, curTrail) : Infinity;
 
     if (current && curTrail) {
+      var atEnd = haversineM(pt, curTrail.start) <= END_M || haversineM(pt, curTrail.end) <= END_M;
+      if (atEnd) {
+        var hop = junctionTrail(pt, current.trail_id);
+        if (hop) {
+          closeSplit('switch', pt);
+          openSplit(hop.trail, pt, hop.dist);
+          return getSnapshot();
+        }
+      }
       var other = near && near.trail.id !== current.trail_id ? near : null;
       if (other && other.dist + SWITCH_CLOSER_M < curDist && other.dist <= MATCH_ON_M) {
         if (pendingTrailId === other.trail.id) switchHits += 1;

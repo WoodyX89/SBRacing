@@ -1247,7 +1247,9 @@ async function sendAdminPush() {
     }
 
     // Confirm before broadcasting
-    var audienceLabel = audience === 'all' ? 'everyone' : (audience === 'leaders' ? 'leaders & admins' : 'admins only');
+    var audienceLabel = audience === 'members' ? 'all members'
+      : (audience === 'all' ? 'everyone with the app'
+      : (audience === 'leaders' ? 'leaders & admins' : 'admins only'));
     if (!confirm('Send this push to ' + audienceLabel + '?\n\n"' + title + '"\n' + body)) return;
 
     if (btn) {
@@ -1269,7 +1271,7 @@ async function sendAdminPush() {
                 title: title,
                 body: body,
                 url: url,
-                type: 'admin',
+                type: (audience === 'admins' || audience === 'leaders') ? 'admin' : 'announcement',
                 audience: audience,
                 excludeSelf: false
             });
@@ -1285,7 +1287,7 @@ async function sendAdminPush() {
                     title: title,
                     body: body,
                     audience: audience,
-                    data: { url: url, type: 'admin', audience: audience }
+                    data: { url: url, type: (audience === 'admins' || audience === 'leaders') ? 'admin' : 'announcement', audience: audience }
                 }
             });
             if (res.error) throw res.error;
@@ -1994,6 +1996,13 @@ function routeThumbSvg(gj, w, h) {
     '</svg>';
 }
 
+function formatE2ERecorded(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 function formatRideClock(sec) {
   sec = Math.max(0, Math.floor(Number(sec) || 0));
   var h = Math.floor(sec / 3600);
@@ -2369,7 +2378,8 @@ async function loadRideStats(period) {
           trail_name: s.trail_name,
           moving_sec: s.moving_sec || s.elapsed_sec,
           elapsed_sec: s.elapsed_sec,
-          end_to_end: s.end_to_end
+          end_to_end: s.end_to_end,
+          started_at: s.started_at || r.started_at || r.created_at
         });
       });
     });
@@ -2381,19 +2391,18 @@ async function loadRideStats(period) {
         prRow('Longest ride', longest, longest ? longest.distance_km.toFixed(1) + ' km' : '', 'distance') +
         prRow('Most climbing', mostClimb, mostClimb ? Math.round(mostClimb.elev_gain_m) + ' m' : '', 'climb') +
         prRow('Best average', fastestAvg, fastestAvg ? fastestAvg.avg_speed_kmh.toFixed(1) + ' km/h' : '', 'avg') +
-        prRow('Top speed', fastestTop, fastestTop ? fastestTop.max_speed_kmh.toFixed(1) + ' km/h' : '', 'top') +
-        prRow('Fastest trail time', bestTime, bestTime ? formatRideClock(bestTime.moving_sec || bestTime.elapsed_sec) : '', 'time');
+        prRow('Top speed', fastestTop, fastestTop ? fastestTop.max_speed_kmh.toFixed(1) + ' km/h' : '', 'top');
       function seriesOf(key) {
         return rides.map(function (r) {
           return { t: new Date(r.started_at || r.created_at).getTime() || 0, v: Number(r[key]) || 0 };
         }).filter(function (p) { return p.v > 0; });
       }
+      function whenOf(r) { return r && (r.started_at || r.created_at) || ''; }
       window._pbChart = {
-        distance: Object.assign(packPb('Longest ride', 'km', false, longest && longest.distance_km, club && club.compare && club.compare.distance), { series: seriesOf('distance_km') }),
-        climb: Object.assign(packPb('Most climbing', 'm', false, mostClimb && mostClimb.elev_gain_m, club && club.compare && club.compare.climb), { series: seriesOf('elev_gain_m') }),
-        avg: Object.assign(packPb('Best average', 'km/h', false, fastestAvg && fastestAvg.avg_speed_kmh, club && club.compare && club.compare.avg), { series: seriesOf('avg_speed_kmh') }),
-        top: Object.assign(packPb('Top speed', 'km/h', false, fastestTop && fastestTop.max_speed_kmh, club && club.compare && club.compare.top), { series: seriesOf('max_speed_kmh') }),
-        time: Object.assign(packPb('Fastest end-to-end', 'sec', true, bestTime && (bestTime.elapsed_sec || bestTime.moving_sec), clubTimeCompare(club, bestTime)), { series: splitRides.filter(function (s) { return s.end_to_end; }).map(function (s) { return { t: 0, v: s.elapsed_sec || s.moving_sec }; }) })
+        distance: Object.assign(packPb('Longest ride', 'km', false, longest && longest.distance_km, club && club.compare && club.compare.distance), { series: seriesOf('distance_km'), youAt: whenOf(longest) }),
+        climb: Object.assign(packPb('Most climbing', 'm', false, mostClimb && mostClimb.elev_gain_m, club && club.compare && club.compare.climb), { series: seriesOf('elev_gain_m'), youAt: whenOf(mostClimb) }),
+        avg: Object.assign(packPb('Best average', 'km/h', false, fastestAvg && fastestAvg.avg_speed_kmh, club && club.compare && club.compare.avg), { series: seriesOf('avg_speed_kmh'), youAt: whenOf(fastestAvg) }),
+        top: Object.assign(packPb('Top speed', 'km/h', false, fastestTop && fastestTop.max_speed_kmh, club && club.compare && club.compare.top), { series: seriesOf('max_speed_kmh'), youAt: whenOf(fastestTop) })
       };
     }
 
@@ -2404,14 +2413,17 @@ async function loadRideStats(period) {
         parts.forEach(function (s) {
           var key = s.trail_id || s.trail_name;
           if (!key) return;
-          if (!byTrail[key]) byTrail[key] = { name: s.trail_name || key, runs: 0, e2e: 0, km: 0, bestSec: null, bestE2E: null, top: 0 };
+          if (!byTrail[key]) byTrail[key] = { name: s.trail_name || key, runs: 0, e2e: 0, km: 0, bestSec: null, bestE2E: null, bestE2EAt: null, top: 0 };
           var g = byTrail[key];
           g.runs += 1;
           if (s.end_to_end) g.e2e += 1;
           g.km += Number(s.distance_km) || 0;
           if ((s.max_speed_kmh || 0) > g.top) g.top = s.max_speed_kmh || 0;
           var sec = s.elapsed_sec || s.moving_sec;
-          if (s.end_to_end && sec && (!g.bestE2E || sec < g.bestE2E)) g.bestE2E = sec;
+          if (s.end_to_end && sec && (!g.bestE2E || sec < g.bestE2E)) {
+            g.bestE2E = sec;
+            g.bestE2EAt = s.started_at || s.ended_at || r.started_at || r.created_at || null;
+          }
           if (sec && (!g.bestSec || sec < g.bestSec)) g.bestSec = sec;
         });
       } else if (r.trail_name || r.trail_id) {
@@ -2441,9 +2453,9 @@ async function loadRideStats(period) {
       var cmp = clubArr.length ? (function () {
         var sum = 0, best = clubArr[0];
         clubArr.forEach(function (x) { sum += x.v; if (x.v < best.v) best = x; });
-        return { avg: sum / clubArr.length, best: best.v, who: (club.names && club.names[best.user_id]) || 'Club rider', ride: g.name };
+        return { avg: sum / clubArr.length, best: best.v, who: (club.names && club.names[best.user_id]) || 'Club rider', ride: g.name, at: best.t || '' };
       })() : null;
-      window._trailGraphs[g.name] = Object.assign(packPb(g.name + ' end-to-end', 'sec', true, g.bestE2E, cmp), { series: mine });
+      window._trailGraphs[g.name] = Object.assign(packPb(g.name + ' end-to-end', 'sec', true, g.bestE2E, cmp), { series: mine, youAt: g.bestE2EAt || '' });
     });
     if (trails) {
       if (!trailRows.length) {
@@ -2454,7 +2466,9 @@ async function loadRideStats(period) {
           (e2eBoard.length
             ? '<div class="font-semibold mb-2">Your end-to-end times</div>' + e2eBoard.map(function (g) {
               return '<button type="button" onclick="openTrailGraph(\'' + escapeAttr(g.name) + '\')" class="w-full text-left rounded-2xl bg-zinc-950 border border-orange-900/50 px-4 py-3 mb-2"><div class="font-medium text-zinc-100">' + escapeHtml(g.name) + '</div>' +
-                '<div class="text-sm text-orange-400 mt-0.5">' + formatRideClock(g.bestE2E) + ' best · ' + g.e2e + ' finish' + (g.e2e === 1 ? '' : 'es') + ' · tap for graph</div></button>';
+                '<div class="text-sm text-orange-400 mt-0.5">' + formatRideClock(g.bestE2E) + ' best' +
+                (g.bestE2EAt ? ' · ' + formatE2ERecorded(g.bestE2EAt) : '') +
+                ' · ' + g.e2e + ' finish' + (g.e2e === 1 ? '' : 'es') + ' · tap for graph</div></button>';
             }).join('') + '<div class="font-semibold mb-2 mt-4">All trails</div>'
             : '') +
           trailRows.map(function (g) {
@@ -2528,7 +2542,8 @@ function packPb(title, unit, lowerBetter, you, clubStat) {
     avg: clubStat && clubStat.avg ? Number(clubStat.avg) : 0,
     best: clubStat && clubStat.best ? Number(clubStat.best) : 0,
     who: (clubStat && clubStat.who) || '',
-    ride: (clubStat && clubStat.ride) || ''
+    ride: (clubStat && clubStat.ride) || '',
+    bestAt: (clubStat && clubStat.at) || ''
   };
 }
 
@@ -2544,7 +2559,7 @@ function clubTimeCompare(club, bestTime) {
   if (!arr.length) return null;
   var sum = 0, best = arr[0];
   arr.forEach(function (x) { sum += x.v; if (x.v < best.v) best = x; });
-  return { avg: sum / arr.length, best: best.v, who: (club.names && club.names[best.user_id]) || 'Club rider', ride: best.name || key || '' };
+  return { avg: sum / arr.length, best: best.v, who: (club.names && club.names[best.user_id]) || 'Club rider', ride: best.name || key || '', at: best.t || '' };
 }
 
 function pbLabel(v, unit) {
@@ -2565,7 +2580,9 @@ function graphSvg(pack) {
   function x(i) { return pad + (series.length < 2 ? (w - pad * 2) / 2 : i * ((w - pad * 2) / (series.length - 1))); }
   var d = series.map(function (p, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.v).toFixed(1); }).join(' ');
   var dots = series.map(function (p, i) {
-    return '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(p.v).toFixed(1) + '" r="4" fill="#f97316"><title>' + pbLabel(p.v, pack.unit) + '</title></circle>';
+    var date = p.t ? formatE2ERecorded(p.t) : '';
+    var tip = (date ? date + ' · ' : '') + pbLabel(p.v, pack.unit);
+    return '<circle class="pb-dot" data-i="' + i + '" data-tip="' + escapeHtml(tip) + '" data-date="' + escapeHtml(date) + '" data-val="' + escapeHtml(pbLabel(p.v, pack.unit)) + '" cx="' + x(i).toFixed(1) + '" cy="' + y(p.v).toFixed(1) + '" r="4" fill="#f97316"/>';
   }).join('');
   function guide(v, color, label) {
     if (!v) return '';
@@ -2573,14 +2590,78 @@ function graphSvg(pack) {
     return '<line x1="' + pad + '" y1="' + yy + '" x2="' + (w - 8) + '" y2="' + yy + '" stroke="' + color + '" stroke-dasharray="4 4"/>' +
       '<text x="' + (w - 8) + '" y="' + (Number(yy) - 4) + '" fill="' + color + '" font-size="10" text-anchor="end">' + label + ' ' + pbLabel(v, pack.unit) + '</text>';
   }
-  return '<svg viewBox="0 0 ' + w + ' ' + h + '" class="w-full h-56">' +
+  return '<svg viewBox="0 0 ' + w + ' ' + h + '" class="w-full h-56 touch-none">' +
     guide(pack.avg, '#a1a1aa', 'Avg') +
     guide(pack.best, '#22c55e', 'Best') +
     (d ? '<path d="' + d + '" fill="none" stroke="#f97316" stroke-width="2.5"/>' : '') +
     dots +
     '<text x="' + pad + '" y="' + (h - 6) + '" fill="#71717a" font-size="10">Your rides</text>' +
+    '<g id="pb-embed-tip" style="display:none">' +
+      '<circle id="pb-tip-dot" r="6" fill="#fff" stroke="#f97316" stroke-width="2"/>' +
+      '<rect id="pb-tip-box" rx="6" ry="6" fill="#18181b" stroke="#3f3f46" stroke-width="1"/>' +
+      '<text id="pb-tip-date" fill="#a1a1aa" font-size="10"></text>' +
+      '<text id="pb-tip-val" fill="#f97316" font-size="13" font-weight="700"></text>' +
+    '</g>' +
     '</svg>' +
-    '<div class="flex gap-3 text-[11px] text-zinc-400 mt-1"><span class="text-orange-400">● you</span><span>┈ club avg</span><span class="text-emerald-400">┈ club best</span></div>';
+    '<div class="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-zinc-400 mt-1">' +
+    '<span class="text-orange-400">● you' + (pack.youAt ? ' · ' + formatE2ERecorded(pack.youAt) : '') + '</span>' +
+    '<span>┈ club avg</span>' +
+    '<span class="text-emerald-400">┈ club best' + (pack.bestAt ? ' · ' + formatE2ERecorded(pack.bestAt) : '') + '</span></div>';
+}
+
+
+function bindEmbeddedChartTip(chart) {
+  var svg = chart.querySelector('svg');
+  var tip = chart.querySelector('#pb-embed-tip');
+  var dots = chart.querySelectorAll('.pb-dot');
+  if (!svg || !tip || !dots.length) return;
+  var dot = chart.querySelector('#pb-tip-dot');
+  var box = chart.querySelector('#pb-tip-box');
+  var dateEl = chart.querySelector('#pb-tip-date');
+  var valEl = chart.querySelector('#pb-tip-val');
+  function showAt(target) {
+    var cx = Number(target.getAttribute('cx'));
+    var cy = Number(target.getAttribute('cy'));
+    var date = target.getAttribute('data-date') || '';
+    var val = target.getAttribute('data-val') || '';
+    var bw = Math.max(72, Math.max(date.length, val.length) * 6.4 + 16);
+    var bh = date ? 34 : 22;
+    var bx = cx + 10;
+    var by = cy - bh - 8;
+    if (bx + bw > 428) bx = cx - bw - 10;
+    if (by < 8) by = cy + 10;
+    dot.setAttribute('cx', cx);
+    dot.setAttribute('cy', cy);
+    box.setAttribute('x', bx);
+    box.setAttribute('y', by);
+    box.setAttribute('width', bw);
+    box.setAttribute('height', bh);
+    dateEl.setAttribute('x', bx + 8);
+    dateEl.setAttribute('y', by + 13);
+    dateEl.textContent = date;
+    valEl.setAttribute('x', bx + 8);
+    valEl.setAttribute('y', by + (date ? 26 : 15));
+    valEl.textContent = val;
+    tip.style.display = '';
+  }
+  function nearest(clientX) {
+    var rect = svg.getBoundingClientRect();
+    var x = ((clientX - rect.left) / rect.width) * 440;
+    var best = null;
+    var bestD = Infinity;
+    dots.forEach(function (el) {
+      var d = Math.abs(Number(el.getAttribute('cx')) - x);
+      if (d < bestD) { bestD = d; best = el; }
+    });
+    return best;
+  }
+  function move(e) {
+    var hit = nearest(e.clientX);
+    if (hit) showAt(hit);
+  }
+  svg.addEventListener('pointermove', move);
+  svg.addEventListener('pointerdown', move);
+  svg.addEventListener('pointerleave', function () { tip.style.display = 'none'; });
 }
 
 function showGraph(pack) {
@@ -2590,11 +2671,18 @@ function showGraph(pack) {
   document.getElementById('pb-chart-title').textContent = pack.title;
   document.getElementById('pb-chart-sub').textContent = pack.lowerBetter ? 'Lower is better' : 'Higher is better';
   chart.innerHTML = graphSvg(pack);
+  bindEmbeddedChartTip(chart);
   var who = document.getElementById('pb-chart-who');
   if (who) {
-    who.textContent = pack.who
-      ? ('Club best: ' + pack.who + (pack.ride ? ' · ' + pack.ride : '') + ' · ' + pbLabel(pack.best, pack.unit))
+    var youLine = pack.you
+      ? ('You: ' + pbLabel(pack.you, pack.unit) + (pack.youAt ? ' · ' + formatE2ERecorded(pack.youAt) : ''))
+      : '';
+    var clubLine = pack.who
+      ? ('Club best: ' + pack.who + (pack.ride ? ' · ' + pack.ride : '') + ' · ' + pbLabel(pack.best, pack.unit) + (pack.bestAt ? ' · ' + formatE2ERecorded(pack.bestAt) : ''))
       : 'No other club rides in this period yet.';
+    who.innerHTML = [youLine, clubLine].filter(Boolean).map(function (line) {
+      return '<div>' + escapeHtml(line) + '</div>';
+    }).join('');
   }
   modal.style.display = 'flex';
 }
@@ -2613,8 +2701,12 @@ function closePbChart() {
 }
 
 function setStatsSection(section) {
+  document.querySelectorAll('.stats-section[data-section="club"]').forEach(function (btn) { btn.remove(); });
+  var clubSec = document.getElementById('stats-sec-club');
+  if (clubSec) clubSec.remove();
   window._statsSection = section || 'you';
-  ['you', 'club', 'trails', 'log'].forEach(function (id) {
+  if (window._statsSection === 'club') window._statsSection = 'you';
+  ['you', 'trails', 'log'].forEach(function (id) {
     var el = document.getElementById('stats-sec-' + id);
     if (el) el.classList.toggle('hidden', id !== window._statsSection);
   });
@@ -2650,10 +2742,11 @@ async function loadClubPace(period) {
         speedW += r.distance_km;
       }
       if ((r.max_speed_kmh || 0) > top) top = r.max_speed_kmh;
-      if (r.distance_km) distVals.push({ v: r.distance_km, user_id: r.user_id, name: r.name });
-      if (r.elev_gain_m) climbVals.push({ v: r.elev_gain_m, user_id: r.user_id, name: r.name });
-      if (r.avg_speed_kmh && (r.distance_km || 0) >= 0.5) avgVals.push({ v: r.avg_speed_kmh, user_id: r.user_id, name: r.name });
-      if (r.max_speed_kmh) topVals.push({ v: r.max_speed_kmh, user_id: r.user_id, name: r.name });
+      var when = r.started_at || r.created_at || '';
+      if (r.distance_km) distVals.push({ v: r.distance_km, user_id: r.user_id, name: r.name, t: when });
+      if (r.elev_gain_m) climbVals.push({ v: r.elev_gain_m, user_id: r.user_id, name: r.name, t: when });
+      if (r.avg_speed_kmh && (r.distance_km || 0) >= 0.5) avgVals.push({ v: r.avg_speed_kmh, user_id: r.user_id, name: r.name, t: when });
+      if (r.max_speed_kmh) topVals.push({ v: r.max_speed_kmh, user_id: r.user_id, name: r.name, t: when });
       var parts = (r.trail_splits && r.trail_splits.length) ? r.trail_splits : (r.trail_name ? [r] : []);
       parts.forEach(function (s) {
         var key = s.trail_id || s.trail_name;
@@ -2667,7 +2760,10 @@ async function loadClubPace(period) {
         if (s.end_to_end) {
           g.e2e += 1;
           var et = s.elapsed_sec || s.moving_sec;
-          if (et && (!g.bestE2E || et < g.bestE2E)) g.bestE2E = et;
+          if (et && (!g.bestE2E || et < g.bestE2E)) {
+            g.bestE2E = et;
+            g.bestE2EAt = s.started_at || r.started_at || r.created_at || '';
+          }
           if (et) {
             var ek = String(s.trail_name || key);
             if (!e2eByTrail[ek]) e2eByTrail[ek] = [];
@@ -2678,7 +2774,7 @@ async function loadClubPace(period) {
     });
     var list = Object.keys(trails).map(function (k) {
       var g = trails[k];
-      return { name: g.name, avg: g.w ? g.sum / g.w : 0, top: g.top, n: g.n, bestE2E: g.bestE2E, e2e: g.e2e };
+      return { name: g.name, avg: g.w ? g.sum / g.w : 0, top: g.top, n: g.n, bestE2E: g.bestE2E, bestE2EAt: g.bestE2EAt || '', e2e: g.e2e };
     }).sort(function (a, b) { return b.n - a.n; });
     var names = await riderNames(Object.keys(users));
     function stat(arr, lower) {
@@ -2689,7 +2785,7 @@ async function loadClubPace(period) {
         sum += x.v;
         if (lower ? x.v < best.v : x.v > best.v) best = x;
       });
-      return { avg: sum / arr.length, best: best.v, who: names[best.user_id] || 'Club rider', ride: best.name || '' };
+      return { avg: sum / arr.length, best: best.v, who: names[best.user_id] || 'Club rider', ride: best.name || '', at: best.t || '' };
     }
     return {
       riders: Object.keys(users).length,
@@ -2861,3 +2957,9 @@ async function submitAdminBadgeAward() {
 }
 window.loadAdminBadgeAward = loadAdminBadgeAward;
 window.submitAdminBadgeAward = submitAdminBadgeAward;
+
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('.stats-section[data-section="club"]').forEach(function (btn) { btn.remove(); });
+  var clubSec = document.getElementById('stats-sec-club');
+  if (clubSec) clubSec.remove();
+});

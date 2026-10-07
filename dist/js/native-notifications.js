@@ -82,17 +82,8 @@ async function notifyLocal(opts) {
       }]
     });
     console.log('[notify] scheduled', id, title, '|', body);
-    // Also store in the in-app notification inbox (bell drawer)
-    if (typeof addNotification === 'function') {
-      var extra = opts.extra || {};
-      addNotification({
-        title: title,
-        body: body,
-        url: extra.url || '',
-        type: extra.type || 'local',
-        id: 'local-' + id
-      });
-    }
+    // Inbox is filled when the notification is delivered (localNotificationReceived
+    // or the push handler), so scheduling does not create a second copy.
     return true;
   } catch (e) {
     console.warn('[notify] schedule failed', e);
@@ -153,28 +144,29 @@ async function notifyActivity(opts) {
   });
 }
 
-/** Local + remote (when APNs edge function is live) */
+/**
+ * One alert only. Remote push is the channel when it is available so the
+ * sender and everyone else get a single notification. Local is the fallback
+ * when push cannot be sent (no plugin / not native).
+ */
 async function notifyActivityAll(opts) {
+  opts = opts || {};
+  try {
+    if (typeof broadcastPush === 'function' && typeof isNativeApp === 'function' && isNativeApp()) {
+      await broadcastPush(opts);
+      return;
+    }
+    if (typeof broadcastPush === 'function' && window.sb) {
+      await broadcastPush(opts);
+      return;
+    }
+  } catch (e) {
+    console.warn('[notify] remote activity', e);
+  }
   try {
     await notifyActivity(opts);
   } catch (e) {
     console.warn('[notify] local activity', e);
-  }
-  try {
-    if (typeof broadcastPush === 'function') {
-      await broadcastPush(opts);
-    } else if (typeof sendEventPushToAll === 'function' && opts) {
-      // fallback shape for older push helper
-      await window.sb?.functions?.invoke('notify-event', {
-        body: {
-          title: opts.title || 'Update',
-          body: opts.body || '',
-          data: { url: opts.url || 'forum.html', type: opts.type || 'activity' }
-        }
-      });
-    }
-  } catch (e) {
-    console.warn('[notify] remote activity', e);
   }
 }
 
@@ -203,8 +195,7 @@ async function pollStamp(table, selectCols, stampKey, buildNotify) {
     }
     if (stamp !== _lastStamps[stampKey]) {
       _lastStamps[stampKey] = stamp;
-      var opts = buildNotify(row);
-      if (opts) await notifyActivity(opts);
+      // Push already delivered this row. Do not schedule a second local alert.
     }
   } catch (e) {
     // table may not exist yet
@@ -279,11 +270,59 @@ function bootNativeNotifications() {
   var plugin = !!getLocalNotificationsPlugin();
   console.log('[notify] boot native=', native, 'plugin=', plugin);
   if (!native) return;
+  var LN = getLocalNotificationsPlugin();
+  if (LN && typeof LN.addListener === 'function') {
+    LN.addListener('localNotificationReceived', function (notification) {
+      var extra = (notification && notification.extra) || {};
+      if (typeof addNotification === 'function') {
+        addNotification({
+          title: (notification && notification.title) || 'Update',
+          body: (notification && notification.body) || '',
+          url: extra.url || '',
+          type: extra.type || 'local',
+          id: 'local-' + ((notification && notification.id) || extra.id || '')
+        });
+      }
+    });
+  }
   ensureNotifyPermission().then(function (ok) {
     console.log('[notify] granted=', ok);
-    if (ok) startEventNotificationWatch(60 * 1000);
   });
 }
+
+/** Clear delivered push + local alerts, pending locals, and the app badge. */
+async function clearNativeNotifications() {
+  try {
+    var Push = window.Capacitor && (Capacitor.Plugins && Capacitor.Plugins.PushNotifications
+      || (typeof Capacitor.registerPlugin === 'function' && Capacitor.registerPlugin('PushNotifications')));
+    if (Push && typeof Push.removeAllDeliveredNotifications === 'function') {
+      await Push.removeAllDeliveredNotifications();
+    }
+  } catch (e) {
+    console.warn('[notify] clear push', e);
+  }
+  try {
+    var LN = getLocalNotificationsPlugin();
+    if (LN) {
+      if (typeof LN.removeAllDeliveredNotifications === 'function') {
+        await LN.removeAllDeliveredNotifications();
+      }
+      if (typeof LN.getPending === 'function' && typeof LN.cancel === 'function') {
+        var pending = await LN.getPending();
+        var notes = (pending && pending.notifications) || [];
+        if (notes.length) {
+          await LN.cancel({ notifications: notes.map(function (n) { return { id: n.id }; }) });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[notify] clear local', e);
+  }
+  try {
+    if (typeof syncNativeBadge === 'function') await syncNativeBadge(0);
+  } catch (e) {}
+}
+window.clearNativeNotifications = clearNativeNotifications;
 
 document.addEventListener('DOMContentLoaded', function () {
   // Single delayed boot — avoids duplicate iOS permission prompts

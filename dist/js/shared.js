@@ -578,13 +578,17 @@ function addNotification(opts) {
   opts = opts || {};
   var list = loadNotifications();
   var id = opts.id != null ? String(opts.id) : ('n' + Date.now() + '-' + Math.floor(Math.random() * 10000));
-  // de-dupe by id if provided
-  if (opts.id != null) {
-    var exists = list.some(function (n) { return String(n.id) === id; });
-    if (exists) {
-      updateNotifCount();
-      return id;
-    }
+  var title = opts.title || 'Update';
+  var body = opts.body || '';
+  var now = Date.now();
+  // Same id, or the same title/body in the last 2 minutes (local + push double fire)
+  var exists = list.some(function (n) {
+    if (String(n.id) === id) return true;
+    return n.title === title && n.body === body && (now - (n.ts || 0)) < 120000;
+  });
+  if (exists) {
+    updateNotifCount();
+    return id;
   }
   list.unshift({
     id: id,
@@ -627,12 +631,16 @@ function removeNotification(id) {
 function clearAllNotifications() {
   saveNotifications([]);
   updateNotifCount();
-  // Clear delivered OS notifications + native badge
+  // One clear for inbox, delivered push, delivered local, pending locals, and badge
   try {
-    var Push = window.Capacitor && (Capacitor.Plugins && Capacitor.Plugins.PushNotifications
-      || (typeof Capacitor.registerPlugin === 'function' && Capacitor.registerPlugin('PushNotifications')));
-    if (Push && typeof Push.removeAllDeliveredNotifications === 'function') {
-      Push.removeAllDeliveredNotifications();
+    if (typeof clearNativeNotifications === 'function') {
+      clearNativeNotifications();
+    } else {
+      var Push = window.Capacitor && (Capacitor.Plugins && Capacitor.Plugins.PushNotifications
+        || (typeof Capacitor.registerPlugin === 'function' && Capacitor.registerPlugin('PushNotifications')));
+      if (Push && typeof Push.removeAllDeliveredNotifications === 'function') {
+        Push.removeAllDeliveredNotifications();
+      }
     }
   } catch (e) {}
   // Reset server-side badge_count so the next push starts from 1 again

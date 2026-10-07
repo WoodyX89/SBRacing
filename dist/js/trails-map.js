@@ -177,7 +177,7 @@ function analyzeRideFairness(snap) {
     var crow = haversineKm([first.lat, first.lng], [last.lat, last.lng]);
     straight = crow / km;
   }
-  if (top >= 65 && km >= 1.5) flags.push('top ' + top.toFixed(0) + ' km/h');
+  if (top >= 75 && km >= 1.5) flags.push('top ' + top.toFixed(0) + ' km/h');
   if (avg >= 28 && km >= 4) flags.push('avg ' + avg.toFixed(1) + ' km/h');
   if (fastShare >= 0.28 && km >= 3) flags.push(Math.round(fastShare * 100) + '% time over 40 km/h');
   if (veryShare >= 0.12 && km >= 2) flags.push(Math.round(veryShare * 100) + '% time over 65 km/h');

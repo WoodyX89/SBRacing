@@ -233,12 +233,14 @@ Deno.serve(async (req) => {
       .from("push_tokens")
       .select("token, platform, user_id, badge_count");
 
-    if (audience === "admins" || audience === "leaders") {
+    if (audience === "admins" || audience === "leaders" || audience === "members") {
       let profileQuery = supabase.from("profiles").select("id");
       if (audience === "admins") {
         profileQuery = profileQuery.eq("is_admin", true);
-      } else {
+      } else if (audience === "leaders") {
         profileQuery = profileQuery.or("is_leader.eq.true,is_admin.eq.true");
+      } else {
+        profileQuery = profileQuery.eq("membership_status", "active");
       }
       const { data: profiles, error: pErr } = await profileQuery;
       if (pErr) {
@@ -289,7 +291,7 @@ Deno.serve(async (req) => {
           }[]) {
             if (p.notify_push === false) continue;
             let ok = true;
-            if (type === "admin") ok = p.notify_admin !== false;
+            if (type === "admin" && (audience === "admins" || audience === "leaders")) ok = p.notify_admin !== false;
             else if (type === "rsvp") ok = p.notify_rsvp !== false;
             else if (type === "forum_comment" || type === "event_comment") ok = p.notify_comments !== false;
             else if (type === "forum_post" || type === "forum_poll") ok = p.notify_forum !== false;

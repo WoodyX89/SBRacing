@@ -193,6 +193,7 @@ async function broadcastPush(opts) {
     var type = (opts.type || '').toString().toLowerCase();
     var isComment = type === 'forum_comment' || type === 'event_comment';
     var audience = opts.audience || (isComment ? 'members' : 'all');
+    var nid = opts.id != null ? String(opts.id) : ('p-' + Date.now() + '-' + Math.floor(Math.random() * 10000));
     var res = await window.sb.functions.invoke('notify-event', {
       body: {
         title: title,
@@ -201,7 +202,8 @@ async function broadcastPush(opts) {
         data: {
           url: opts.url || 'index.html',
           type: opts.type || 'activity',
-          audience: audience
+          audience: audience,
+          id: nid
         }
       }
     });

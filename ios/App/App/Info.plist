@@ -4,8 +4,6 @@
 <dict>
 	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
-	<key>NSCameraUsageDescription</key>
-	<string>SB Racing uses the camera to scan poker-run checkpoint QR codes.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
@@ -26,6 +24,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>SB Racing uses the camera to scan poker-run checkpoint QR codes.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>SB Racing continues recording your ride in the background so your full track, distance, and elevation are saved even when the screen is locked.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
