@@ -34,18 +34,77 @@
     return earnedByUser[userId];
   }
 
+
+  async function awardBadgesFromSavedRides(userId, preloaded) {
+    if (!window.sb || !userId) return [];
+    var rides = preloaded;
+    if (!rides) {
+      var res = await window.sb.from('member_routes')
+        .select('distance_km, started_at, created_at, trail_name, trail_splits, review_status')
+        .eq('user_id', userId);
+      if (res.error || !res.data) return [];
+      rides = res.data.filter(function (r) { return r.review_status !== 'dq'; });
+    }
+    var km = 0;
+    var longest = 0;
+    var e2e = false;
+    var night = false;
+    rides.forEach(function (r) {
+      var d = Number(r.distance_km) || 0;
+      km += d;
+      if (d > longest) longest = d;
+      var when = new Date(r.started_at || r.created_at);
+      var hr = when.getHours();
+      if (!isNaN(hr) && (hr >= 20 || hr < 5)) night = true;
+      (r.trail_splits || []).forEach(function (s) { if (s && s.end_to_end) e2e = true; });
+      if (r.trail_name) e2e = e2e || false;
+    });
+    var want = [];
+    if (rides.length >= 1) want.push('first-pedal');
+    if (rides.length >= 5) want.push('regular');
+    if (rides.length >= 15) want.push('fixture');
+    if (longest >= 20) want.push('twenty-k');
+    if (km >= 100) want.push('century-dirt');
+    if (e2e) want.push('local-line');
+    if (night) want.push('night-owl');
+    var known = {};
+    catalog.forEach(function (b) { if (b && b.slug) known[b.slug] = true; });
+    var earned = {};
+    (earnedByUser[userId] || []).forEach(function (row) { earned[row.badge_slug] = true; });
+    var fresh = [];
+    for (var i = 0; i < want.length; i++) {
+      var slug = want[i];
+      if (!known[slug] || earned[slug]) continue;
+      try {
+        var aw = await awardBadge(userId, slug);
+        if (!aw || aw.ok !== false) fresh.push(slug);
+      } catch (e) {
+        console.warn('[badges] ride award', slug, e);
+      }
+    }
+    return fresh;
+  }
+
   async function evaluateMyBadges() {
     if (!window.sb) return null;
     try {
       var user = await getCurrentUser();
       if (!user) return null;
-      var res = await window.sb.rpc('evaluate_member_badges', { p_user_id: user.id });
-      if (res.error) {
-        console.warn('[badges] evaluate', res.error);
-        return null;
+      var awarded = [];
+      try {
+        var res = await window.sb.rpc('evaluate_member_badges', { p_user_id: user.id });
+        if (res.error) console.warn('[badges] evaluate', res.error);
+        else {
+          lastStats = res.data && res.data.stats;
+          awarded = (res.data && res.data.awarded) || [];
+        }
+      } catch (rpcErr) {
+        console.warn('[badges] rpc', rpcErr);
       }
-      lastStats = res.data && res.data.stats;
-      var awarded = (res.data && res.data.awarded) || [];
+      var fromRides = await awardBadgesFromSavedRides(user.id);
+      fromRides.forEach(function (slug) {
+        if (awarded.indexOf(slug) < 0) awarded.push(slug);
+      });
       if (awarded.length && typeof showToast === 'function') {
         var names = awarded.map(function (slug) {
           var b = catalog.find(function (x) { return x.slug === slug; });
@@ -143,6 +202,37 @@
     if (res.data && res.data.ok === false) throw new Error(res.data.error || 'Could not award');
     return res.data;
   }
+
+
+  async function backfillRideBadges() {
+    if (!window.sb) return;
+    var status = document.getElementById('admin-badge-backfill');
+    if (status) status.textContent = 'Checking saved rides…';
+    var res = await window.sb.from('member_routes')
+      .select('user_id, distance_km, started_at, created_at, trail_splits, review_status')
+      .limit(5000);
+    if (res.error) {
+      if (status) status.textContent = res.error.message || 'Could not read rides';
+      return;
+    }
+    await loadBadgeCatalog();
+    var byUser = {};
+    (res.data || []).forEach(function (r) {
+      if (!r.user_id || r.review_status === 'dq') return;
+      if (!byUser[r.user_id]) byUser[r.user_id] = [];
+      byUser[r.user_id].push(r);
+    });
+    var ids = Object.keys(byUser);
+    var awarded = 0;
+    for (var i = 0; i < ids.length; i++) {
+      if (status) status.textContent = 'Updating ' + (i + 1) + ' / ' + ids.length;
+      var got = await awardBadgesFromSavedRides(ids[i], byUser[ids[i]]);
+      awarded += got.length;
+    }
+    if (status) status.textContent = 'Done. ' + awarded + ' new badge' + (awarded === 1 ? '' : 's') + ' across ' + ids.length + ' rider' + (ids.length === 1 ? '' : 's') + '.';
+    if (typeof showToast === 'function') showToast('Ride badges updated');
+  }
+  window.backfillRideBadges = backfillRideBadges;
 
   window.SBBadges = {
     loadBadgeCatalog: loadBadgeCatalog,

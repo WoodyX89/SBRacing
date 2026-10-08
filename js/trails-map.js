@@ -940,6 +940,128 @@ async function loadMyRoutes() {
   }
 }
 
+
+function nearestLoadedIndex(latlng) {
+  var pts = window._loadedRideCoords || [];
+  var best = 0;
+  var bestD = Infinity;
+  for (var i = 0; i < pts.length; i++) {
+    var d = haversineKm([latlng.lat, latlng.lng], [pts[i].lat, pts[i].lng]);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+function nearestTrailSnap(latlng) {
+  var best = null;
+  var bestM = 25;
+  (trailFeatures || []).forEach(function (tr) {
+    var line = tr.latlngs || [];
+    for (var i = 0; i < line.length; i++) {
+      var d = haversineKm([latlng.lat, latlng.lng], line[i]) * 1000;
+      if (d < bestM) {
+        bestM = d;
+        best = { lat: line[i][0], lng: line[i][1], name: tr.name, meters: d };
+      }
+    }
+  });
+  return best;
+}
+
+function drawSegmentMarks() {
+  if (window._segmentMarks) {
+    window._segmentMarks.forEach(function (m) { map.removeLayer(m); });
+  }
+  window._segmentMarks = [];
+  var pts = window._loadedRideCoords || [];
+  function mark(which, i, color) {
+    if (i == null || !pts[i]) return;
+    var snap = window[which === 'a' ? '_segmentSnapA' : '_segmentSnapB'];
+    var ll = snap ? [snap.lat, snap.lng] : [pts[i].lat, pts[i].lng];
+    var icon = L.divIcon({
+      className: '',
+      html: '<div style="width:18px;height:18px;border-radius:999px;background:' + color + ';border:2px solid #fff;box-shadow:0 0 0 1px #000"></div>',
+      iconSize: [18, 18],
+      iconAnchor: [9, 9]
+    });
+    var m = L.marker(ll, { draggable: true, icon: icon, zIndexOffset: 800 }).addTo(map);
+    m.on('drag', function (e) {
+      var snap = nearestTrailSnap(e.latlng);
+      if (snap) m.setLatLng([snap.lat, snap.lng]);
+    });
+    m.on('dragend', function (e) {
+      var here = m.getLatLng();
+      var snap = nearestTrailSnap(here);
+      var idx = nearestLoadedIndex(snap || here);
+      if (which === 'a') {
+        window._segmentA = idx;
+        window._segmentSnapA = snap;
+      } else {
+        window._segmentB = idx;
+        window._segmentSnapB = snap;
+      }
+      if (snap) showToast('Snapped to ' + snap.name);
+      else showToast('Not close enough to a mapped trail');
+      drawSegmentMarks();
+    });
+    window._segmentMarks.push(m);
+  }
+  mark('a', window._segmentA, '#22c55e');
+  mark('b', window._segmentB, '#ef4444');
+  if (window._segmentA != null && window._segmentB != null) {
+    var a = Math.min(window._segmentA, window._segmentB);
+    var b = Math.max(window._segmentA, window._segmentB);
+    var slice = pts.slice(a, b + 1).map(function (p) { return [p.lat, p.lng]; });
+    var startSnap = window._segmentA <= window._segmentB ? window._segmentSnapA : window._segmentSnapB;
+    var endSnap = window._segmentA <= window._segmentB ? window._segmentSnapB : window._segmentSnapA;
+    if (startSnap) slice[0] = [startSnap.lat, startSnap.lng];
+    if (endSnap) slice[slice.length - 1] = [endSnap.lat, endSnap.lng];
+    window._segmentMarks.push(L.polyline(slice, { color: '#22c55e', weight: 6, opacity: 0.9 }).addTo(map));
+  }
+}
+
+function exportRideSegment() {
+  var pts = window._loadedRideCoords || [];
+  if (window._segmentA == null || window._segmentB == null) {
+    showToast('Load a ride, tap the start, then tap the end', true);
+    return;
+  }
+  var a = Math.min(window._segmentA, window._segmentB);
+  var b = Math.max(window._segmentA, window._segmentB);
+  var slice = pts.slice(a, b + 1);
+  var startSnap = window._segmentA <= window._segmentB ? window._segmentSnapA : window._segmentSnapB;
+  var endSnap = window._segmentA <= window._segmentB ? window._segmentSnapB : window._segmentSnapA;
+  if (startSnap) slice[0] = { lat: startSnap.lat, lng: startSnap.lng };
+  if (endSnap) slice[slice.length - 1] = { lat: endSnap.lat, lng: endSnap.lng };
+  if (slice.length < 2) {
+    showToast('Segment is too short', true);
+    return;
+  }
+  var name = prompt('Trail name', 'New trail');
+  if (!name) return;
+  name = name.trim();
+  if (!name) return;
+  var feature = {
+    type: 'Feature',
+    properties: { name: name, area: '', difficulty: 'intermediate' },
+    geometry: {
+      type: 'LineString',
+      coordinates: slice.map(function (p) { return [Math.round(p.lng * 1e6) / 1e6, Math.round(p.lat * 1e6) / 1e6]; })
+    }
+  };
+  var blob = new Blob([JSON.stringify(feature, null, 2)], { type: 'application/geo+json' });
+  var url = URL.createObjectURL(blob);
+  var link = document.createElement('a');
+  link.href = url;
+  link.download = name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() + '.geojson';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  showToast('Trail segment downloaded — add it to assets/trails/region.geojson');
+}
+window.exportRideSegment = exportRideSegment;
+
 function showSavedRoute(row) {
   clearLoadedRoute();
   routePoints = [];
@@ -972,6 +1094,23 @@ function showSavedRoute(row) {
     lineJoin: 'round',
     lineCap: 'round'
   }).addTo(map);
+  window._loadedRideCoords = latlngs.map(function (ll) { return { lat: ll[0], lng: ll[1] }; });
+  window._segmentA = null;
+  window._segmentB = null;
+  window._segmentSnapA = null;
+  window._segmentSnapB = null;
+  loadedRouteLine.on('click', function (e) {
+    var idx = nearestLoadedIndex(e.latlng);
+    if (window._segmentA == null || (window._segmentA != null && window._segmentB != null)) {
+      window._segmentA = idx;
+      window._segmentB = null;
+      showToast('Segment start set — tap the line again for the end');
+    } else {
+      window._segmentB = idx;
+      showToast('Segment end set — export it below');
+    }
+    drawSegmentMarks();
+  });
 
   var start = latlngs[0];
   var end = latlngs[latlngs.length - 1];
@@ -1471,6 +1610,10 @@ async function saveRecordedRide() {
     if (fair.status === 'dq') showToast('Ride saved but disqualified from the leaderboard (' + fair.reason + ')', true);
     else if (fair.status === 'flagged') showToast('Ride saved and flagged for review (' + fair.reason + ')');
     else showToast(splits.length ? ('Ride saved · ' + splits.length + ' trail split' + (splits.length === 1 ? '' : 's')) : 'Ride saved');
+    try {
+      if (typeof evaluateMyBadges === 'function') evaluateMyBadges();
+      else if (window.SBBadges && SBBadges.evaluateMyBadges) SBBadges.evaluateMyBadges();
+    } catch (be) {}
     loadMyRoutes();
   } catch (e) {
     console.error(e);
