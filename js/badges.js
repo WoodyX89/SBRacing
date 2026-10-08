@@ -90,6 +90,9 @@
     try {
       var user = await getCurrentUser();
       if (!user) return null;
+      await loadMemberBadges(user.id);
+      var already = {};
+      (earnedByUser[user.id] || []).forEach(function (row) { already[row.badge_slug] = true; });
       var awarded = [];
       try {
         var res = await window.sb.rpc('evaluate_member_badges', { p_user_id: user.id });
@@ -105,8 +108,9 @@
       fromRides.forEach(function (slug) {
         if (awarded.indexOf(slug) < 0) awarded.push(slug);
       });
-      if (awarded.length && typeof showToast === 'function') {
-        var names = awarded.map(function (slug) {
+      var fresh = awarded.filter(function (slug) { return !already[slug]; });
+      if (fresh.length && typeof showToast === 'function') {
+        var names = fresh.map(function (slug) {
           var b = catalog.find(function (x) { return x.slug === slug; });
           return b ? b.name : slug;
         });
