@@ -669,6 +669,7 @@ async function initMap() {
   try {
     var res = await fetch('assets/trails/region.geojson');
     var geo = await res.json();
+    window._regionGeojson = geo;
     buildTrailIndex(geo);
 
     var idx = 0;
@@ -728,6 +729,11 @@ async function initMap() {
         });
 
         layer.on('click', function (e) {
+          if (window._trailEditMode) {
+            L.DomEvent.stopPropagation(e);
+            selectTrailForEdit(layer.feature);
+            return;
+          }
           if (checkpointMode) {
             L.DomEvent.stopPropagation(e);
             addCheckpoint(e.latlng);
@@ -775,6 +781,7 @@ async function initMap() {
   }
 
   map.on('click', function (e) {
+    if (window._trailEditMode && editFeature) { addEditPinFromMap(e.latlng); return; }
     if (!checkpointMode) return;
     addCheckpoint(e.latlng);
   });
@@ -1778,3 +1785,108 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 });
+
+
+var editPins = [];
+var editFeature = null;
+function isTrailAdmin() {
+  return !!(window._isAdmin || (window.currentProfile && window.currentProfile.is_admin));
+}
+async function toggleTrailEdit() {
+  var user = null;
+  try {
+    var session = await window.sb.auth.getSession();
+    user = session.data && session.data.session && session.data.session.user;
+  } catch (e) {}
+  if (!user) { showToast('Sign in as an admin to edit trails', true); return; }
+  var prof = await window.sb.from('profiles').select('is_admin').eq('id', user.id).maybeSingle();
+  if (prof.error || !prof.data || !prof.data.is_admin) { showToast('Admin only', true); return; }
+  window._isAdmin = true;
+  window._trailEditMode = !window._trailEditMode;
+  var btn = document.getElementById('btn-trail-edit');
+  if (btn) btn.classList.toggle('border-orange-600', window._trailEditMode);
+  if (!window._trailEditMode) clearTrailEdit();
+  showToast(window._trailEditMode ? 'Edit on — tap a trail, then drag the pins' : 'Trail edit off');
+}
+function clearTrailEdit() {
+  editPins.forEach(function (m) { map.removeLayer(m); });
+  editPins = [];
+  editFeature = null;
+}
+function selectTrailForEdit(feature) {
+  if (!feature || !feature.geometry) return;
+  clearTrailEdit();
+  editFeature = feature;
+  var coords = feature.geometry.type === 'LineString' ? feature.geometry.coordinates.slice() : (feature.geometry.coordinates[0] || []).slice();
+  feature.geometry = { type: 'LineString', coordinates: coords };
+  var step = Math.max(1, Math.ceil(coords.length / 60));
+  var keep = [];
+  coords.forEach(function (c, i) { if (i === 0 || i === coords.length - 1 || i % step === 0) keep.push(c); });
+  feature.geometry.coordinates = keep;
+  keep.forEach(function (c, i) { addEditPin(i, c); });
+  showToast((feature.properties && feature.properties.name || 'Trail') + ' — drag pins, tap the map to add one');
+}
+function addEditPin(index, coord) {
+  var icon = L.divIcon({ className: '', html: '<div style="width:16px;height:16px;border-radius:99px;background:#f97316;border:2px solid #fff"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
+  var m = L.marker([coord[1], coord[0]], { draggable: true, icon: icon, zIndexOffset: 900 }).addTo(map);
+  m._editIndex = index;
+  m.on('dragend', function () {
+    var ll = m.getLatLng();
+    editFeature.geometry.coordinates[m._editIndex] = [Math.round(ll.lng * 1e6) / 1e6, Math.round(ll.lat * 1e6) / 1e6];
+    redrawEditedTrail();
+  });
+  m.on('click', function (e) {
+    L.DomEvent.stopPropagation(e);
+    editPins.forEach(function (pin) { pin._selected = pin === m; });
+    showToast('Pin selected — use Remove pin to delete it');
+  });
+  editPins.push(m);
+}
+function redrawEditedTrail() {
+  if (!editFeature || !trailLayer) return;
+  trailLayer.eachLayer(function (layer) {
+    if (layer.feature === editFeature && layer.setLatLngs) {
+      layer.setLatLngs(editFeature.geometry.coordinates.map(function (c) { return [c[1], c[0]]; }));
+    }
+  });
+}
+function addEditPinFromMap(latlng) {
+  if (!window._trailEditMode || !editFeature) return;
+  var coords = editFeature.geometry.coordinates;
+  var best = 1, bestD = Infinity;
+  for (var i = 1; i < coords.length; i++) {
+    var d = map.distance(latlng, [(coords[i - 1][1] + coords[i][1]) / 2, (coords[i - 1][0] + coords[i][0]) / 2]);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  coords.splice(best, 0, [Math.round(latlng.lng * 1e6) / 1e6, Math.round(latlng.lat * 1e6) / 1e6]);
+  clearTrailEdit();
+  var feature = editFeature;
+  editFeature = null;
+  selectTrailForEdit(feature);
+}
+function removeSelectedEditPin() {
+  if (!editFeature) return;
+  var idx = -1;
+  editPins.forEach(function (pin) { if (pin._selected) idx = pin._editIndex; });
+  if (idx < 0 || editFeature.geometry.coordinates.length < 3) { showToast('Select a pin first', true); return; }
+  editFeature.geometry.coordinates.splice(idx, 1);
+  var feature = editFeature;
+  clearTrailEdit();
+  selectTrailForEdit(feature);
+}
+function saveEditedTrails() {
+  if (!window._regionGeojson) { showToast('Trail file is not loaded', true); return; }
+  var blob = new Blob([JSON.stringify(window._regionGeojson)], { type: 'application/geo+json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'region.geojson';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  showToast('Updated region.geojson downloaded');
+}
+window.toggleTrailEdit = toggleTrailEdit;
+window.removeSelectedEditPin = removeSelectedEditPin;
+window.saveEditedTrails = saveEditedTrails;
