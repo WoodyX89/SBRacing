@@ -39,23 +39,9 @@
     </script>
 </head>
 <body class="bg-zinc-950 text-zinc-200">
-<div id="sb-splash" aria-hidden="true">
-  <img src="assets/splash.png" alt="">
-</div>
-<style>
-  #sb-splash{position:fixed;inset:0;z-index:100000;background:#000;transition:opacity .4s ease}
-  #sb-splash img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:center;background:#000}
-  #sb-splash.sb-splash-out{opacity:0}
-  @keyframes sbGlow{0%,100%{opacity:.45;transform:translate(-50%,-50%) scale(.92)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}}
-</style>
 <script>
   (function () {
     setTimeout(function () {
-      var el = document.getElementById('sb-splash');
-      if (el) {
-        el.classList.add('sb-splash-out');
-        setTimeout(function () { el.remove(); }, 420);
-      }
       try {
         var Splash = window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.SplashScreen;
         if (Splash && Splash.hide) Splash.hide();
